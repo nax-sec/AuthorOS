@@ -1,0 +1,12 @@
+key: sci_fi
+name: 科幻
+status: active
+tone_keywords: [科幻, 未来, 技术, 外推, 思辨]
+one_line_pitch: 基于科学外推的未来或异世界故事,技术与人性博弈,核心是"如果...会怎样"的思辨。
+applicable_when: 用户概念涉及未来/外星/AI/赛博朋克/太空/时间旅行/技术伦理。
+not_applicable_when: 现代日常无超自然元素;古代题材;纯奇幻魔法。
+diff_from:
+  urban_power_anomaly: 个人异能 vs 全社会技术变革;科学解释优先而非异常体系。
+  western_fantasy: 科技体系替代魔法体系;无多种族王国和神职结构。
+  xianxia: 外部技术升级而非内在境界突破。
+created_at: 2026-05-12

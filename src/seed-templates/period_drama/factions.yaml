@@ -1,0 +1,11 @@
+factions:
+  - id: F001
+    name: ""
+    resources: []
+    public_position: ""
+    hidden_goal: ""
+families:
+  - id: H001
+    name: ""
+    allies: []
+    rivals: []

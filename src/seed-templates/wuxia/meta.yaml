@@ -1,0 +1,12 @@
+key: wuxia
+name: 武侠
+status: active
+tone_keywords: [江湖, 武学, 侠义, 恩怨, 古典]
+one_line_pitch: 凡人极限武学的江湖世界,讲恩怨情仇与侠义抉择,无修真飞升。
+applicable_when: 用户概念涉及江湖/门派/武功/侠客/古代不带修仙。
+not_applicable_when: 修真飞升;现代背景;超自然能力。
+diff_from:
+  xianxia: 凡人极限武学,无灵气体系;江湖世俗化。
+  period_drama: 焦点在江湖而非朝堂;武力解决占主导。
+  urban_power_anomaly: 不靠现代特殊机制,靠招式、胆识和名声。
+created_at: 2026-05-12

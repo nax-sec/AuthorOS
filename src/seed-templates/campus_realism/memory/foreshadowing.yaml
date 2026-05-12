@@ -1,0 +1,11 @@
+hooks:
+  - id: H001
+    description: "校园关系与成长节点 的第一条隐性伏笔,用于连接开篇事件和中段反转。"
+    introduced_chapter: 0
+    status: planned
+    payoff_hint: "中段揭示其真实用途"
+  - id: H002
+    description: "配角一句看似随意的话,实际暴露 校园青春 主线压力的来源。"
+    introduced_chapter: 0
+    status: planned
+    payoff_hint: "阶段结尾成为选择依据"

@@ -1,0 +1,12 @@
+key: period_drama
+name: 历史架空
+status: active
+tone_keywords: [历史, 权谋, 礼制, 家族, 朝堂]
+one_line_pitch: 类历史背景下的权力博弈,讲朝堂/家族/礼制约束,主角靠智谋而非武力。
+applicable_when: 用户概念涉及古代朝廷/宅斗/权谋/穿越历史/架空王朝。
+not_applicable_when: 江湖武林;修真;现代背景。
+diff_from:
+  wuxia: 主战场是朝堂/家族而非江湖;武力受礼制约束。
+  dog_blood_romance: 情感线服务于权力,而非反过来。
+  xianxia: 没有修行体系,权力来自制度与人脉。
+created_at: 2026-05-12

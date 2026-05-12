@@ -1,0 +1,12 @@
+key: dog_blood_romance
+name: 狗血言情
+status: active
+tone_keywords: [情感, 关系, 误会, 反转, 张力]
+one_line_pitch: 多角关系驱动的情感故事,误会/身世/反转密集,情绪强度优先。
+applicable_when: 用户概念以关系网/情感冲突/身份反转/CP 张力为核心。
+not_applicable_when: 单线主角冒险;无情感冲突的纯任务流。
+diff_from:
+  campus_realism: 情绪强度优先而非日常质感;允许夸张巧合。
+  period_drama: 焦点在私人关系而非权力结构。
+  mystery_thriller: 反转服务情绪冲击,不是案件公平性。
+created_at: 2026-05-12

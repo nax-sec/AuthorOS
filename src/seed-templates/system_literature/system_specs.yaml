@@ -1,0 +1,14 @@
+system:
+  name: ""
+  trigger_condition: ""
+  task_types:
+    - main
+    - daily
+    - timed
+  reward_tiers:
+    - basic
+    - rare
+    - strategic
+  penalties:
+    - cooldown
+    - score_loss

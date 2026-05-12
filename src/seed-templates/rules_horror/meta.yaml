@@ -1,0 +1,12 @@
+key: rules_horror
+name: 规则怪谈
+status: active
+tone_keywords: [恐怖, 压抑, 悬念, 心理, 封闭]
+one_line_pitch: 主角处于一套必须遵守的诡异规则中,违规即死;故事在"规则解析"和"规则破绽"中展开。
+applicable_when: 用户概念包含规则、必须遵守、违反后果、异常空间、封闭环境。
+not_applicable_when: 开放世界冒险;强爽点题材;无超自然元素。
+diff_from:
+  mystery_thriller: 推理对象是规则本身而非凶手。
+  urban_power_anomaly: 主角无能力,靠观察与遵守活下来。
+  sci_fi: 规则不需要科学解释,允许保留诡异本质。
+created_at: 2026-05-12

@@ -1,0 +1,27 @@
+protagonist:
+  name: ""
+  age: ""
+  occupation: ""
+  desire: ""
+  fear: ""
+  weakness: ""
+  arc: ""
+  panel_role: ""
+  reward_dependency: ""
+major:
+  - id: M001
+    name: ""
+    role: ""
+    relation_to_protagonist: ""
+    desire: ""
+    likely_change: ""
+    panel_role: ""
+    reward_dependency: ""
+minor: []
+antagonists:
+  - id: A001
+    name: ""
+    role: ""
+    motivation: ""
+    method: ""
+    threat_level: ""

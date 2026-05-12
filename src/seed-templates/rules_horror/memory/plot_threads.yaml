@@ -1,0 +1,11 @@
+threads:
+  - id: main_001
+    type: main
+    title: "规则认知与生存代价 主线"
+    status: planned
+    next_action: "在第一章建立核心压力"
+  - id: side_001
+    type: side
+    title: "配角个人选择副线"
+    status: planned
+    next_action: "让配角目标与主线发生冲突"

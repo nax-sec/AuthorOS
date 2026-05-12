@@ -1,0 +1,33 @@
+protagonist:
+  name: ""
+  age: ""
+  occupation: ""
+  desire: ""
+  fear: ""
+  weakness: ""
+  arc: ""
+  relationship_role: ""
+  misunderstanding_state: ""
+major:
+  - id: M001
+    name: ""
+    role: ""
+    relation_to_protagonist: ""
+    desire: ""
+    likely_change: ""
+    relationship_role: ""
+    misunderstanding_state: ""
+minor: []
+antagonists:
+  - id: A001
+    name: ""
+    role: ""
+    motivation: ""
+    method: ""
+    threat_level: ""
+relationship_threads:
+  - id: R001
+    pair: []
+    current_state: ""
+    misunderstanding: ""
+    next_turning_point: ""

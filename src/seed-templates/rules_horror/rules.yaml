@@ -1,0 +1,9 @@
+rules:
+  - id: R001
+    text: "午夜后不要回应走廊里的第二次敲门。"
+    known_exception: ""
+    violation_result: "失踪或被替换"
+  - id: R002
+    text: "食堂窗口只接受红色餐票。"
+    known_exception: "雨天可使用空白票"
+    violation_result: "被迫进入后厨"

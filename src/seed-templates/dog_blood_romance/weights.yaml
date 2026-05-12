@@ -1,0 +1,17 @@
+decision_basis_weights:
+  author_long_term_plan:
+    weight: 40
+    enabled_when: always
+
+  internal_review:
+    weight: 30
+    enabled_when: always
+
+  simulated_readers:
+    weight: 10
+    enabled_when: always
+
+  reader_feedback:
+    weight: 20
+    enabled_when: real_feedback_exists
+    redistribute_when_absent: false

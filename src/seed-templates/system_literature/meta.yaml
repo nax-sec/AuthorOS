@@ -1,0 +1,12 @@
+key: system_literature
+name: 系统流
+status: active
+tone_keywords: [任务, 成长, 数值, 反馈循环, 爽文]
+one_line_pitch: 主角绑定系统获得任务与奖励,通过数值化成长推进剧情。
+applicable_when: 用户概念明确提到系统/任务/积分/属性面板/成长曲线。
+not_applicable_when: 主角无外部辅助;反系统/反套路概念。
+diff_from:
+  urban_power_anomaly: 能力来自系统而非异常;有明确数值与奖励。
+  xianxia: 数值化成长,无境界自然突破。
+  campus_realism: 外部反馈驱动成长,不是纯内驱日常。
+created_at: 2026-05-12

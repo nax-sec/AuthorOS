@@ -1,0 +1,31 @@
+protagonist:
+  name: ""
+  age: ""
+  occupation: ""
+  desire: ""
+  fear: ""
+  weakness: ""
+  arc: ""
+  survival_skill: ""
+  group_role: ""
+major:
+  - id: M001
+    name: ""
+    role: ""
+    relation_to_protagonist: ""
+    desire: ""
+    likely_change: ""
+    survival_skill: ""
+    group_role: ""
+minor: []
+antagonists:
+  - id: A001
+    name: ""
+    role: ""
+    motivation: ""
+    method: ""
+    threat_level: ""
+group:
+  shelter: ""
+  resources_known: []
+  safe_zones_known: []

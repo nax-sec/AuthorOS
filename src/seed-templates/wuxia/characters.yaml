@@ -1,0 +1,27 @@
+protagonist:
+  name: ""
+  age: ""
+  occupation: ""
+  desire: ""
+  fear: ""
+  weakness: ""
+  arc: ""
+  sect: ""
+  signature_skill: ""
+major:
+  - id: M001
+    name: ""
+    role: ""
+    relation_to_protagonist: ""
+    desire: ""
+    likely_change: ""
+    sect: ""
+    signature_skill: ""
+minor: []
+antagonists:
+  - id: A001
+    name: ""
+    role: ""
+    motivation: ""
+    method: ""
+    threat_level: ""

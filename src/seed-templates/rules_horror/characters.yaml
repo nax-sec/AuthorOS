@@ -1,0 +1,27 @@
+protagonist:
+  name: ""
+  age: ""
+  occupation: ""
+  desire: ""
+  fear: ""
+  weakness: ""
+  arc: ""
+  rule_awareness: ""
+  fear_trigger: ""
+major:
+  - id: M001
+    name: ""
+    role: ""
+    relation_to_protagonist: ""
+    desire: ""
+    likely_change: ""
+    rule_awareness: ""
+    fear_trigger: ""
+minor: []
+antagonists:
+  - id: A001
+    name: ""
+    role: ""
+    motivation: ""
+    method: ""
+    threat_level: ""

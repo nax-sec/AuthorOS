@@ -1,0 +1,12 @@
+protagonist:
+  current_goal: ""
+  emotional_state: ""
+  public_status: ""
+  private_pressure: ""
+major: []
+antagonists: []
+resources_known:
+  - food
+  - clean_water
+safe_zones_known:
+  - temporary_shelter

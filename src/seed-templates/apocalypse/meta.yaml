@@ -1,0 +1,12 @@
+key: apocalypse
+name: 末日
+status: active
+tone_keywords: [末日, 生存, 资源, 危机, 人性]
+one_line_pitch: 灾难后世界中的生存与重建,资源稀缺,人性考验,环境本身是反派。
+applicable_when: 用户概念涉及末日/丧尸/灾变/生存/废土。
+not_applicable_when: 灾难前的繁华世界;无资源压力。
+diff_from:
+  sci_fi: 焦点在生存而非技术外推;科学解释可弱化。
+  rules_horror: 威胁来自环境而非规则。
+  urban_power_anomaly: 爽点受资源消耗和群体风险压制。
+created_at: 2026-05-12

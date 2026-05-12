@@ -9,6 +9,14 @@ export const supportedTemplateKeys = [
   'xianxia',
   'western_fantasy',
   'mystery_thriller',
+  'sci_fi',
+  'rules_horror',
+  'wuxia',
+  'dog_blood_romance',
+  'system_literature',
+  'apocalypse',
+  'period_drama',
+  'campus_realism',
 ] as const;
 
 const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
