@@ -575,6 +575,7 @@ async function runRevise(args: string[], cwd: string, io: Io, options: RunOption
     llm,
     now: options.now,
     write: parsed.flags.write === true,
+    instruction: stringFlag(parsed.flags.instruction),
   })));
   return 0;
 }
@@ -1184,6 +1185,7 @@ function reviseHelpText(): string {
     '  --chapter <N>      Required',
     '  --model            Required to actually decide; without --model the step is a no-op stub',
     '  --write            Apply changes (move backup, overwrite chapter file)',
+    '  --instruction <t>   Force a directive-driven revision; internal review becomes supplementary',
     '',
   ].join('\n');
 }

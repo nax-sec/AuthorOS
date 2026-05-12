@@ -101,11 +101,55 @@ test('revise --model with NO output leaves chapter intact', async () => {
     assert.match(captured, /original_chapter:/);
     assert.match(captured, /internal_review:/);
     assert.match(captured, /reader_sim_review:/);
+    assert.doesNotMatch(captured, /revision_directive/);
     const after = await readFile(join(cwd, 'chapters/0001.md'), 'utf8');
     assert.equal(after, before);
     assert.match(io.out.join(''), /changed: no/);
     assert.match(io.out.join(''), /所有 advisor 建议都是非阻塞的风格偏好/);
     await assert.rejects(() => stat(join(cwd, 'chapters/0001.draft.md')));
+  });
+});
+
+test('revise --instruction forces a directive-driven revision', async () => {
+  await withReviewedChapter(async (cwd) => {
+    let captured = '';
+    const llm = fakeLlm([
+      'REVISION_NEEDED: yes',
+      'rationale:',
+      '- 按导演席指令改写代价表达',
+      '---',
+      '正文第一段。',
+      '',
+      '正文第二段加入精神焚烧的后果。',
+      '',
+      '正文第三段。结尾钩子',
+    ].join('\n'), (p) => { captured = p; });
+
+    const io = silentIo();
+    assert.equal(
+      await run([
+        'revise',
+        '--chapter',
+        '1',
+        '--model',
+        '--write',
+        '--instruction',
+        '把主角的能力代价从年寿改成精神焚烧',
+      ], cwd, io.io, {
+        env: { OPENAI_API_KEY: 'k', AUTHOROS_MODEL: 'm' }, llm,
+      }),
+      0,
+      io.err.join(''),
+    );
+
+    assert.match(captured, /revision_directive \(override from author console\):/);
+    assert.match(captured, /把主角的能力代价从年寿改成精神焚烧/);
+    assert.match(captured, /MUST revise the chapter to comply with it/);
+    assert.match(captured, /internal_review:/);
+
+    const revised = await readFile(join(cwd, 'chapters/0001.md'), 'utf8');
+    assert.match(revised, /精神焚烧/);
+    assert.match(io.out.join(''), /changed: yes/);
   });
 });
 

@@ -17,6 +17,7 @@ export interface ReviseOptions {
   llm?: LlmClient;
   now?: Date;
   write?: boolean;
+  instruction?: string;
 }
 
 export interface ReviseResult {
@@ -66,6 +67,7 @@ export async function reviseChapter(projectDir: string, options: ReviseOptions):
         readerSimReview,
         lengthSpec,
         maxTokens,
+        instruction: normalizedInstruction(options.instruction),
       })
     : { changed: false, rationale: '(scaffold mode: no revision performed)', newBody: null };
 
@@ -152,6 +154,7 @@ interface InvokeArgs {
   readerSimReview: string | null;
   lengthSpec: ChapterLengthSpec;
   maxTokens: number;
+  instruction: string | null;
 }
 
 interface ReviseDecision {
@@ -171,8 +174,11 @@ async function invokeReviseModel(llm: LlmClient, args: InvokeArgs): Promise<Revi
     '',
     'role for this call:',
     'You wrote this chapter as chief-writer. Internal review + simulated readers have weighed in.',
-    'As the author, judge each feedback item yourself. You decide if any text changes are needed.',
+    args.instruction
+      ? 'A revision_directive from the author console is present. Follow it as the trigger for revision.'
+      : 'As the author, judge each feedback item yourself. You decide if any text changes are needed.',
     '',
+    ...revisionDirectiveLines(args.instruction),
     'length_state:',
     `  target_chinese_chars: ${len.target}`,
     `  acceptable_range: ${len.minChars} - ${len.maxChars} (floor ${len.floorPercent}% / ceiling ${len.ceilingPercent}% of target)`,
@@ -183,7 +189,9 @@ async function invokeReviseModel(llm: LlmClient, args: InvokeArgs): Promise<Revi
     '- Only address concrete BLOCKING risks or specific 已采纳 items that need text edits.',
     '- Do not add new plot beats, character moves, or canon decisions absent from the draft.',
     '- Do not redirect the chapter or change its ending if the ending is intact.',
-    '- If review only flags style/craft preferences with no blocking risk AND length_state is WITHIN_RANGE, default to NO revision.',
+    args.instruction
+      ? '- If revision_directive is present, you MUST revise the chapter to comply with it.'
+      : '- If review only flags style/craft preferences with no blocking risk AND length_state is WITHIN_RANGE, default to NO revision.',
     '',
     'length-conditional rules:',
     ...lengthHandlingLines(len),
@@ -202,9 +210,10 @@ async function invokeReviseModel(llm: LlmClient, args: InvokeArgs): Promise<Revi
       : 'reader_sim_review: (not available)',
     '',
     'output_format:',
-    'Line 1 MUST be exactly one of:',
-    '  REVISION_NEEDED: no',
-    '  REVISION_NEEDED: yes',
+    args.instruction ? 'Line 1 MUST be exactly:' : 'Line 1 MUST be exactly one of:',
+    ...(args.instruction
+      ? ['  REVISION_NEEDED: yes']
+      : ['  REVISION_NEEDED: no', '  REVISION_NEEDED: yes']),
     '',
     'If "no", then next lines are a "rationale:" section explaining briefly why every review item is non-blocking or already handled AND length is within range.',
     '',
@@ -224,6 +233,18 @@ async function invokeReviseModel(llm: LlmClient, args: InvokeArgs): Promise<Revi
   }
 
   return parseReviseReply(reply);
+}
+
+function revisionDirectiveLines(instruction: string | null): string[] {
+  if (!instruction) return [];
+  return [
+    'revision_directive (override from author console):',
+    instruction,
+    '',
+    'If revision_directive is present, you MUST revise the chapter to comply with it.',
+    'Read internal_review only as supplementary context, not as the trigger.',
+    '',
+  ];
 }
 
 function buildLengthSpec(config: Parameters<typeof computeChapterLengthSpec>[0], body: string): ChapterLengthSpec {
@@ -410,4 +431,9 @@ function validateChapter(chapter: number): number {
     throw new AuthorOsError('--chapter must be a positive integer.');
   }
   return chapter;
+}
+
+function normalizedInstruction(instruction: string | undefined): string | null {
+  const trimmed = instruction?.trim();
+  return trimmed ? trimmed : null;
 }
