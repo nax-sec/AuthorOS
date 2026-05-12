@@ -50,6 +50,18 @@ import {
   setupGuided,
   type AskFn,
 } from './commands/setup.ts';
+import {
+  exportTemplate,
+  forgetTemplate,
+  listTemplates,
+  promoteTemplate,
+  renderTemplateExport,
+  renderTemplateForget,
+  renderTemplateList,
+  renderTemplatePromote,
+  renderTemplateShow,
+  showTemplate,
+} from './commands/template.ts';
 import { createOpenAiCompatibleClientFromProject, type LlmClient } from './core/llm.ts';
 import type { EnvLike } from './core/modelConfig.ts';
 import { resolveAuthorDir } from './core/authorSchema.ts';
@@ -145,6 +157,10 @@ export async function run(
 
     if (command === 'skill') {
       return await runSkill(rest, io);
+    }
+
+    if (command === 'template') {
+      return await runTemplate(rest, io, options);
     }
 
     throw new AuthorOsError(`Unknown command: ${command}`);
@@ -713,6 +729,59 @@ async function runSkill(args: string[], io: Io): Promise<number> {
   return 0;
 }
 
+async function runTemplate(args: string[], io: Io, options: RunOptions): Promise<number> {
+  const [subcommand = 'list', ...rest] = args;
+  const env = options.env ?? process.env;
+
+  if (subcommand === '--help' || subcommand === '-h') {
+    io.stdout(templateHelpText());
+    return 0;
+  }
+
+  const parsed = parseArgs(rest);
+  if (parsed.flags.help || parsed.flags.h) {
+    io.stdout(templateHelpText());
+    return 0;
+  }
+  const dir = stringFlag(parsed.flags.dir) ?? stringFlag(parsed.flags['author-dir']);
+
+  if (subcommand === 'list') {
+    io.stdout(renderTemplateList(await listTemplates(dir, env)));
+    return 0;
+  }
+
+  const key = parsed.positionals[0];
+  if (!key) {
+    throw new AuthorOsError(`author template ${subcommand} requires a template key.`);
+  }
+
+  if (subcommand === 'show') {
+    io.stdout(renderTemplateShow(await showTemplate(key, dir, env)));
+    return 0;
+  }
+
+  if (subcommand === 'promote') {
+    io.stdout(renderTemplatePromote(await promoteTemplate(key, dir, env)));
+    return 0;
+  }
+
+  if (subcommand === 'forget') {
+    io.stdout(renderTemplateForget(await forgetTemplate(key, dir, env)));
+    return 0;
+  }
+
+  if (subcommand === 'export') {
+    const outputFile = parsed.positionals[1];
+    if (!outputFile) {
+      throw new AuthorOsError('author template export requires an output file path.');
+    }
+    io.stdout(renderTemplateExport(await exportTemplate(key, outputFile, dir, env)));
+    return 0;
+  }
+
+  throw new AuthorOsError(`Unknown template subcommand: ${subcommand}`);
+}
+
 function optionalPositiveIntegerFlag(value: string | boolean | undefined, name: string): number | undefined {
   if (value === undefined) {
     return undefined;
@@ -815,6 +884,7 @@ function helpText(): string {
     '  author feedback analyze --chapter <N> [--model] [--write]',
     '  author decide --chapter <N> [--model] [--write]',
     '  author memory update --chapter <N> [--model] [--write]',
+    '  author template list | show | promote | forget | export',
     '  author skill install [--dir <skills-root>] [--force]',
     '',
     'Creative loop:',
@@ -834,6 +904,7 @@ function helpText(): string {
     '  feedback   Import and analyze real reader feedback',
     '  decide     Produce the weighted creative decision report (decider)',
     '  memory     Emit typed memory delta proposals (memory-curator)',
+    '  template   Manage seed and author-level templates',
     '  skill      Install the bundled Claude Code skill (SKILL.md)',
     '',
   ].join('\n');
@@ -873,6 +944,24 @@ function skillHelpText(): string {
     '  --force        Overwrite an existing SKILL.md even if it differs',
     '',
     'Restart Claude Code after install for the skill to register.',
+    '',
+  ].join('\n');
+}
+
+function templateHelpText(): string {
+  return [
+    'Manage seed and author-level templates.',
+    '',
+    'Usage:',
+    '  author template list',
+    '  author template show <key>',
+    '  author template promote <key>',
+    '  author template forget <key>',
+    '  author template export <key> <file.zip>',
+    '',
+    'Options:',
+    '  --dir <path>        Author directory. Default: AUTHOROS_AUTHOR_DIR or ~/.authoros',
+    '  --author-dir <path> Alias for --dir',
     '',
   ].join('\n');
 }
