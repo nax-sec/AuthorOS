@@ -1,6 +1,7 @@
-import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { agentContextPaths } from './agentContext.ts';
+import { loadCascadedMarkdown } from './cascade.ts';
+import { resolveAuthorDir } from './authorSchema.ts';
 import { AuthorOsError } from './schema.ts';
 
 export interface AgentProfileTemplate {
@@ -93,8 +94,13 @@ export function agentProfilePath(name: string): string {
 }
 
 export async function readAgentProfile(projectDir: string, name: string): Promise<string> {
+  const relativePath = `agents/${name}.md`;
   try {
-    return await readFile(join(projectDir, agentProfilePath(name)), 'utf8');
+    return await loadCascadedMarkdown({
+      builtinRoot: join(projectDir, '.authoros'),
+      authorRoot: resolveAuthorDir(undefined),
+      bookRoot: join(projectDir, '.authoros'),
+    }, relativePath);
   } catch (error) {
     if (error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
       throw new AuthorOsError(

@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   assembleAgentContext,
@@ -6,7 +6,7 @@ import {
   renderContextBlock,
   type ContextDoc,
 } from '../core/contextAssembly.ts';
-import { agentProfilePath } from '../core/agentProfiles.ts';
+import { readAgentProfile } from '../core/agentProfiles.ts';
 import type { LlmClient } from '../core/llm.ts';
 import { formatChapterNumber } from '../core/paths.ts';
 import { AuthorOsError } from '../core/schema.ts';
@@ -54,7 +54,7 @@ export async function createChapterPlan(projectDir: string, options: PlanOptions
   const docs = await assembleAgentContext(projectDir, plannerAgent, { chapter });
   assertNoRequiredMissing(plannerAgent, docs);
 
-  const profile = await readPlannerProfile(projectDir);
+  const profile = await readAgentProfile(projectDir, plannerAgent);
   const body = options.llm
     ? await generatePlanWithModel(options.llm, chapter, profile, docs)
     : renderPlanScaffold(chapter);
@@ -175,19 +175,6 @@ async function listExistingPlans(projectDir: string): Promise<PlanStatusEntry[]>
   return planEntries;
 }
 
-async function readPlannerProfile(projectDir: string): Promise<string> {
-  try {
-    return await readFile(join(projectDir, agentProfilePath(plannerAgent)), 'utf8');
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      throw new AuthorOsError(
-        `planner profile missing at ${agentProfilePath(plannerAgent)}. Run author init or restore the profile.`,
-      );
-    }
-    throw error;
-  }
-}
-
 async function generatePlanWithModel(
   llm: LlmClient,
   chapter: number,
@@ -224,7 +211,7 @@ async function generatePlanWithModel(
 
   let reply: string;
   try {
-    reply = await llm.generate(prompt, { temperature: 0.5, maxTokens: 1600 });
+    reply = await llm.generate(prompt, { temperature: 0.5, maxTokens: 4000 });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new AuthorOsError(`Plan model generation failed. ${detail}`);

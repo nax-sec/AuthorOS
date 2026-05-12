@@ -1,6 +1,4 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { agentProfilePath } from '../core/agentProfiles.ts';
+import { readAgentProfile } from '../core/agentProfiles.ts';
 import { agentNames } from '../core/agents.ts';
 import type { LlmClient } from '../core/llm.ts';
 import {
@@ -115,18 +113,19 @@ export async function pingAgent(
     throw new AuthorOsError('model is not set (use --model, AUTHOROS_MODEL, or OPENAI_MODEL)');
   }
 
-  const profile = await readFile(join(projectDir, agentProfilePath(agentName)), 'utf8');
+  const profile = await readAgentProfile(projectDir, agentName);
   const prompt = [
     `AGENT_PING ${agentName}`,
     'agent_profile:',
     profile,
     '',
-    'Task: reply with one short Chinese sentence confirming you understand your role.',
+    'Task: reply with exactly this short Chinese sentence and nothing else:',
+    '已理解我的 AuthorOS 角色。',
   ].join('\n');
 
   const reply = await llm.generate(prompt, {
     temperature: 0.2,
-    maxTokens: 200,
+    maxTokens: 800,
   });
 
   return {
