@@ -133,6 +133,41 @@ test('runSetupDistill retries leaked concrete names and writes a candidate templ
   });
 });
 
+test('runSetupDistill warns and refuses candidate when place names still leak after retry', async () => {
+  await withTempDirs(async (bookDir, authorDir) => {
+    await writeGeneratedBook(bookDir);
+    await writeFile(join(bookDir, 'world.md'), '# 世界与规则\n\n## 基础规则\n\n新港镇是义体黑市的核心据点。\n\n## 风险提醒\n\n技术不能万能。\n', 'utf8');
+
+    let calls = 0;
+    const llm = {
+      async generate(prompt: string) {
+        calls += 1;
+        if (calls === 2) {
+          assert.match(prompt, /Previous attempt leaked specific names: 新港镇/);
+        }
+        return JSON.stringify(distillTrue({
+          'world.md': '# 世界与规则\n\n## 基础规则\n\n新港镇式义体黑市城市。\n\n## 风险提醒\n\n不能万能。\n',
+        }));
+      },
+    };
+
+    const result = await runSetupDistill({
+      bookDir,
+      authorDir,
+      projectName: 'demo',
+      concept: '赛博朋克义体侦探',
+      llm,
+      now: new Date('2026-05-12T00:00:00Z'),
+    });
+
+    assert.equal(calls, 2);
+    assert.equal(result.shouldCreate, false);
+    assert.match(result.reason, /warning/i);
+    assert.ok(result.leakedTerms?.includes('新港镇'));
+    await assert.rejects(() => stat(join(authorDir, 'templates')));
+  });
+});
+
 function distillTrue(overrides: Record<string, string>) {
   return {
     should_create: true,
@@ -149,7 +184,7 @@ function distillTrue(overrides: Record<string, string>) {
     skeleton_files: {
       'product.md': overrides['product.md'] ?? '# 作品定位\n\n## 题材\n\n义体侦探\n\n## 目标读者\n\n读者\n\n## 核心卖点\n\n- 调查\n\n## 禁区\n\n- 具体人名\n',
       'outline.md': '# 主线大纲\n\n## 节奏规则\n\n调查推进。\n\n## 主线阶段\n\n- 阶段\n\n## 待规划章节\n\n- 待定\n',
-      'world.md': '# 世界与规则\n\n## 基础规则\n\n技术城市。\n\n## 风险提醒\n\n不能万能。\n',
+      'world.md': overrides['world.md'] ?? '# 世界与规则\n\n## 基础规则\n\n技术城市。\n\n## 风险提醒\n\n不能万能。\n',
       'characters.yaml': 'protagonist:\n  name: "<主角姓名>"\n  desire: ""\nmajor: []\nantagonists: []\n',
       'review_rules.md': '# 章节评审规则\n\n## 必查项\n\n技术一致。\n\n## 风险分级\n\n高: 空降。\n',
       'memory/canon.md': '# 正史设定\n\n## 变更记录\n\n- 待定。\n',

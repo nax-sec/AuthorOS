@@ -91,7 +91,7 @@ export async function runSetupDistill(args: {
     }
     leaked = findLeakedTerms(parsed.skeleton_files ?? {}, concreteTerms);
     if (leaked.length > 0) {
-      return { shouldCreate: false, reason: `distill aborted (concrete leak): ${leaked.join(', ')}`, leakedTerms: leaked };
+      return { shouldCreate: false, reason: `warning: distill aborted (concrete leak): ${leaked.join(', ')}`, leakedTerms: leaked };
     }
   }
 
@@ -270,9 +270,17 @@ function extractConcreteTerms(files: Record<string, string>): string[] {
   const terms = new Set<string>();
   const characters = files['characters.yaml'] ?? '';
   for (const match of characters.matchAll(/^\s*name:\s*["']?([^"'\n#]+)["']?/gm)) {
-    const value = match[1]?.trim();
-    if (value && !value.includes('<') && value.length >= 2) {
-      terms.add(value);
+    addConcreteTerm(terms, match[1]);
+  }
+  const segments = Object.values(files)
+    .join('\n')
+    .split(/[\s，。；：、,.!?！？;:）)\]]|是|的|在|里|中|和|与|及/g);
+  const concretePlaceOrOrg = /[\u4e00-\u9fffA-Za-z0-9·]{1,23}(?:市|镇|村|县|区|街|路|巷|港|湾|岛|山|谷|河|湖|洲|省|国|城|公司|集团|学院|高中|大学|医院|警局|分局|研究所|实验室|基金会|教会|公会)/g;
+  for (const segment of segments) {
+    for (const match of segment.matchAll(concretePlaceOrOrg)) {
+      if (match[0]!.length >= 3) {
+        addConcreteTerm(terms, match[0]);
+      }
     }
   }
   return [...terms];
@@ -281,6 +289,13 @@ function extractConcreteTerms(files: Record<string, string>): string[] {
 function findLeakedTerms(files: Record<string, string>, terms: string[]): string[] {
   const content = Object.values(files).join('\n');
   return terms.filter((term) => content.includes(term));
+}
+
+function addConcreteTerm(terms: Set<string>, raw: string | undefined): void {
+  const value = raw?.trim().replace(/[，。；：、,.!?！？;:）)\]]+$/g, '');
+  if (value && !value.includes('<') && value.length >= 2) {
+    terms.add(value);
+  }
 }
 
 async function writeCandidateTemplate(args: {
