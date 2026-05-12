@@ -1,0 +1,9 @@
+tests/
+tmp/
+*.log
+.DS_Store
+.gitignore
+.git/
+node_modules/
+coverage/
+dist/

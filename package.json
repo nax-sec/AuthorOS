@@ -1,0 +1,37 @@
+{
+  "name": "authoros",
+  "version": "0.2.0",
+  "description": "Local-first CLI writing system for AI authors managing a single long-form novel.",
+  "type": "module",
+  "bin": {
+    "author": "./bin/author.js",
+    "authoros": "./bin/author.js"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "src/",
+    "skill/",
+    "README.md",
+    "USAGE.md"
+  ],
+  "scripts": {
+    "author": "node src/cli.ts",
+    "build": "node scripts/build.mjs",
+    "prepack": "node scripts/build.mjs",
+    "check": "node --test tests/*.test.ts",
+    "test": "node --test tests/*.test.ts"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nax-sec/authoros.git"
+  },
+  "private": true,
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

@@ -1,0 +1,7 @@
+threads:
+  - id: T001
+    name: 主角能力成长线
+    status: active
+    current_stage: 初次觉醒
+    next_expected_move: 第一次使用能力并付出代价
+    last_advanced_chapter: 0

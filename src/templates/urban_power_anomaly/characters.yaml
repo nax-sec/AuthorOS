@@ -1,0 +1,26 @@
+protagonist:
+  name: ""
+  age: ""
+  occupation: ""
+  desire: ""
+  fear: ""
+  ability: ""
+  ability_cost: ""
+  arc: ""
+
+major:
+  - id: M001
+    name: ""
+    role: ""
+    relation_to_protagonist: ""
+    desire: ""
+    likely_change: ""
+
+minor: []
+
+antagonists:
+  - id: A001
+    name: ""
+    faction: ""
+    motivation: ""
+    threat_level: ""

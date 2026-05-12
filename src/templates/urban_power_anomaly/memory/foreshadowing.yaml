@@ -1,0 +1,9 @@
+hooks:
+  - id: H001
+    title: 能力来源
+    type: main_truth
+    status: open
+    introduced_chapter: 0
+    expected_payoff: 中后期揭示能力并非随机出现
+    last_advanced_chapter: 0
+    notes: ""
