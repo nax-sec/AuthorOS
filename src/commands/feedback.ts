@@ -199,7 +199,7 @@ async function generateAnalysisWithModel(
 
   let reply: string;
   try {
-    reply = await llm.generate(prompt, { temperature: 0.4, maxTokens: 1800 });
+    reply = await llm.generate(prompt, { temperature: 0.4, maxTokens: 4000 });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new AuthorOsError(`Feedback analyze model generation failed. ${detail}`);

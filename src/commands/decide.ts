@@ -145,7 +145,7 @@ async function generateDecisionWithModel(
 
   let reply: string;
   try {
-    reply = await llm.generate(prompt, { temperature: 0.35, maxTokens: 2400 });
+    reply = await llm.generate(prompt, { temperature: 0.35, maxTokens: 5000 });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new AuthorOsError(`Decide model generation failed. ${detail}`);

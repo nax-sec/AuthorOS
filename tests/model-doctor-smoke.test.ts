@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../src/cli.ts';
-import type { LlmClient } from '../src/core/llm.ts';
+import type { GenerateOptions, LlmClient } from '../src/core/llm.ts';
 
 async function withInitedProject(body: (cwd: string) => Promise<void>): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), 'authoros-v2-doctor-test-'));
@@ -70,9 +70,11 @@ test('doctor reports ready when api key and model are present', async () => {
 test('smoke pings chief-writer with the agent profile injected and renders the reply', async () => {
   await withInitedProject(async (cwd) => {
     let captured = '';
+    let capturedOptions: GenerateOptions | undefined;
     const llm: LlmClient = {
-      async generate(prompt) {
+      async generate(prompt, options) {
         captured = prompt;
+        capturedOptions = options;
         return '收到,我是 chief-writer,负责章节方向。';
       },
     };
@@ -87,6 +89,8 @@ test('smoke pings chief-writer with the agent profile injected and renders the r
     assert.match(captured, /AGENT_PING chief-writer/);
     assert.match(captured, /# chief-writer/);
     assert.match(captured, /Required Context/);
+    assert.match(captured, /已理解我的 AuthorOS 角色。/);
+    assert.equal(capturedOptions?.maxTokens, 800);
 
     const output = io.out.join('');
     assert.match(output, /agent: chief-writer/);

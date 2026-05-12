@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../src/cli.ts';
-import type { LlmClient } from '../src/core/llm.ts';
+import type { GenerateOptions, LlmClient } from '../src/core/llm.ts';
 
 async function withDraftedChapter(body: (cwd: string) => Promise<void>): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), 'authoros-v2-review-test-'));
@@ -33,12 +33,15 @@ function silentIo() {
   };
 }
 
-function recordingLlm(replies: Record<string, string>, capture?: (label: string, prompt: string) => void): LlmClient {
+function recordingLlm(
+  replies: Record<string, string>,
+  capture?: (label: string, prompt: string, options: GenerateOptions | undefined) => void,
+): LlmClient {
   return {
-    async generate(prompt) {
+    async generate(prompt, options) {
       for (const marker of Object.keys(replies)) {
         if (prompt.includes(marker)) {
-          capture?.(marker, prompt);
+          capture?.(marker, prompt, options);
           return replies[marker];
         }
       }
@@ -69,13 +72,17 @@ test('review --mode internal scaffold writes consolidated file', async () => {
 test('review --mode internal --model calls 5 agents (4 advisors + editor)', async () => {
   await withDraftedChapter(async (cwd) => {
     const seen: string[] = [];
+    const maxTokensByMarker = new Map<string, number | undefined>();
     const llm = recordingLlm({
       INTERNAL_REVIEW_WORLD_ADVISOR: '## blocking\n- 无\n## advisory\n- 世界设定 OK\n## accepted-if-no-change\n- 无',
       INTERNAL_REVIEW_CHARACTER_ADVISOR: '## blocking\n- 无\n## advisory\n- 人物 OK\n## accepted-if-no-change\n- 无',
       INTERNAL_REVIEW_PLOT_ADVISOR: '## blocking\n- 无\n## advisory\n- 剧情 OK\n## accepted-if-no-change\n- 无',
       INTERNAL_REVIEW_STYLE_ADVISOR: '## blocking\n- 无\n## advisory\n- 风格 OK\n## accepted-if-no-change\n- 无',
       INTERNAL_REVIEW_EDITOR: '## 已采纳\n- 风格小改\n## 已拒绝\n- 无\n## 阻塞风险\n- 无\n## 暂缓\n- 无',
-    }, (marker) => seen.push(marker));
+    }, (marker, _prompt, options) => {
+      seen.push(marker);
+      maxTokensByMarker.set(marker, options?.maxTokens);
+    });
 
     const io = silentIo();
     assert.equal(
@@ -96,6 +103,9 @@ test('review --mode internal --model calls 5 agents (4 advisors + editor)', asyn
       'INTERNAL_REVIEW_PLOT_ADVISOR',
       'INTERNAL_REVIEW_STYLE_ADVISOR',
     ]));
+    assert.equal(maxTokensByMarker.get('INTERNAL_REVIEW_WORLD_ADVISOR'), 6000);
+    assert.equal(maxTokensByMarker.get('INTERNAL_REVIEW_PLOT_ADVISOR'), 6000);
+    assert.equal(maxTokensByMarker.get('INTERNAL_REVIEW_EDITOR'), 7000);
 
     const stored = await readFile(join(cwd, 'reviews/0001.internal.md'), 'utf8');
     assert.match(stored, /source: model/);
@@ -172,7 +182,10 @@ test('review --mode reader-sim --model passes readers.yaml in context', async ()
         '## 逻辑读者', '通。',
         '## 人设读者', '活。',
       ].join('\n'),
-    }, (_marker, prompt) => { captured = prompt; });
+    }, (_marker, prompt, options) => {
+      captured = prompt;
+      assert.equal(options?.maxTokens, 5000);
+    });
 
     const io = silentIo();
     assert.equal(

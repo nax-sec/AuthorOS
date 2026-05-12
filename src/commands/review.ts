@@ -53,6 +53,10 @@ const advisorSpecs: readonly AdvisorSpec[] = [
   { agent: 'style-advisor', marker: 'INTERNAL_REVIEW_STYLE_ADVISOR', label: '风格顾问 (style-advisor)', temperature: 0.4 },
 ];
 
+const advisorReviewMaxTokens = 6000;
+const editorReviewMaxTokens = 7000;
+const readerSimMaxTokens = 5000;
+
 export async function createChapterReview(projectDir: string, options: ReviewOptions): Promise<ReviewResult> {
   const chapter = resolveChapterNumber(options);
   const chapterId = formatChapterNumber(chapter);
@@ -229,7 +233,7 @@ async function generateAdvisorReview(
 
   return await runAgentCall(llm, `${spec.agent} review`, prompt, {
     temperature: spec.temperature,
-    maxTokens: 2400,
+    maxTokens: advisorReviewMaxTokens,
   });
 }
 
@@ -278,7 +282,7 @@ async function generateEditorDecision(
 
   return await runAgentCall(llm, 'editor synthesis', prompt, {
     temperature: 0.35,
-    maxTokens: 3000,
+    maxTokens: editorReviewMaxTokens,
   });
 }
 
@@ -309,7 +313,7 @@ async function generateReaderSim(
 
   return await runAgentCall(llm, 'reader-sim review', prompt, {
     temperature: 0.55,
-    maxTokens: 2000,
+    maxTokens: readerSimMaxTokens,
   });
 }
 
