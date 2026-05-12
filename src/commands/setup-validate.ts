@@ -67,7 +67,7 @@ export async function repairBookFileIfNeeded(
 
   let reply: string;
   try {
-    reply = await llm.generate(prompt, { temperature: 0.2, maxTokens: 2000 });
+    reply = await llm.generate(prompt, { temperature: 0.2, maxTokens: 6000 });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new AuthorOsError(`Setup repair for ${file} model generation failed. ${detail}`);

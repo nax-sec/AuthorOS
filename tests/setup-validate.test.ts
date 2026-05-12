@@ -19,10 +19,11 @@ test('repairBookFileIfNeeded repairs missing headings and passes validation', as
     await writeFile(join(bookDir, 'product.md'), '# 作品定位\n\n## 题材\n\n侦探小说\n', 'utf8');
     const calls: string[] = [];
     const llm = {
-      async generate(prompt: string) {
+      async generate(prompt: string, options?: { maxTokens?: number }) {
         calls.push(prompt);
         assert.match(prompt, /SETUP_REPAIR/);
         assert.match(prompt, /Missing required heading: ## 目标读者/);
+        assert.equal(options?.maxTokens, 6000);
         return [
           '# 作品定位',
           '',
