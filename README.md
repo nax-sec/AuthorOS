@@ -1,63 +1,46 @@
 # AuthorOS
 
-本地优先的 AI 作者 CLI:由 12 个 agent 协作经营一本长篇小说,完成 计划 → 写作 → 评审 → 修订 → 决策 → 记忆 的闭环。
+本地优先的 AI 作者 CLI。AuthorOS 把一本长篇小说当作一个可经营的产品,用 agent 闭环完成计划、写作、评审、修订、决策、记忆更新和作者级形状调整。
 
-License: MIT · Node.js ≥ 24 · 运行时零 npm 依赖
+License: MIT · Node.js >= 24 · 运行时零 npm 依赖
 
 ---
 
 ## 1. 系统要求
 
+v0.3 引入了"作者层":首次使用前先运行 `author author init`,让 AuthorOS 建立作者级 profile、preferences、templates 和 agent 默认配置。之后每本书都可以从作者层继承这些资产。
+
 - Node.js **24** 或更新
 - 任何能跑 `node` 的 shell(PowerShell / bash 都行)
 - 一个 OpenAI 兼容的 API key + base_url + 模型名
 
-**运行时零 npm 依赖**。dev 用 Node 24 native TypeScript type stripping 直接跑 `src/*.ts`;发布时 `npm pack` 会自动通过 prepack 脚本用 tsc 编译到 `dist/`(devDep 只有 typescript,运行时不需要)。
+运行时零 npm 依赖。dev 模式用 Node 24 native TypeScript type stripping 直接跑 `src/*.ts`;发布时 `npm pack` 会通过 prepack 脚本编译到 `dist/`。
 
 ### Windows PowerShell 注意
 
-默认 ExecutionPolicy(`Restricted`)会拦截 `npm.ps1` 和 npm 装出来的 `author.ps1`。两种绕法:
+默认 ExecutionPolicy(`Restricted`)会拦截 `npm.ps1` 和 npm 装出来的 `author.ps1`。可以直接用 `.cmd` shim:
 
 ```powershell
-# 绕法 A:用 .cmd shim(batch file,不受 policy 影响)
-npm.cmd install -g .\authoros-0.2.0.tgz
+npm.cmd install -g .\authoros-0.3.0.tgz
 author.cmd --help
-
-# 绕法 B:为当前用户放开
-Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-npm install -g .\authoros-0.2.0.tgz
-author --help
 ```
-
-cmd.exe / Git Bash / WSL 不受影响。
 
 ---
 
 ## 2. 安装
 
-### 方式 A: npm pack(推荐)
+### 方式 A: npm pack
 
 ```powershell
-# 拿到 authoros-0.2.0.tgz 后
-npm install -g .\authoros-0.2.0.tgz
+npm install -g .\authoros-0.3.0.tgz
 author --help
-# 卸载:npm uninstall -g authoros
-```
-
-装完顺手注册 Claude Code skill(可选,让 Claude Code 自动识别 AuthorOS 触发短语):
-
-```powershell
-author skill install                   # 装到 ~/.claude/skills/authoros/
-author skill install --force           # 覆盖已存在副本
-author skill install --dir <root>      # 装到别处
 ```
 
 ### 方式 B: 解压 + npm link
 
 ```powershell
-# 解压 authoros-v2.zip
 cd authoros-v2
-npm link            # 注册 author / authoros 命令
+npm link
 author --help
 ```
 
@@ -68,285 +51,324 @@ cd authoros-v2
 node src\cli.ts --help
 ```
 
+### 可选: 安装 Claude Code skill
+
+```powershell
+author skill install
+author skill install --force
+author skill install --dir <root>
+```
+
+---
+
+## 2.5. 三层身份模型
+
+AuthorOS v0.3 有三层身份:
+
+- **作者层**:默认在 `~/.authoros`,也可用 `AUTHOROS_AUTHOR_DIR` 或 `--author-dir` 指定。保存作者级 `author.md`、`style.md`、preferences、agent profiles、templates 和 changes 历史。
+- **书层**:每本书自己的 `product.md`、`author.md`、`world.md`、`outline.md`、`characters.yaml`、`review_rules.md`、memory 和 `.authoros/config.yaml`。
+- **运行层**:章节计划、正文、评审、决策、反馈分析、memory delta、console change 记录。
+
+继承方向是作者层 -> 书层 -> 运行层。书层可以覆盖作者层,但不会自动反写作者层;需要长期复用的变化通过 `author console --scope author` 或 template promote 进入作者层。
+
 ---
 
 ## 3. 配置模型
 
-模型 key **永不存盘**(只存环境变量名)。两种配置层次:
-
-### 环境变量(默认,所有 book 共用)
+模型 key 不存盘,只存环境变量名。
 
 ```powershell
 $env:OPENAI_API_KEY="<你的 key>"
-$env:OPENAI_BASE_URL="https://api.openai.com/v1"     # 或你的代理
-$env:AUTHOROS_MODEL="gpt-4o"                          # 或别的模型名
+$env:OPENAI_BASE_URL="https://api.openai.com/v1"
+$env:AUTHOROS_MODEL="gpt-4o"
 ```
 
-### 项目级覆盖(写到 `.authoros/model.json`)
+项目级覆盖:
 
 ```powershell
 cd <book 目录>
 author model config set --base-url https://... --model <name>
-author model config set --api-key-env OPENAI_API_KEY    # env 变量名,不是 key 本身
-author model doctor       # 不联网,只检查配置是否齐
-author model smoke        # 联网 ping chief-writer,确认能通
+author model config set --api-key-env OPENAI_API_KEY
+author model doctor
+author model smoke
 ```
 
 ---
 
 ## 4. 起一本书
 
-`author init` **必须**选一个模式 flag:
+首次使用:
 
 ```powershell
-# (1) concept 模式:一句话给模型,模型一次出 6 个 identity 文件
+author author init
+```
+
+指定作者目录:
+
+```powershell
+author author init --author-dir D:\AI\author-home
+author init "我的小说" --quick --author-dir D:\AI\author-home
+```
+
+`author init` 必须选择一个模式:
+
+```powershell
 author init "我的小说" --concept "都市异能,主角是数据分析师,能力是回溯历史信息"
-
-# (2) guided 模式:交互式 Q&A,6 段每段一个问题
 author init "我的小说" --guided
-
-# (3) quick 模式:仅用模板默认(后续手动编辑或重新 init)
 author init "我的小说" --quick
-
-# 路径控制
-author init demo --quick --dir D:\Books\demo      # 指定路径
-author init demo --quick --force                  # 允许覆盖非空目录
 ```
 
-**模板**是**结构参考**——concept/guided 模式下,模型只用它的小节结构,内容完全按用户意图重写。`--quick` 才会原样保留模板内容。
+常用选项:
 
-支持的模板(用 `--template <key>` 选择,默认 `urban_power_anomaly`):
+- `--template <key>`:选择参考模板,默认 `urban_power_anomaly`。
+- `--dir <path>`:指定书目录。
+- `--force`:允许写入非空目录。
+- `--strategy-confirm`:concept/guided 模式下打印 Strategy Pass 决策并等待确认。
+- `--no-distill`:跳过建书后的候选 template 提炼。
+- `--author-dir <path>`:使用指定作者层目录。
 
-| Key | 中文名 | 调性 |
-| --- | --- | --- |
-| `urban_power_anomaly` | 都市异能 | 现代 + 异能脑洞爽文 |
-| `xianxia` | 仙侠修真 | 出世问道 / 境界突破 |
-| `western_fantasy` | 西方奇幻 | 史诗 / 多种族 / 三方势力 |
-| `mystery_thriller` | 悬疑推理 | 本格 + 社会派,公平推理 |
+支持 12 个 seed templates:
 
-### 起完书你会得到
+`urban_power_anomaly`, `xianxia`, `western_fantasy`, `mystery_thriller`, `sci_fi`, `rules_horror`, `wuxia`, `dog_blood_romance`, `system_literature`, `apocalypse`, `period_drama`, `campus_realism`。
 
-```
-我的小说/
-  product.md            # 作品定位
-  author.md             # 作者人格
-  outline.md            # 主线大纲
-  world.md              # 世界与规则
-  characters.yaml       # 人物表
-  review_rules.md       # 章节评审规则
-  README.md             # 项目级 README(自动生成)
-  plans/                # 章节计划
-  chapters/             # 章节正文(canonical)+ <ch>.draft.md(被修订时的原稿备份)
-  reviews/              # <ch>.internal.md / <ch>.reader-sim.md
-  feedback/             # <ch>.raw.jsonl / <ch>.analysis.md
-  decisions/            # 加权决策报告
-  memory/
-    canon.md, foreshadowing.yaml, plot_threads.yaml,
-    character_state.yaml, style.md   # 5 类类型化记忆
-    chapter-<ch>.delta.md             # 每章 memory-curator 输出的待合并 delta
-  .authoros/
-    config.yaml         # 项目配置(字数目标、容差等)
-    state.json          # 章节进度状态
-    weights.yaml        # 决策权重(默认 40/30/10/20)
-    readers.yaml        # 5 类模拟读者人格
-    model.json          # (可选) 模型配置
-    agents/<name>.md    # 12 个 agent 的可编辑 profile
-    runs/               # 操作日志(预留)
-    templates/<name>/   # 冻结的模板源拷贝
-```
+模板是结构参考。concept/guided 模式下,模型只用 schema 和 strategy 决策,不复制模板正文;`--quick` 才保留模板默认内容。
 
 ---
 
-## 5. 跑通第一章 — 完整流程
-
-闭环:**plan → write → review → revise → decide → memory**
+## 5. 跑通第一章
 
 ```powershell
 cd <book 目录>
 
-# 0. 确认模型可用
 author model doctor
-author model smoke              # 真模型 ping chief-writer
+author model smoke
 
-# 1. 规划第一章
 author plan --chapter 1 --model --write
-
-# 2. 写第一章(chief-writer 出稿,长度按 .authoros/config.yaml 的 target ±容差控制)
 author write --chapter 1 --model --write
-
-# 3. 评审(并行 4 顾问 + editor 综合 + 5 类模拟读者)
 author review --chapter 1 --mode all --model --write
-
-# 4. chief-writer 自己看评审,判断要不要修
-#    REVISION_NEEDED: yes → 原稿存为 chapters/0001.draft.md,新版覆盖 chapters/0001.md
-#    REVISION_NEEDED: no  → 文件不动
 author revise --chapter 1 --model --write
-
-# 5. 加权决策(40/30/10/20;无真实反馈时该项不计,不补权)
 author decide --chapter 1 --model --write
-
-# 6. 记忆更新建议(产出 memory/chapter-0001.delta.md,手动合并到 memory/* 5 个文件)
 author memory update --chapter 1 --model --write
 
-# 看进度
 author state
 ```
 
-**真实反馈线**(可选,decide 前导入):
+真实反馈线:
 
 ```powershell
-# 你手上有 feedback.txt,每行一条
 author feedback import --chapter 1 path\to\feedback.txt
 author feedback analyze --chapter 1 --model --write
-# 然后 decide 会自动把真实反馈纳入权重(20%)
 author decide --chapter 1 --model --write
 ```
+
+真实反馈不存在时,`reader_feedback` 的 20% 不重分配给其它来源。
 
 ---
 
 ## 6. 命令速查
 
-```
+```powershell
+author author init | show | doctor | edit-profile
+
 author init <name> --quick | --concept "<idea>" | --guided
-author init <name> --dir <path>
+author init <name> --dir <path> --author-dir <path>
 
 author model config | doctor | smoke
-author model config set --base-url <url> --model <name> --api-key-env <ENV>
-author model config reset
-
-author state                                            # 各章产出状态
-author brief                                            # 打印 product.md
-author profile                                          # 打印 author.md
+author state
+author brief
+author profile
 
 author plan --chapter <N> | --next [--model] [--write]
-author plan status
-
 author write --chapter <N> | --next [--model] [--write]
-
 author review --chapter <N> [--mode internal|reader-sim|all] [--model] [--write]
-
-author revise --chapter <N> [--model] [--write]
-
+author revise --chapter <N> [--model] [--write] [--instruction "<directive>"]
 author feedback import --chapter <N> <input-file>
 author feedback analyze --chapter <N> [--model] [--write]
-
 author decide --chapter <N> [--model] [--write]
-
 author memory update --chapter <N> [--model] [--write]
 
+author console ["instruction"] [--dry-run] [--write] [--scope author|book|both]
+author console log
+author console --rollback <CHG-ID>
+
+author template list | show <key> | promote <key> | forget <key> | export <key> <file.zip>
 author skill install [--dir <skills-root>] [--force]
 ```
-
-所有命令都支持 `--help`。
-
-`--model`:走真模型;省略时多数命令产出"scaffold"占位结构(便于查看结构、不耗 token)。
-`--write`:落盘;省略时仅打印预览。
-`--next`:用在 plan / write 上,自动找下一个待处理章节。
 
 ---
 
 ## 7. 字数与容差配置
 
-`.authoros/config.yaml` 控制 chief-writer 写作时的长度目标:
+`.authoros/config.yaml` 控制 chief-writer 写作长度:
 
 ```yaml
-chapter_word_count: 3000              # 中文字符目标
-chapter_word_count_floor_percent: 80  # 最低 = target × 0.8 = 2400
-chapter_word_count_ceiling_percent: 150 # 最高 = target × 1.5 = 4500
+chapter_word_count: 3000
+chapter_word_count_floor_percent: 80
+chapter_word_count_ceiling_percent: 150
 ```
 
-write 时模型会读 acceptable_range 并尝试落在范围内。超出会在终端报 `OUT OF RANGE`,revise 步骤会强制压缩(或扩张)使其回到范围。
+write 会尽量落在范围内。超出时 `revise` 会把 length_state 当作修订理由。
 
 ---
 
-## 8. agent profile 自定义
+## 8. Agent Profile 自定义
 
-12 个 agent 的 profile 都在 `.authoros/agents/<name>.md`,用户可以**直接编辑**:
+书层 agent profile 在 `.authoros/agents/<name>.md`,作者层默认 profile 在 `<author-dir>/agents/<name>.md`。可直接编辑,下次调用生效。
 
-```
-planner.md            chief-writer.md      world-advisor.md
-character-advisor.md  plot-advisor.md      style-advisor.md
-editor.md             reader-sim.md        feedback-analyzer.md
-decider.md            memory-curator.md    book-setup-editor.md
-```
+核心 agent:
 
-每个 profile 包含 Responsibilities / Required Context / Boundaries 三段。改完立即生效(下次该 agent 调用就用新 profile)。
+`planner`, `chief-writer`, `world-advisor`, `character-advisor`, `plot-advisor`, `style-advisor`, `editor`, `reader-sim`, `feedback-analyzer`, `decider`, `memory-curator`, `book-setup-editor`, `author-console`。
 
 ---
 
-## 9. 决策权重自定义
+## 9. 决策权重
 
-`.authoros/weights.yaml`(默认值符合 MVP 文档):
+默认 `.authoros/weights.yaml`:
 
 ```yaml
 decision_basis_weights:
   author_long_term_plan:  { weight: 40, enabled_when: always }
   internal_review:        { weight: 30, enabled_when: always }
   simulated_readers:      { weight: 10, enabled_when: always }
-  reader_feedback:        { weight: 20, enabled_when: real_feedback_exists,
-                            redistribute_when_absent: false }
+  reader_feedback:
+    weight: 20
+    enabled_when: real_feedback_exists
+    redistribute_when_absent: false
 ```
 
-decider 严格执行 `redistribute_when_absent: false` —— 没真实反馈时这 20% **不补权给其它项**,不归一化。
+缺真实反馈时跳过该项,不归一化。
 
 ---
 
-## 10. 模拟读者自定义
+## 10. 模拟读者
 
-`.authoros/readers.yaml` 列出 5 类读者人格(都市异能默认):
-
-```yaml
-simulated_readers:
-  - id: R1
-    name: 爽点读者
-    cares: [主角有没有赢, 能力用法爽不爽, 憋屈有没有释放]
-  ...
-```
-
-reader-sim agent 每章按这个清单走,每类人格输出一段反馈。换书种类时可以直接改这里。
+`.authoros/readers.yaml` 保存模拟读者人格。`review --mode reader-sim` 每章按这个清单输出读者侧信号。
 
 ---
 
 ## 11. 常见问题
 
-**Q: 模型返回空内容,报 finish_reason: length**
-A: max_tokens 顶到了。advisor 是 2400,editor 3000,chief-writer 动态(基于 chapter_word_count_ceiling)。一般 chinese chars 1.5K-3K 字够用;如果你的目标长度比默认 3000 大很多,改 `.authoros/config.yaml` 里的 `chapter_word_count`。
+**Q: 模型返回空内容,报 finish_reason: length**  
+A: max_tokens 顶到了。先降低 `chapter_word_count`,或检查对应命令的输出预算。
 
-**Q: 章节 OUT OF RANGE 怎么办**
-A: 跑 `author revise --chapter N --model --write` —— chief-writer 看到 length_state 超范围会主动压缩(或扩张)。
+**Q: 章节 OUT OF RANGE 怎么办**  
+A: 跑 `author revise --chapter N --model --write`。chief-writer 会根据 length_state 压缩或扩张。
 
-**Q: 我想跳过 review 直接 decide 行不行**
-A: 不行。decider 的 required context 包含 internal review 和 reader-sim review,缺会报错。这是设计——加权决策必须有评审输入。
+**Q: 我想跳过 review 直接 decide 行不行**  
+A: 不行。decider 需要 internal review 和 reader-sim review。
 
-**Q: 记忆 delta 怎么"合并"**
-A: 手动。打开 `memory/chapter-NNNN.delta.md`,看 5 段 delta,把要采纳的内容粘到 `memory/canon.md` / `foreshadowing.yaml` / 等文件。AuthorOS v1 故意不自动合并,避免破坏作者人工 curation 的 canon。
+**Q: 记忆 delta 怎么合并**  
+A: 手动打开 `memory/chapter-NNNN.delta.md`,把采纳内容合并到 `memory/*`。AuthorOS 不自动改 canon。
 
-**Q: PowerShell 里 `npm` 或 `author` 报 "cannot be loaded because running scripts is disabled"**
-A: 默认 ExecutionPolicy 拦 `.ps1`。用 `npm.cmd` / `author.cmd`,或 `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`。详见 §1。
+**Q: 为什么我的概念没生成异能内容**  
+A: v0.3 的 Strategy Pass 会先判断你的概念适合哪个模板,并用 banned vocabulary 防止不相关模板词汇串入。如果你的 concept 是侦探、校园、科幻等非异能方向,系统会避免把 `urban_power_anomaly` 的能力/代价词汇硬塞进去。
+
+**Q: candidate template 是什么**  
+A: Distill Pass 认为某本书形成了可复用题材结构时,会在作者层创建 `status: candidate` 的模板。它不会自动用于新书;你确认后用 `author template promote <key>` 转为 active。
+
+**Q: PowerShell 里 `npm` 或 `author` 报脚本被禁用**  
+A: 用 `npm.cmd` / `author.cmd`,或修改 ExecutionPolicy。
 
 ---
 
-## 12. 验证安装是否完整
+## 12. 验证安装
 
 ```powershell
-cd authoros-v2     # 或你装到的位置
-npm test           # 应该看到 80+ tests pass
+npm test
+npm run build
 node src\cli.ts --help
 ```
+
+当前 v0.3 测试矩阵目标是 140+ tests pass。
+
+---
+
+## 13. 作者控制台
+
+`author console` 是作者驾驶席,用于调整书或作者层的 shape,不直接重写章节正文。
+
+One-shot:
+
+```powershell
+author console "把主角名字从 X 改成 Y"
+author console --dry-run "调整世界规则"
+author console --write "调整大纲第二阶段"
+author console --scope author "把默认写作偏好改得更克制"
+```
+
+REPL:
+
+```powershell
+author console
+```
+
+每次模型输出必须是四段协议:
+
+```text
+[scope] book | author | both
+[impact]
+  <severity>: <file> - <reason>
+[diff]
+--- <file>
+@@ ...
+<unified diff>
+[next]
+  <command>
+```
+
+REPL 支持:
+
+- `apply`:应用 diff,写入 `changes/<ts>/` 快照。
+- `edit`:把 diff 写到临时文件,用 `$EDITOR` 编辑后再决定。
+- `abort`:丢弃本次建议。
+- `drill <file>`:预览应用后该文件完整内容。
+
+历史与回滚:
+
+```powershell
+author console log
+author console --rollback CHG-XXXX
+```
+
+回滚会从对应 change 的 `before/` 快照还原文件,并写入新的 rollback change 记录。
+
+---
+
+## 14. 模板管理
+
+模板分两类:
+
+- `seed`:随 AuthorOS 发布的出厂模板,不可删除。
+- `author`:作者层 `templates/<key>/` 中积累的模板资产。
+
+命令:
+
+```powershell
+author template list
+author template show <key>
+author template promote <key>
+author template forget <key>
+author template export <key> <file.zip>
+```
+
+说明:
+
+- `list`:列 seed 和 author templates,标注 source/status。
+- `show`:查看 `meta.yaml` 和文件结构。
+- `promote`:把 candidate template 转为 active,可被后续建书使用。
+- `forget`:删除作者层模板;seed template 会报错。
+- `export`:打包成 zip,方便迁移或提 PR 进入 seed templates。
+
+candidate template 来自 Distill Pass。它代表"这本书总结出的可复用结构",需要人工 promote 后才进入常用模板库。
 
 ---
 
 ## 分发
 
 ```powershell
-npm pack                      # 自动跑 prepack(tsc 编译 src/→dist/ + copy 模板)
-                              # 产出 authoros-0.2.0.tgz(~83 KB,约 80 文件)
-
-# 收件人:
-npm install -g .\authoros-0.2.0.tgz
-author skill install          # 可选
+npm pack
+npm install -g .\authoros-0.3.0.tgz
+author skill install
 ```
 
----
-
-完。详细模型行为在 `src/commands/*.ts` 的 prompt 里能看到具体约束,12 个 agent 的 profile 在 init 后的 `.authoros/agents/*.md`。
+详细模型行为在 `src/commands/*.ts` 的 prompt 里,agent profile 在 init 后的 `.authoros/agents/*.md`。
