@@ -1,0 +1,9 @@
+hooks:
+  - id: H001
+    title: 主角灵根真相
+    type: main_truth
+    status: open
+    introduced_chapter: 0
+    expected_payoff: 中后期揭示灵根并非凡品,牵动身世
+    last_advanced_chapter: 0
+    notes: ""

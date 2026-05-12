@@ -1,0 +1,10 @@
+protagonist:
+  race_revealed: false
+  magic_state: 未觉醒
+  faction_allegiance: 无
+  known_information: []
+  active_relationships: []
+  open_obligations: []        # 古老誓约/血誓/神职誓约
+  last_updated_chapter: 0
+
+major: []

@@ -1,0 +1,7 @@
+threads:
+  - id: T001
+    name: 主角史诗地位推进线
+    status: active
+    current_stage: 草根冒险者起步
+    next_expected_move: 首次接触异变 + 三方势力之一进入视野
+    last_advanced_chapter: 0

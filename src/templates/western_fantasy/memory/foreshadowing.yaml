@@ -1,0 +1,9 @@
+hooks:
+  - id: H001
+    title: 主角身世与古老遗迹
+    type: main_truth
+    status: open
+    introduced_chapter: 0
+    expected_payoff: 中后期揭示主角与某古老存在/誓约的关联
+    last_advanced_chapter: 0
+    notes: ""

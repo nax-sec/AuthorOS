@@ -1,0 +1,18 @@
+hooks:
+  - id: H001
+    title: 真凶身份与社会派动机
+    type: main_truth
+    status: open
+    introduced_chapter: 0
+    expected_payoff: 结局前一章给出最后关键线索,结局章揭示完整真相
+    last_advanced_chapter: 0
+    notes: ""
+
+  - id: H002
+    title: 伪揭示与真揭示的反差
+    type: structural
+    status: open
+    introduced_chapter: 0
+    expected_payoff: 全卷 1/2 处伪揭示,后半推翻
+    last_advanced_chapter: 0
+    notes: ""

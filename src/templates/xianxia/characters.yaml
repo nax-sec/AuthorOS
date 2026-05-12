@@ -1,0 +1,27 @@
+protagonist:
+  name: ""
+  age: ""
+  origin: ""              # 凡人/世家弟子/孤儿/异族
+  spirit_root: ""         # 灵根成色:天/异/地/凡/废
+  desire: ""              # 所求之道(长生?复仇?守护?问道?)
+  fear: ""
+  ability: ""             # 初露端倪的修炼天赋/异象
+  ability_cost: ""        # 修炼代价(寿元?道心?业力?)
+  arc: ""                 # 由凡入仙再问道
+
+major:
+  - id: M001
+    name: ""
+    role: ""              # 师尊/同门/道侣/挚友
+    relation_to_protagonist: ""
+    desire: ""
+    likely_change: ""
+
+minor: []
+
+antagonists:
+  - id: A001
+    name: ""
+    faction: ""           # 敌对宗门/魔修/异族/天劫
+    motivation: ""
+    threat_level: ""

@@ -1,0 +1,8 @@
+protagonist:
+  cultivation_state: 凡人/灵根未明
+  known_dao: []                # 已确立的"道"线索
+  active_relationships: []     # 师徒/同门/道侣
+  open_obligations: []         # 待偿因果/誓约
+  last_updated_chapter: 0
+
+major: []

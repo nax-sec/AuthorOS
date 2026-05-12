@@ -1,0 +1,7 @@
+threads:
+  - id: T001
+    name: 主角境界推进线
+    status: active
+    current_stage: 炼气期待入门
+    next_expected_move: 第一次以下犯上 + 灵根初露
+    last_advanced_chapter: 0

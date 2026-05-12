@@ -1,0 +1,12 @@
+protagonist:
+  investigation_stage: 介入前
+  weakness_state: 未暴露
+  known_clues: []              # 主角已掌握的线索
+  reader_known_clues: []       # 读者已看到的线索(公平性核对用)
+  active_relationships: []
+  open_obligations: []
+  last_updated_chapter: 0
+
+major: []
+
+suspects_state: []             # 嫌疑人池当前状态(浮现/沉降/被排除)

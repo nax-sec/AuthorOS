@@ -1,0 +1,20 @@
+threads:
+  - id: T001
+    name: 主线案件调查
+    status: active
+    current_stage: 案件刚出现
+    next_expected_move: 第一个嫌疑人浮现 + 主角心理弱点初次显现
+    last_advanced_chapter: 0
+
+  - id: T002
+    name: 嫌疑人轮换
+    status: active
+    current_stage: 嫌疑人池空
+    next_expected_move: 2-3 个嫌疑人浮现
+    last_advanced_chapter: 0
+
+timeline:
+  - chapter: 0
+    in_universe_time: ""       # 案发的虚拟时间
+    location: ""
+    notes: ""

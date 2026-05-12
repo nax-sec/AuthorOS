@@ -1,0 +1,36 @@
+protagonist:
+  name: ""
+  age: ""
+  occupation: ""           # 侦探/记者/警察/律师/法医/普通人卷入
+  specialty: ""            # 法医知识/心理学/侧写/逻辑/技术
+  weakness: ""             # 心理弱点/创伤/盲点/执念
+  desire: ""               # 追凶/翻案/真相/赎罪
+  fear: ""
+  arc: ""                  # 从被弱点束缚到克服
+
+major:
+  - id: M001
+    name: ""
+    role: ""               # 助手/警方对手/受害者关联人/线人
+    relation_to_protagonist: ""
+    desire: ""
+    likely_change: ""
+
+minor: []                  # 路人证人/案件相关者
+
+antagonists:
+  - id: A001
+    name: ""
+    role: ""               # 真凶/伪凶/共犯/幕后操纵者
+    motivation: ""         # 社会派维度的真实动机
+    method: ""             # 诡计方式
+    threat_level: ""
+
+suspects:                  # 嫌疑人池(独立于 antagonists)
+  - id: S001
+    name: ""
+    motive: ""             # 有动机但未必是凶手
+    opportunity: ""        # 有机会
+    means: ""              # 有手段
+    revealed_chapter: 0
+    cleared_chapter: 0     # 0 表示未被排除

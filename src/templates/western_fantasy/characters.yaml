@@ -1,0 +1,30 @@
+protagonist:
+  name: ""
+  race: ""                  # 人/精灵/矮人/兽人/半人/未明
+  age: ""
+  profession: ""            # 战士/法师/盗贼/牧师/游侠/其它
+  patron_deity: ""          # 信仰的神(可空)
+  magic_affinity: ""        # 元素/体系流派
+  magic_cost: ""            # 施法代价(精神/寿元/誓约/烙印)
+  desire: ""
+  fear: ""
+  arc: ""                   # 草根→重要参与者→史诗角色
+
+major:
+  - id: M001
+    name: ""
+    race: ""
+    role: ""                # 导师/同伴/异族贵族/教廷代理人/法师塔成员
+    relation_to_protagonist: ""
+    desire: ""
+    likely_change: ""
+
+minor: []
+
+antagonists:
+  - id: A001
+    name: ""
+    race: ""
+    faction: ""             # 王国敌国/教廷高位/异族王/古老存在/反派法师塔派系
+    motivation: ""
+    threat_level: ""

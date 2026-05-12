@@ -113,7 +113,16 @@ author init demo --quick --dir D:\Books\demo      # 指定路径
 author init demo --quick --force                  # 允许覆盖非空目录
 ```
 
-**模板**(目前仅 `urban_power_anomaly`)是**结构参考**——concept/guided 模式下,模型只用它的小节结构,内容完全按用户意图重写。`--quick` 才会原样保留模板内容。
+**模板**是**结构参考**——concept/guided 模式下,模型只用它的小节结构,内容完全按用户意图重写。`--quick` 才会原样保留模板内容。
+
+支持的模板(用 `--template <key>` 选择,默认 `urban_power_anomaly`):
+
+| Key | 中文名 | 调性 |
+| --- | --- | --- |
+| `urban_power_anomaly` | 都市异能 | 现代 + 异能脑洞爽文 |
+| `xianxia` | 仙侠修真 | 出世问道 / 境界突破 |
+| `western_fantasy` | 西方奇幻 | 史诗 / 多种族 / 三方势力 |
+| `mystery_thriller` | 悬疑推理 | 本格 + 社会派,公平推理 |
 
 ### 起完书你会得到
 

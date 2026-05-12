@@ -3,7 +3,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AuthorOsError } from './schema.ts';
 
-export const supportedTemplateKeys = ['urban_power_anomaly'] as const;
+export const supportedTemplateKeys = [
+  'urban_power_anomaly',
+  'xianxia',
+  'western_fantasy',
+  'mystery_thriller',
+] as const;
 
 const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const templatesRoot = join(sourceRoot, 'templates');
