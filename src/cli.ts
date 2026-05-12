@@ -177,6 +177,7 @@ async function runInit(args: string[], cwd: string, io: Io, options: RunOptions)
   const quick = parsed.flags.quick === true;
   const guided = parsed.flags.guided === true;
   const concept = stringFlag(parsed.flags.concept);
+  const strategyConfirm = parsed.flags['strategy-confirm'] === true;
 
   const modeCount = [quick, guided, concept !== undefined].filter(Boolean).length;
   if (modeCount === 0) {
@@ -206,6 +207,9 @@ async function runInit(args: string[], cwd: string, io: Io, options: RunOptions)
       authorDir,
       concept,
       llm,
+      ask: options.ask ?? defaultReadlineAsk,
+      io,
+      strategyConfirm,
     });
     setupOutput = renderSetupResult(setupResult);
   } else if (guided) {
@@ -953,6 +957,7 @@ function initHelpText(): string {
     '                                not canonical content (except in --quick mode).',
     '                                Supported: urban_power_anomaly, xianxia, western_fantasy, mystery_thriller',
     '  --dir <path>                  Target directory. Defaults to the project name.',
+    '  --strategy-confirm           Print setup strategy and ask before generating identity files.',
     '  --force                       Allow writing into an existing non-empty directory.',
     '',
   ].join('\n');

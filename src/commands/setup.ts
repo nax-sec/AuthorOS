@@ -1,10 +1,19 @@
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { bookSchema } from '../core/bookSchema.ts';
 import { identitySetupSections } from '../core/bookSchema.ts';
 import { readAgentProfile } from '../core/agentProfiles.ts';
 import type { LlmClient } from '../core/llm.ts';
 import { AuthorOsError } from '../core/schema.ts';
-import { readTemplateFile } from '../core/templates.ts';
+import {
+  buildBannedVocabulary,
+  buildGenerationPrompt,
+  createSetupStrategy,
+  loadTemplateMetas,
+  type SetupStrategy,
+  type TemplateMeta,
+} from './setup-strategy.ts';
+import { validateAndRepairBookFiles } from './setup-validate.ts';
 
 export interface SetupSection {
   file: string;
@@ -38,38 +47,27 @@ export async function setupFromConcept(opts: {
   authorDir?: string | null;
   concept: string;
   llm: LlmClient;
+  ask?: AskFn;
+  io?: { stdout: (m: string) => void };
+  strategyConfirm?: boolean;
 }): Promise<SetupResult> {
   const concept = opts.concept.trim();
   if (!concept) {
     throw new AuthorOsError('--concept value cannot be empty.');
   }
 
-  const profile = await readAgentProfile(opts.projectDir, setupAgent);
-
-  const results = await Promise.all(setupSections.map(async (section) => {
-    const templateContent = await readTemplateFile(opts.template, section.file, { authorRoot: opts.authorDir ?? null });
-    const prompt = buildConceptPrompt({
-      projectName: opts.projectName,
-      concept,
-      section,
-      templateContent,
-      profile,
-    });
-    const reply = await invokeAgent(opts.llm, `setup ${section.title}`, prompt, {
-      temperature: 0.5,
-      maxTokens: 2000,
-    });
-    const content = sanitizeFileBody(reply);
-    await writeFile(join(opts.projectDir, section.file), content, 'utf8');
-    return {
-      file: section.file,
-      title: section.title,
-      source: 'concept' as const,
-      charCount: content.length,
-    };
-  }));
-
-  return { mode: 'concept', files: results };
+  return await generateIdentityFiles({
+    projectDir: opts.projectDir,
+    projectName: opts.projectName,
+    authorDir: opts.authorDir ?? null,
+    concept,
+    llm: opts.llm,
+    mode: 'concept',
+    source: 'concept',
+    ask: opts.ask,
+    io: opts.io,
+    strategyConfirm: opts.strategyConfirm === true,
+  });
 }
 
 export async function setupGuided(opts: {
@@ -82,22 +80,20 @@ export async function setupGuided(opts: {
   io: { stdout: (m: string) => void };
 }): Promise<SetupResult> {
   const profile = await readAgentProfile(opts.projectDir, setupAgent);
-  const results: SetupFileResult[] = [];
   const priorSummaries: string[] = [];
 
   opts.io.stdout([
     '',
     `AuthorOS 建书编辑 Agent 已启动 (book-setup-editor)。`,
-    '我会就六个核心文件各问一个问题。你可以直接回答,也可以输入:',
+    '我会就六个核心文件各问一个问题,再统一做 Strategy Pass 与生成。',
+    '你可以直接回答,也可以输入:',
     '  你建议   —— 让我提议',
-    '  跳过     —— 用模板默认',
-    '  暂定     —— 用模板默认并标记 TBD',
+    '  跳过     —— 本段暂不提供额外方向',
+    '  暂定     —— 本段只记为待定',
     '',
   ].join('\n'));
 
   for (const section of setupSections) {
-    const templateContent = await readTemplateFile(opts.template, section.file, { authorRoot: opts.authorDir ?? null });
-
     const question = await invokeAgent(opts.llm, `${section.title} question`, buildQuestionPrompt({
       projectName: opts.projectName,
       section,
@@ -110,40 +106,44 @@ export async function setupGuided(opts: {
     const intent = classifyAnswer(rawAnswer);
 
     if (intent === 'skip') {
-      await writeFile(join(opts.projectDir, section.file), templateContent, 'utf8');
-      results.push({ file: section.file, title: section.title, source: 'guided-skip', charCount: templateContent.length });
-      priorSummaries.push(`${section.title}: 跳过(用模板默认)`);
-      opts.io.stdout(`[${section.title}] 跳过,使用模板默认内容。\n`);
+      priorSummaries.push(`${section.title}: 用户跳过,不增加额外方向。`);
+      opts.io.stdout(`[${section.title}] 已记录为跳过。\n`);
       continue;
     }
 
     if (intent === 'tbd') {
-      const tbdContent = annotateAsTbd(templateContent, section);
-      await writeFile(join(opts.projectDir, section.file), tbdContent, 'utf8');
-      results.push({ file: section.file, title: section.title, source: 'guided-tbd', charCount: tbdContent.length });
-      priorSummaries.push(`${section.title}: 暂定`);
-      opts.io.stdout(`[${section.title}] 暂定,用模板默认并已标记 TBD。\n`);
+      priorSummaries.push(`${section.title}: 用户暂定,后续生成需保守留白。`);
+      opts.io.stdout(`[${section.title}] 已记录为暂定。\n`);
       continue;
     }
 
-    const reply = await invokeAgent(opts.llm, `${section.title} generation`, buildGuidedGeneratePrompt({
-      projectName: opts.projectName,
-      section,
-      userAnswer: rawAnswer,
-      askingForSuggestion: intent === 'suggest',
-      priorSummaries,
-      templateContent,
-      profile,
-    }), { temperature: 0.5, maxTokens: 2000 });
+    if (intent === 'suggest') {
+      priorSummaries.push(`${section.title}: 用户要求 book-setup-editor 根据项目名和前文建议。`);
+      opts.io.stdout(`[${section.title}] 已记录为由 Agent 建议。\n`);
+      continue;
+    }
 
-    const content = sanitizeFileBody(reply);
-    await writeFile(join(opts.projectDir, section.file), content, 'utf8');
-    results.push({ file: section.file, title: section.title, source: 'guided', charCount: content.length });
-    priorSummaries.push(`${section.title}: ${summarize(content)}`);
-    opts.io.stdout(`[${section.title}] 已写入 ${section.file} (${content.length} 字符)。\n`);
+    priorSummaries.push(`${section.title}: ${rawAnswer}`);
+    opts.io.stdout(`[${section.title}] 已记录回答。\n`);
   }
 
-  return { mode: 'guided', files: results };
+  const guidedConcept = [
+    `project_name: ${opts.projectName}`,
+    '',
+    'guided_answers:',
+    ...priorSummaries.map((summary) => `- ${summary}`),
+  ].join('\n');
+
+  return await generateIdentityFiles({
+    projectDir: opts.projectDir,
+    projectName: opts.projectName,
+    authorDir: opts.authorDir ?? null,
+    concept: guidedConcept,
+    llm: opts.llm,
+    mode: 'guided',
+    source: 'guided',
+    profile,
+  });
 }
 
 export function renderSetupResult(result: SetupResult): string {
@@ -175,38 +175,6 @@ function classifyAnswer(answer: string): AnswerIntent {
   return 'concrete';
 }
 
-function buildConceptPrompt(args: {
-  projectName: string;
-  concept: string;
-  section: SetupSection;
-  templateContent: string;
-  profile: string;
-}): string {
-  return [
-    `SETUP_CONCEPT_${args.section.marker}`,
-    `project_name: ${args.projectName}`,
-    `section: ${args.section.title} (${args.section.file})`,
-    `section_purpose: ${args.section.purpose}`,
-    '',
-    'agent_profile:',
-    args.profile.trim(),
-    '',
-    'template_reference (structure only; do NOT copy verbatim):',
-    args.templateContent.trim(),
-    '',
-    'book_concept (the author\'s actual book idea):',
-    args.concept,
-    '',
-    'task:',
-    `Write the content of ${args.section.file} (${args.section.title}) for this book, tailored to the concept above.`,
-    '- Keep the same section headings as the template_reference.',
-    '- Replace template content with concrete content derived from the book_concept; do NOT copy template defaults if they conflict with the concept.',
-    '- Be specific and concrete; avoid generic platitudes.',
-    `- ${args.section.file.endsWith('.yaml') ? 'Output valid YAML only.' : 'Output Markdown only.'}`,
-    '- No surrounding commentary or code fences.',
-  ].join('\n');
-}
-
 function buildQuestionPrompt(args: {
   projectName: string;
   section: SetupSection;
@@ -233,53 +201,6 @@ function buildQuestionPrompt(args: {
   ].join('\n');
 }
 
-function buildGuidedGeneratePrompt(args: {
-  projectName: string;
-  section: SetupSection;
-  userAnswer: string;
-  askingForSuggestion: boolean;
-  priorSummaries: string[];
-  templateContent: string;
-  profile: string;
-}): string {
-  const userBlock = args.askingForSuggestion
-    ? 'user_input: (the author asked you to propose. No concrete answer provided. Propose content based on project_name and prior_sections.)'
-    : `user_input:\n${args.userAnswer}`;
-
-  return [
-    `SETUP_GUIDED_GENERATE_${args.section.marker}`,
-    `project_name: ${args.projectName}`,
-    `section: ${args.section.title} (${args.section.file})`,
-    `section_purpose: ${args.section.purpose}`,
-    '',
-    'agent_profile:',
-    args.profile.trim(),
-    '',
-    'prior_sections (already collected):',
-    args.priorSummaries.length > 0 ? args.priorSummaries.join('\n') : '(none)',
-    '',
-    'template_reference (structure only; do NOT copy verbatim):',
-    args.templateContent.trim(),
-    '',
-    userBlock,
-    '',
-    'task:',
-    `Write the content of ${args.section.file} (${args.section.title}) based on the user_input.`,
-    '- Match the template_reference section structure (same headings/keys).',
-    '- Fill content with what the user said + reasonable expansion that does not contradict them.',
-    `- If user_input is vague, expand it into structured content; do not echo it back verbatim.`,
-    `- ${args.section.file.endsWith('.yaml') ? 'Output valid YAML only.' : 'Output Markdown only.'}`,
-    '- No surrounding commentary or code fences.',
-  ].join('\n');
-}
-
-function annotateAsTbd(templateContent: string, section: SetupSection): string {
-  const head = section.file.endsWith('.yaml')
-    ? `# TBD: ${section.title} 暂定,后续 author setup 或手动编辑后再确认。\n`
-    : `> TBD: ${section.title} 暂定,后续 author setup 或手动编辑后再确认。\n\n`;
-  return head + templateContent;
-}
-
 function sanitizeFileBody(reply: string): string {
   let text = reply.trim();
   // Strip ```markdown / ```yaml / ``` fences if model wrapped output.
@@ -288,11 +209,6 @@ function sanitizeFileBody(reply: string): string {
     text = fenceMatch[1].trim();
   }
   return text + '\n';
-}
-
-function summarize(content: string): string {
-  const collapsed = content.replace(/\s+/g, ' ').trim();
-  return collapsed.length > 120 ? `${collapsed.slice(0, 120)}…` : collapsed;
 }
 
 async function invokeAgent(
@@ -313,4 +229,78 @@ async function invokeAgent(
     throw new AuthorOsError(`Setup ${label} model returned empty content.`);
   }
   return trimmed;
+}
+
+async function generateIdentityFiles(args: {
+  projectDir: string;
+  projectName: string;
+  authorDir: string | null;
+  concept: string;
+  llm: LlmClient;
+  mode: SetupResult['mode'];
+  source: SetupFileResult['source'];
+  profile?: string;
+  ask?: AskFn;
+  io?: { stdout: (m: string) => void };
+  strategyConfirm?: boolean;
+}): Promise<SetupResult> {
+  const profile = args.profile ?? await readAgentProfile(args.projectDir, setupAgent);
+  const metas = await loadTemplateMetas(args.authorDir);
+  const strategy = await createSetupStrategy({
+    projectName: args.projectName,
+    concept: args.concept,
+    metas,
+    llm: args.llm,
+  });
+
+  if (args.strategyConfirm) {
+    if (!args.ask || !args.io) {
+      throw new AuthorOsError('--strategy-confirm requires interactive ask/io support.');
+    }
+    args.io.stdout(`\nSetup strategy:\n${JSON.stringify(strategy, null, 2)}\n`);
+    const answer = (await args.ask('继续生成? (y/n) ')).trim().toLowerCase();
+    if (answer !== 'y' && answer !== 'yes') {
+      throw new AuthorOsError('setup strategy cancelled by user.');
+    }
+  }
+
+  await writeStrategyFile(args.projectDir, strategy);
+  const bannedVocabulary = buildBannedVocabulary(args.concept, strategy, metas);
+  const results = await Promise.all(bookSchema.identityFiles.map(async (section) => {
+    const reply = await invokeAgent(args.llm, `setup ${section.title}`, buildGenerationPrompt({
+      projectName: args.projectName,
+      concept: args.concept,
+      section,
+      sectionIntent: strategy.per_section_intent[section.file] ?? '',
+      agentProfile: profile,
+      bannedVocabulary,
+    }), {
+      temperature: 0.5,
+      maxTokens: 2200,
+    });
+
+    const content = sanitizeFileBody(reply);
+    await writeFile(join(args.projectDir, section.file), content, 'utf8');
+    return {
+      file: section.file,
+      title: section.title,
+      source: args.source,
+      charCount: content.length,
+    };
+  }));
+
+  await validateAndRepairBookFiles({
+    bookDir: args.projectDir,
+    projectName: args.projectName,
+    files: bookSchema.identityFiles.map((entry) => entry.file),
+    llm: args.llm,
+  });
+
+  return { mode: args.mode, files: results };
+}
+
+async function writeStrategyFile(projectDir: string, strategy: SetupStrategy): Promise<void> {
+  const authorosDir = join(projectDir, '.authoros');
+  await mkdir(authorosDir, { recursive: true });
+  await writeFile(join(authorosDir, 'strategy.json'), `${JSON.stringify(strategy, null, 2)}\n`, 'utf8');
 }
