@@ -35,6 +35,16 @@ import { createChapterDecision, renderDecideResult } from './commands/decide.ts'
 import { createMemoryUpdate, renderMemoryUpdateResult } from './commands/memory.ts';
 import { installSkill, renderSkillInstallResult } from './commands/skill.ts';
 import {
+  getAuthorDoctor,
+  getAuthorShow,
+  initAuthorDirectory,
+  openAuthorProfile,
+  renderAuthorDoctorResult,
+  renderAuthorInitResult,
+  renderAuthorShowResult,
+  renderEditProfileResult,
+} from './commands/author.ts';
+import {
   renderSetupResult,
   setupFromConcept,
   setupGuided,
@@ -82,6 +92,10 @@ export async function run(
   try {
     if (command === 'init') {
       return await runInit(rest, cwd, io, options);
+    }
+
+    if (command === 'author') {
+      return await runAuthor(rest, io, options);
     }
 
     if (command === 'model') {
@@ -228,6 +242,49 @@ async function runInit(args: string[], cwd: string, io: Io, options: RunOptions)
   lines.push('');
   io.stdout(lines.join('\n'));
   return 0;
+}
+
+async function runAuthor(args: string[], io: Io, options: RunOptions): Promise<number> {
+  const [subcommand = 'show', ...rest] = args;
+  const env = options.env ?? process.env;
+
+  if (subcommand === '--help' || subcommand === '-h') {
+    io.stdout(authorHelpText());
+    return 0;
+  }
+
+  const parsed = parseArgs(rest);
+  if (parsed.flags.help || parsed.flags.h) {
+    io.stdout(authorHelpText());
+    return 0;
+  }
+  const dir = stringFlag(parsed.flags.dir) ?? stringFlag(parsed.flags['author-dir']);
+
+  if (subcommand === 'init') {
+    io.stdout(renderAuthorInitResult(await initAuthorDirectory({
+      dir,
+      force: parsed.flags.force === true,
+      env,
+    })));
+    return 0;
+  }
+
+  if (subcommand === 'show') {
+    io.stdout(renderAuthorShowResult(getAuthorShow(dir, env)));
+    return 0;
+  }
+
+  if (subcommand === 'doctor') {
+    io.stdout(renderAuthorDoctorResult(await getAuthorDoctor(dir, env)));
+    return 0;
+  }
+
+  if (subcommand === 'edit-profile') {
+    io.stdout(renderEditProfileResult(await openAuthorProfile(dir, env)));
+    return 0;
+  }
+
+  throw new AuthorOsError(`Unknown author subcommand: ${subcommand}`);
 }
 
 async function defaultReadlineAsk(prompt: string): Promise<string> {
@@ -736,6 +793,7 @@ function helpText(): string {
     '',
     'Usage:',
     '  author init <project-name> [--template <key>] [--dir path] [--force]',
+    '  author author init | show | doctor | edit-profile',
     '  author model config | doctor | smoke',
     '  author state | brief | profile',
     '  author plan --chapter <N> | --next [--model] [--write]',
@@ -753,6 +811,7 @@ function helpText(): string {
     '',
     'Commands:',
     '  init       Create a single-book AuthorOS project',
+    '  author     Manage the author-level AuthorOS directory',
     '  model      Configure and verify the model provider',
     '  state      Show per-chapter artifact progress',
     '  brief      Print product.md (作品定位)',
@@ -765,6 +824,24 @@ function helpText(): string {
     '  decide     Produce the weighted creative decision report (decider)',
     '  memory     Emit typed memory delta proposals (memory-curator)',
     '  skill      Install the bundled Claude Code skill (SKILL.md)',
+    '',
+  ].join('\n');
+}
+
+function authorHelpText(): string {
+  return [
+    'Manage the author-level AuthorOS directory.',
+    '',
+    'Usage:',
+    '  author author init [--dir <path>] [--force]',
+    '  author author show [--dir <path>]',
+    '  author author doctor [--dir <path>]',
+    '  author author edit-profile [--dir <path>]',
+    '',
+    'Options:',
+    '  --dir <path>        Author directory. Default: AUTHOROS_AUTHOR_DIR or ~/.authoros',
+    '  --author-dir <path> Alias for --dir',
+    '  --force             Allow init into an existing non-empty directory',
     '',
   ].join('\n');
 }
