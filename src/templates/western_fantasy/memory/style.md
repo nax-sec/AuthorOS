@@ -1,4 +1,4 @@
-# 风格规则 (style)
+# 风格规则
 
 memory-curator 按 delta 追加,不重写。
 

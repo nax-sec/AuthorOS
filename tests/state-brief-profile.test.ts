@@ -93,7 +93,7 @@ test('profile prints author.md', async () => {
     const exit = await run(['profile'], cwd, io.io, { env: {} });
     assert.equal(exit, 0);
     const output = io.out.join('');
-    assert.match(output, /# AI 作者人格/);
+    assert.match(output, /# 作者人格/);
     assert.match(output, /商业连载型都市异能作者/);
   });
 });

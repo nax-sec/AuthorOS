@@ -1,4 +1,4 @@
-# 正史设定 (canon)
+# 正史设定
 
 不可违背的设定记录。memory-curator 每章按 delta 追加,不重写。
 

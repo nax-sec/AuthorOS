@@ -1,5 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { identitySetupSections } from '../core/bookSchema.ts';
 import { readAgentProfile } from '../core/agentProfiles.ts';
 import type { LlmClient } from '../core/llm.ts';
 import { AuthorOsError } from '../core/schema.ts';
@@ -12,44 +13,7 @@ export interface SetupSection {
   purpose: string;
 }
 
-export const setupSections: readonly SetupSection[] = [
-  {
-    file: 'product.md',
-    title: '作品定位',
-    marker: 'PRODUCT',
-    purpose: '题材、目标读者、核心卖点、禁区、模板优先级',
-  },
-  {
-    file: 'author.md',
-    title: '作者人格',
-    marker: 'AUTHOR',
-    purpose: '作者定位、写作偏好、反馈态度、决策原则',
-  },
-  {
-    file: 'world.md',
-    title: '世界与规则',
-    marker: 'WORLD',
-    purpose: '基础规则、异常体系、能力代价、风险提醒',
-  },
-  {
-    file: 'outline.md',
-    title: '主线大纲',
-    marker: 'OUTLINE',
-    purpose: '节奏规则、主线阶段、待规划章节',
-  },
-  {
-    file: 'characters.yaml',
-    title: '人物表',
-    marker: 'CHARACTERS',
-    purpose: 'protagonist、major、minor、antagonists',
-  },
-  {
-    file: 'review_rules.md',
-    title: '章节评审规则',
-    marker: 'REVIEW_RULES',
-    purpose: '必查项、风险分级',
-  },
-] as const;
+export const setupSections: readonly SetupSection[] = identitySetupSections();
 
 export interface SetupFileResult {
   file: string;

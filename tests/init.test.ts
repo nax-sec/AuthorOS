@@ -280,7 +280,7 @@ test('init --guided calls book-setup-editor twice per section (question + genera
 
     // review_rules section was 跳过, so file should match template default
     const reviewRules = await readFile(join(cwd, 'demo/review_rules.md'), 'utf8');
-    assert.match(reviewRules, /章节内部评审规则/); // from template
+    assert.match(reviewRules, /章节评审规则/); // from template
   });
 });
 
