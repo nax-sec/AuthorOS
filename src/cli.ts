@@ -52,6 +52,7 @@ import {
 } from './commands/setup.ts';
 import { createOpenAiCompatibleClientFromProject, type LlmClient } from './core/llm.ts';
 import type { EnvLike } from './core/modelConfig.ts';
+import { resolveAuthorDir } from './core/authorSchema.ts';
 import { AuthorOsError } from './core/schema.ts';
 
 export interface Io {
@@ -192,7 +193,8 @@ async function runInit(args: string[], cwd: string, io: Io, options: RunOptions)
   }
 
   const env = options.env ?? process.env;
-  const result = await initProject({ projectName, template, cwd, targetDir, force });
+  const authorDir = resolveAuthorDir(undefined, env);
+  const result = await initProject({ projectName, template, cwd, targetDir, authorDir, force });
 
   let setupOutput: string | null = null;
   if (concept !== undefined) {
@@ -201,6 +203,7 @@ async function runInit(args: string[], cwd: string, io: Io, options: RunOptions)
       projectDir: result.targetDir,
       projectName: result.projectName,
       template: result.template,
+      authorDir,
       concept,
       llm,
     });
@@ -212,6 +215,7 @@ async function runInit(args: string[], cwd: string, io: Io, options: RunOptions)
       projectDir: result.targetDir,
       projectName: result.projectName,
       template: result.template,
+      authorDir,
       llm,
       ask,
       io,

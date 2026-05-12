@@ -1,6 +1,7 @@
 import { cp, readFile, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { CascadeContext } from './cascade.ts';
 import { AuthorOsError } from './schema.ts';
 
 export const supportedTemplateKeys = [
@@ -11,19 +12,27 @@ export const supportedTemplateKeys = [
 ] as const;
 
 const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
-const templatesRoot = join(sourceRoot, 'templates');
+const templatesRoot = join(sourceRoot, 'seed-templates');
 
-export async function readTemplateFile(template: string, relativePath: string): Promise<string> {
-  const templateDir = await resolveTemplateDir(template);
+export async function readTemplateFile(template: string, relativePath: string, ctx?: Partial<CascadeContext>): Promise<string> {
+  const templateDir = await resolveTemplateDir(template, ctx);
   return await readFile(join(templateDir, relativePath), 'utf8');
 }
 
-export async function copyTemplateDirectory(template: string, targetDir: string): Promise<void> {
-  const templateDir = await resolveTemplateDir(template);
+export async function copyTemplateDirectory(template: string, targetDir: string, ctx?: Partial<CascadeContext>): Promise<void> {
+  const templateDir = await resolveTemplateDir(template, ctx);
   await cp(templateDir, targetDir, { recursive: true });
 }
 
-export async function resolveTemplateDir(template: string): Promise<string> {
+export async function resolveTemplateDir(template: string, ctx?: Partial<CascadeContext>): Promise<string> {
+  const authorRoot = ctx?.authorRoot ?? null;
+  if (authorRoot) {
+    const authorTemplateDir = join(authorRoot, 'templates', template);
+    if (await isDirectory(authorTemplateDir)) {
+      return authorTemplateDir;
+    }
+  }
+
   const templateDir = join(templatesRoot, template);
 
   try {
@@ -40,6 +49,17 @@ export async function resolveTemplateDir(template: string): Promise<string> {
   }
 
   return templateDir;
+}
+
+async function isDirectory(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch (error) {
+    if (isNodeError(error) && error.code === 'ENOENT') {
+      return false;
+    }
+    throw error;
+  }
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {

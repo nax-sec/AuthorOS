@@ -42,6 +42,7 @@ test('author author init creates a valid author directory', async () => {
       'preferences/readers.yaml',
       'agents/planner.md',
       'agents/book-setup-editor.md',
+      'templates/urban_power_anomaly/meta.yaml',
       'templates/urban_power_anomaly/product.md',
     ]) {
       const info = await stat(join(authorDir, file));

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../src/cli.ts';
@@ -96,6 +96,27 @@ test('init writes a config.yaml that references project name and template', asyn
     assert.match(config, /project_name: "我的小说"/);
     assert.match(config, /template: urban_power_anomaly/);
     assert.match(config, /language: zh-CN/);
+  });
+});
+
+test('init --quick prefers author template over built-in seed template', async () => {
+  await withTempCwd(async (cwd) => {
+    const authorDir = join(cwd, 'author-home');
+    assert.equal(await run(['author', 'init', '--dir', authorDir], cwd, silentIo().io, { env: {} }), 0);
+    await writeFile(
+      join(authorDir, 'templates/urban_power_anomaly/product.md'),
+      '# 作品定位\n\n## 题材\n\nAUTHOR TEMPLATE PRODUCT\n\n## 目标读者\n\nA\n\n## 核心卖点\n\n- B\n\n## 禁区\n\n- C\n',
+      'utf8',
+    );
+
+    const { io } = silentIo();
+    const exit = await run(['init', 'demo', '--template', 'urban_power_anomaly', '--quick'], cwd, io, {
+      env: { AUTHOROS_AUTHOR_DIR: authorDir },
+    });
+    assert.equal(exit, 0);
+
+    const product = await readFile(join(cwd, 'demo', 'product.md'), 'utf8');
+    assert.match(product, /AUTHOR TEMPLATE PRODUCT/);
   });
 });
 

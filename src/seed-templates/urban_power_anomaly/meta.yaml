@@ -1,0 +1,12 @@
+key: urban_power_anomaly
+name: 都市异能
+status: active
+tone_keywords: [现代, 爽文, 都市, 反制]
+one_line_pitch: 都市背景下主角拥有特殊机制,在使用边界与现实压力中持续反制。
+applicable_when: 用户概念涉及现代都市、超常个体机制、快节奏个人爽点。
+not_applicable_when: 古代、异世界、无超常元素、严格侦探推理。
+diff_from:
+  xianxia: 现代背景,无修真宗门和境界系统。
+  western_fantasy: 单主角现代城市,无多种族王国和神职体系。
+  mystery_thriller: 允许爽点优先,不以线索公平性作为核心承诺。
+created_at: 2026-05-12

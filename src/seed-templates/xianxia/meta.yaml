@@ -1,0 +1,12 @@
+key: xianxia
+name: 东方仙侠
+status: active
+tone_keywords: [古风, 修真, 宗门, 成长]
+one_line_pitch: 以修行道路、宗门关系和道心抉择推动长篇成长。
+applicable_when: 用户概念涉及修真、宗门、道统、古风玄幻成长。
+not_applicable_when: 现代现实、严格科幻、纯侦探推理、无修行体系。
+diff_from:
+  urban_power_anomaly: 古风修行世界,不以现代城市个人爽点为主。
+  western_fantasy: 东方修真语汇和宗门结构,非欧式王国多种族。
+  mystery_thriller: 主线不以案件公平推理为核心。
+created_at: 2026-05-12

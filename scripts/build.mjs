@@ -20,7 +20,7 @@ if (tsc.status !== 0) {
   process.exit(tsc.status ?? 1);
 }
 
-cpSync(resolve(root, 'src', 'templates'), resolve(root, 'dist', 'templates'), {
+cpSync(resolve(root, 'src', 'seed-templates'), resolve(root, 'dist', 'seed-templates'), {
   recursive: true,
 });
 

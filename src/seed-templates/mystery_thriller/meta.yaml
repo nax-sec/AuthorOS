@@ -1,0 +1,12 @@
+key: mystery_thriller
+name: 悬疑推理
+status: active
+tone_keywords: [悬疑, 推理, 犯罪, 调查]
+one_line_pitch: 以案件调查、人物动机和真相分层推进长篇追读。
+applicable_when: 用户概念涉及案件、调查、犯罪、侦探、法医或社会派悬疑。
+not_applicable_when: 纯升级爽文、异世界远征、东方修真、无调查主线。
+diff_from:
+  urban_power_anomaly: 以调查与真相为核心,不以个人爽点优先。
+  xianxia: 无修真宗门和道统成长。
+  western_fantasy: 非史诗远征结构,重点在案件和动机。
+created_at: 2026-05-12

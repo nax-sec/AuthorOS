@@ -35,6 +35,7 @@ export async function setupFromConcept(opts: {
   projectDir: string;
   projectName: string;
   template: string;
+  authorDir?: string | null;
   concept: string;
   llm: LlmClient;
 }): Promise<SetupResult> {
@@ -46,7 +47,7 @@ export async function setupFromConcept(opts: {
   const profile = await readAgentProfile(opts.projectDir, setupAgent);
 
   const results = await Promise.all(setupSections.map(async (section) => {
-    const templateContent = await readTemplateFile(opts.template, section.file);
+    const templateContent = await readTemplateFile(opts.template, section.file, { authorRoot: opts.authorDir ?? null });
     const prompt = buildConceptPrompt({
       projectName: opts.projectName,
       concept,
@@ -75,6 +76,7 @@ export async function setupGuided(opts: {
   projectDir: string;
   projectName: string;
   template: string;
+  authorDir?: string | null;
   llm: LlmClient;
   ask: AskFn;
   io: { stdout: (m: string) => void };
@@ -94,7 +96,7 @@ export async function setupGuided(opts: {
   ].join('\n'));
 
   for (const section of setupSections) {
-    const templateContent = await readTemplateFile(opts.template, section.file);
+    const templateContent = await readTemplateFile(opts.template, section.file, { authorRoot: opts.authorDir ?? null });
 
     const question = await invokeAgent(opts.llm, `${section.title} question`, buildQuestionPrompt({
       projectName: opts.projectName,

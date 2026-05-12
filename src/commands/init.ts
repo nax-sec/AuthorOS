@@ -11,6 +11,7 @@ export interface InitOptions {
   template?: string;
   cwd: string;
   targetDir?: string;
+  authorDir?: string | null;
   force?: boolean;
 }
 
@@ -62,7 +63,7 @@ export async function initProject(options: InitOptions): Promise<InitResult> {
 
   await ensureTargetDirEmpty(targetDir, options.force === true);
 
-  const templateDir = await resolveTemplateDir(template);
+  const templateDir = await resolveTemplateDir(template, { authorRoot: options.authorDir ?? null });
 
   await mkdir(targetDir, { recursive: true });
 
@@ -82,7 +83,9 @@ export async function initProject(options: InitOptions): Promise<InitResult> {
     await copyTemplateFile(templateDir, targetDir, entry.from, entry.to);
   }
 
-  await copyTemplateDirectory(template, join(targetDir, '.authoros/templates', template));
+  await copyTemplateDirectory(template, join(targetDir, '.authoros/templates', template), {
+    authorRoot: options.authorDir ?? null,
+  });
 
   for (const profile of defaultAgentProfiles()) {
     await writeFile(join(targetDir, profile.path), profile.content, 'utf8');

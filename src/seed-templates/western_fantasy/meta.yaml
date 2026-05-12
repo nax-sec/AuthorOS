@@ -1,0 +1,12 @@
+key: western_fantasy
+name: 西方奇幻
+status: active
+tone_keywords: [史诗, 奇幻, 王国, 冒险]
+one_line_pitch: 以王国势力、远征冒险和古老秩序冲突承载史诗长线。
+applicable_when: 用户概念涉及欧式奇幻、王国、远征、教廷、法师塔或多种族势力。
+not_applicable_when: 现代都市、东方修真、现实主义、严格侦探推理。
+diff_from:
+  urban_power_anomaly: 非现代都市,重势力与史诗结构。
+  xianxia: 无东方宗门境界语汇,采用王国与教会式结构。
+  mystery_thriller: 不以案件破解和嫌疑推进为主承诺。
+created_at: 2026-05-12
