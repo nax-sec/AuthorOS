@@ -110,6 +110,6 @@ If feedback is absent, decide skips the 20% line and does NOT redistribute weigh
 - Per-command logic lives in the installed package; see `npm root -g`/authoros/src/commands/`.
 - Agent context contract: `src/core/agentContext.ts` (which files each agent reads)
 - Agent roster: `src/core/agents.ts`
-- Detailed user-facing manual: `USAGE.md` shipped with the package
+- Detailed user-facing manual: `README.md` shipped with the package
 
 When in doubt, run `author <command> --help` for command-specific guidance.

@@ -12,8 +12,7 @@
     "dist/",
     "src/",
     "skill/",
-    "README.md",
-    "USAGE.md"
+    "README.md"
   ],
   "scripts": {
     "author": "node src/cli.ts",
