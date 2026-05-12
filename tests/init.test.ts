@@ -239,6 +239,9 @@ test('init --concept calls book-setup-editor once per identity file and writes c
             rationale: '概念测试。',
           });
         }
+        if (prompt.includes('SETUP_DISTILL')) {
+          return JSON.stringify({ should_create: false, reason: '测试模板已覆盖。' });
+        }
         const match = prompt.match(/SETUP_GENERATE_([A-Z_]+)/);
         if (!match) throw new Error('expected SETUP_GENERATE marker');
         const marker = match[1];
@@ -309,6 +312,9 @@ test('init --guided asks per section, then strategy-generates all identity files
             rationale: '引导模式。',
           });
         }
+        if (prompt.includes('SETUP_DISTILL')) {
+          return JSON.stringify({ should_create: false, reason: '测试模板已覆盖。' });
+        }
         if (gMatch) {
           calls.push({ kind: 'generate', marker: gMatch[1] });
           return replies[`GENERATE_${gMatch[1]}`] ?? `# ${gMatch[1]}`;
@@ -364,6 +370,9 @@ test('init --guided records 你建议 before strategy generation', async () => {
             rationale: '建议。',
           });
         }
+        if (prompt.includes('SETUP_DISTILL')) {
+          return JSON.stringify({ should_create: false, reason: '测试模板已覆盖。' });
+        }
         if (prompt.includes('SETUP_GENERATE_PRODUCT')) return '# 作品定位\n\n## 题材\n\n建议\n\n## 目标读者\n\n读者\n\n## 核心卖点\n\n- 卖点\n\n## 禁区\n\n- 禁区';
         if (prompt.includes('SETUP_GENERATE_AUTHOR')) return '# 作者人格\n\n## 写作偏好\n\n建议\n\n## 反馈态度\n\n反馈\n\n## 决策原则\n\n原则';
         if (prompt.includes('SETUP_GENERATE_WORLD')) return '# 世界与规则\n\n## 基础规则\n\n规则\n\n## 风险提醒\n\n风险';
@@ -410,6 +419,9 @@ test('init --concept detective concept does not bleed urban power template vocab
             rationale: '概念更接近悬疑推理。',
           });
         }
+        if (prompt.includes('SETUP_DISTILL')) {
+          return JSON.stringify({ should_create: false, reason: 'mystery_thriller 已覆盖。' });
+        }
         generationPrompts.push(prompt);
         assert.doesNotMatch(prompt, /template_reference/);
         assert.doesNotMatch(prompt, /主角能力持续带来新问题/);
@@ -438,6 +450,57 @@ test('init --concept detective concept does not bleed urban power template vocab
     assert.doesNotMatch(outline, /能力|代价|异常体系|异能/);
     assert.doesNotMatch(world, /异常/);
     assert.doesNotMatch(characters, /ability|ability_cost/);
+  });
+});
+
+test('init --concept runs distill by default and --no-distill skips it', async () => {
+  await withTempCwd(async (cwd) => {
+    async function runCase(args: string[]): Promise<number> {
+      let distillCalls = 0;
+      const llm = {
+        async generate(prompt: string) {
+          if (prompt.includes('SETUP_STRATEGY')) {
+            return JSON.stringify({
+              base: 'urban_power_anomaly',
+              borrow_from: [],
+              invent: [],
+              scope_hint: 'this-book-only',
+              per_section_intent: {
+                'product.md': '写定位。',
+                'author.md': '写作者。',
+                'outline.md': '写大纲。',
+                'world.md': '写世界。',
+                'characters.yaml': '写人物。',
+                'review_rules.md': '写评审。',
+              },
+              rationale: '测试。',
+            });
+          }
+          if (prompt.includes('SETUP_DISTILL')) {
+            distillCalls += 1;
+            return JSON.stringify({ should_create: false, reason: '已有模板覆盖。' });
+          }
+          if (prompt.includes('SETUP_GENERATE_PRODUCT')) return '# 作品定位\n\n## 题材\n\n都市异能\n\n## 目标读者\n\n读者\n\n## 核心卖点\n\n- 卖点\n\n## 禁区\n\n- 禁区';
+          if (prompt.includes('SETUP_GENERATE_AUTHOR')) return '# 作者人格\n\n## 写作偏好\n\n偏好\n\n## 反馈态度\n\n反馈\n\n## 决策原则\n\n原则';
+          if (prompt.includes('SETUP_GENERATE_WORLD')) return '# 世界与规则\n\n## 基础规则\n\n规则\n\n## 风险提醒\n\n风险';
+          if (prompt.includes('SETUP_GENERATE_OUTLINE')) return '# 主线大纲\n\n## 节奏规则\n\n节奏\n\n## 主线阶段\n\n阶段\n\n## 待规划章节\n\n章节';
+          if (prompt.includes('SETUP_GENERATE_CHARACTERS')) return 'protagonist:\n  name: ""\n  desire: ""\nmajor: []\nantagonists: []';
+          if (prompt.includes('SETUP_GENERATE_REVIEW_RULES')) return '# 章节评审规则\n\n## 必查项\n\n检查\n\n## 风险分级\n\n分级';
+          throw new Error(`unexpected prompt: ${prompt.slice(0, 80)}`);
+        },
+      };
+      const { io } = silentIo();
+      const exit = await run(args, cwd, io, {
+        env: { OPENAI_API_KEY: 'k', AUTHOROS_MODEL: 'm', AUTHOROS_AUTHOR_DIR: join(cwd, 'author-home') },
+        llm,
+      });
+      return exit === 0 ? distillCalls : -1;
+    }
+
+    const defaultDistillCalls = await runCase(['init', 'distill-on', '--concept', '普通都市异能']);
+    assert.equal(defaultDistillCalls, 1);
+    const skippedDistillCalls = await runCase(['init', 'distill-off', '--concept', '普通都市异能', '--no-distill']);
+    assert.equal(skippedDistillCalls, 0);
   });
 });
 

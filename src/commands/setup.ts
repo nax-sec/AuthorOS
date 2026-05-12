@@ -14,6 +14,7 @@ import {
   type TemplateMeta,
 } from './setup-strategy.ts';
 import { validateAndRepairBookFiles } from './setup-validate.ts';
+import { runSetupDistill, type SetupDistillResult } from './setup-distill.ts';
 
 export interface SetupSection {
   file: string;
@@ -34,6 +35,7 @@ export interface SetupFileResult {
 export interface SetupResult {
   mode: 'concept' | 'guided';
   files: SetupFileResult[];
+  distill?: SetupDistillResult;
 }
 
 export type AskFn = (prompt: string) => Promise<string>;
@@ -50,6 +52,7 @@ export async function setupFromConcept(opts: {
   ask?: AskFn;
   io?: { stdout: (m: string) => void };
   strategyConfirm?: boolean;
+  noDistill?: boolean;
 }): Promise<SetupResult> {
   const concept = opts.concept.trim();
   if (!concept) {
@@ -67,6 +70,7 @@ export async function setupFromConcept(opts: {
     ask: opts.ask,
     io: opts.io,
     strategyConfirm: opts.strategyConfirm === true,
+    noDistill: opts.noDistill === true,
   });
 }
 
@@ -78,6 +82,7 @@ export async function setupGuided(opts: {
   llm: LlmClient;
   ask: AskFn;
   io: { stdout: (m: string) => void };
+  noDistill?: boolean;
 }): Promise<SetupResult> {
   const profile = await readAgentProfile(opts.projectDir, setupAgent);
   const priorSummaries: string[] = [];
@@ -143,6 +148,7 @@ export async function setupGuided(opts: {
     mode: 'guided',
     source: 'guided',
     profile,
+    noDistill: opts.noDistill === true,
   });
 }
 
@@ -159,6 +165,14 @@ export function renderSetupResult(result: SetupResult): string {
         ? ' (TBD — template default + marker)'
         : '';
     lines.push(`  ${file.file}  (${file.charCount} chars)${tag}`);
+  }
+  if (result.distill) {
+    lines.push('');
+    if (result.distill.shouldCreate) {
+      lines.push(`Distill: proposed candidate template "${result.distill.key}". Promote with: author template promote ${result.distill.key}`);
+    } else {
+      lines.push(`Distill: no new template needed (${result.distill.reason})`);
+    }
   }
   lines.push('');
   return lines.join('\n');
@@ -243,6 +257,7 @@ async function generateIdentityFiles(args: {
   ask?: AskFn;
   io?: { stdout: (m: string) => void };
   strategyConfirm?: boolean;
+  noDistill?: boolean;
 }): Promise<SetupResult> {
   const profile = args.profile ?? await readAgentProfile(args.projectDir, setupAgent);
   const metas = await loadTemplateMetas(args.authorDir);
@@ -296,7 +311,15 @@ async function generateIdentityFiles(args: {
     llm: args.llm,
   });
 
-  return { mode: args.mode, files: results };
+  const distill = args.noDistill ? undefined : await runSetupDistill({
+    bookDir: args.projectDir,
+    authorDir: args.authorDir,
+    projectName: args.projectName,
+    concept: args.concept,
+    llm: args.llm,
+  });
+
+  return { mode: args.mode, files: results, distill };
 }
 
 async function writeStrategyFile(projectDir: string, strategy: SetupStrategy): Promise<void> {

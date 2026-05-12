@@ -178,6 +178,7 @@ async function runInit(args: string[], cwd: string, io: Io, options: RunOptions)
   const guided = parsed.flags.guided === true;
   const concept = stringFlag(parsed.flags.concept);
   const strategyConfirm = parsed.flags['strategy-confirm'] === true;
+  const noDistill = parsed.flags['no-distill'] === true;
 
   const modeCount = [quick, guided, concept !== undefined].filter(Boolean).length;
   if (modeCount === 0) {
@@ -210,6 +211,7 @@ async function runInit(args: string[], cwd: string, io: Io, options: RunOptions)
       ask: options.ask ?? defaultReadlineAsk,
       io,
       strategyConfirm,
+      noDistill,
     });
     setupOutput = renderSetupResult(setupResult);
   } else if (guided) {
@@ -223,6 +225,7 @@ async function runInit(args: string[], cwd: string, io: Io, options: RunOptions)
       llm,
       ask,
       io,
+      noDistill,
     });
     setupOutput = renderSetupResult(setupResult);
   }
@@ -960,6 +963,7 @@ function initHelpText(): string {
     '                                apocalypse, period_drama, campus_realism',
     '  --dir <path>                  Target directory. Defaults to the project name.',
     '  --strategy-confirm           Print setup strategy and ask before generating identity files.',
+    '  --no-distill                  Skip candidate template extraction after concept/guided setup.',
     '  --force                       Allow writing into an existing non-empty directory.',
     '',
   ].join('\n');
