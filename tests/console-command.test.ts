@@ -95,7 +95,7 @@ test('console one-shot invalid protocol reports the raw agent output', async () 
   });
 });
 
-test('console one-shot --write applies diff and writes a placeholder change record', async () => {
+test('console one-shot --write applies diff and writes a full change record', async () => {
   await withBook(async (bookDir) => {
     const io = silentIo();
 
@@ -109,9 +109,62 @@ test('console one-shot --write applies diff and writes a placeholder change reco
     assert.match(await readFile(join(bookDir, 'product.md'), 'utf8'), /^# 新作品定位/);
     const changes = await readdir(join(bookDir, 'changes'));
     assert.equal(changes.length, 1);
-    const meta = await readFile(join(bookDir, 'changes', changes[0]!, 'meta.json'), 'utf8');
+    const changeDir = join(bookDir, 'changes', changes[0]!);
+    const meta = await readFile(join(changeDir, 'meta.json'), 'utf8');
     assert.match(meta, /"agent": "author-console"/);
     assert.match(meta, /"files": \[\s*"product.md"/);
+    assert.doesNotMatch(meta, /"placeholder": true/);
+    assert.match(await readFile(join(changeDir, 'before/product.md'), 'utf8'), /^# 作品定位/);
+    assert.match(await readFile(join(changeDir, 'after/product.md'), 'utf8'), /^# 新作品定位/);
+  });
+});
+
+test('console log lists recorded changes', async () => {
+  await withBook(async (bookDir) => {
+    const write = silentIo();
+    assert.equal(await run(['console', '--write', '把作品定位标题改掉'], bookDir, write.io, {
+      llm: fakeLlm(renameProductReply()),
+      env: { OPENAI_API_KEY: 'k', AUTHOROS_MODEL: 'm' },
+      now: new Date('2026-05-12T14:00:00Z'),
+    }), 0, write.err.join(''));
+
+    const log = silentIo();
+    const exit = await run(['console', 'log'], bookDir, log.io, {
+      env: { OPENAI_API_KEY: 'k', AUTHOROS_MODEL: 'm' },
+    });
+
+    assert.equal(exit, 0, log.err.join(''));
+    const output = log.out.join('');
+    assert.match(output, /Changes:/);
+    assert.match(output, /CHG-/);
+    assert.match(output, /author-console/);
+    assert.match(output, /product\.md/);
+  });
+});
+
+test('console --rollback restores the before snapshot and records rollback history', async () => {
+  await withBook(async (bookDir) => {
+    const write = silentIo();
+    assert.equal(await run(['console', '--write', '把作品定位标题改掉'], bookDir, write.io, {
+      llm: fakeLlm(renameProductReply()),
+      env: { OPENAI_API_KEY: 'k', AUTHOROS_MODEL: 'm' },
+      now: new Date('2026-05-12T14:00:00Z'),
+    }), 0, write.err.join(''));
+    const id = write.out.join('').match(/applied: (CHG-[A-Z0-9]+)/)?.[1];
+    assert.ok(id);
+    assert.match(await readFile(join(bookDir, 'product.md'), 'utf8'), /^# 新作品定位/);
+
+    const rollbackIo = silentIo();
+    const exit = await run(['console', '--rollback', id], bookDir, rollbackIo.io, {
+      env: { OPENAI_API_KEY: 'k', AUTHOROS_MODEL: 'm' },
+      now: new Date('2026-05-12T14:00:05Z'),
+    });
+
+    assert.equal(exit, 0, rollbackIo.err.join(''));
+    assert.match(rollbackIo.out.join(''), new RegExp(`rollback: CHG-[A-Z0-9]+\\nrollback_of: ${id}`));
+    assert.match(await readFile(join(bookDir, 'product.md'), 'utf8'), /^# 作品定位/);
+    const changes = await readdir(join(bookDir, 'changes'));
+    assert.equal(changes.length, 2);
   });
 });
 

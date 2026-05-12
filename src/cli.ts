@@ -63,7 +63,11 @@ import {
   showTemplate,
 } from './commands/template.ts';
 import {
+  getConsoleChanges,
   renderConsoleDryRun,
+  renderConsoleLog,
+  renderConsoleRollback,
+  rollbackConsoleChange,
   runConsoleOneShot,
   runConsoleRepl,
   type ConsoleScope,
@@ -800,14 +804,26 @@ async function runConsole(args: string[], cwd: string, io: Io, options: RunOptio
     return 0;
   }
 
-  if (parsed.flags.rollback) {
-    throw new AuthorOsError('author console --rollback is implemented in Ticket 10 with the changes/ snapshot module.');
+  const scope = optionalConsoleScope(stringFlag(parsed.flags.scope));
+  const env = options.env ?? process.env;
+
+  const rollbackId = stringFlag(parsed.flags.rollback);
+  if (rollbackId) {
+    io.stdout(renderConsoleRollback(await rollbackConsoleChange(cwd, rollbackId, {
+      scope,
+      env,
+      now: options.now,
+    })));
+    return 0;
+  }
+  if (parsed.flags.rollback === true) {
+    throw new AuthorOsError('author console --rollback requires a change id.');
   }
   if (parsed.positionals[0] === 'log') {
-    throw new AuthorOsError('author console log is implemented in Ticket 10 with the changes/ snapshot module.');
+    io.stdout(renderConsoleLog(await getConsoleChanges(cwd, { scope, env })));
+    return 0;
   }
 
-  const scope = optionalConsoleScope(stringFlag(parsed.flags.scope));
   const positionals = [...parsed.positionals];
   if (typeof parsed.flags.write === 'string') {
     positionals.unshift(parsed.flags.write);
@@ -820,7 +836,6 @@ async function runConsole(args: string[], cwd: string, io: Io, options: RunOptio
   if (parsed.flags.write === true && parsed.flags['dry-run'] === true) {
     throw new AuthorOsError('Use either --write or --dry-run, not both.');
   }
-  const env = options.env ?? process.env;
   const llm = options.llm ?? await createWritingClient(cwd, env);
   const instruction = positionals.join(' ').trim();
 
@@ -1049,7 +1064,7 @@ function consoleHelpText(): string {
     '  author console --write "change product positioning"',
     '  author console --scope author|book|both "change shape"',
     '',
-    'One-shot defaults to dry-run. --write applies the returned unified diff and writes a placeholder changes/ record.',
+    'One-shot defaults to dry-run. --write applies the returned unified diff and writes a changes/ snapshot record.',
     'REPL prompts for apply / edit / abort / drill <file> after each model proposal.',
     '',
   ].join('\n');

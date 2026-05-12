@@ -5,6 +5,7 @@ import { basename, dirname, isAbsolute, join, normalize, sep } from 'node:path';
 import { bookSchema } from '../core/bookSchema.ts';
 import { defaultAgentProfileContent, readAgentProfile } from '../core/agentProfiles.ts';
 import { resolveAuthorDir } from '../core/authorSchema.ts';
+import { listChanges, recordChange, rollback as rollbackChange, type ChangeRecord } from '../core/changes.ts';
 import type { LlmClient } from '../core/llm.ts';
 import type { EnvLike } from '../core/modelConfig.ts';
 import { AuthorOsError } from '../core/schema.ts';
@@ -38,7 +39,6 @@ export interface RunConsoleOptions {
 export interface ConsoleApplyResult {
   id: string;
   files: string[];
-  changeDir: string;
 }
 
 export interface ConsoleRunResult {
@@ -332,24 +332,67 @@ export async function applyConsoleOutput(
 ): Promise<ConsoleApplyResult> {
   const patches = parseUnifiedDiff(parsed.diff);
   const baseDir = baseDirForScope(projectDir, parsed.scope, options.env);
-  const changedFiles: string[] = [];
+  const fileChanges: Array<{ file: string; before: string | null; after: string }> = [];
 
   for (const patch of patches) {
     assertConsoleFileAllowed(parsed.scope, patch.file);
     const absPath = join(baseDir, patch.file);
-    const before = await readOptional(absPath) ?? '';
-    const after = applyPatchToText(before, patch);
+    const before = await readOptional(absPath);
+    const after = applyPatchToText(before ?? '', patch);
     await mkdir(dirname(absPath), { recursive: true });
     await writeFile(absPath, after, 'utf8');
-    changedFiles.push(patch.file);
+    fileChanges.push({ file: patch.file, before, after });
   }
 
-  const change = await writePlaceholderChange(baseDir, parsed, {
+  return await recordChange({
+    baseDir,
+    scope: parsed.scope,
+    agent: 'author-console',
     userPrompt: options.userPrompt,
-    files: changedFiles,
+    agentOutput: parsed.raw,
+    fileChanges,
     now: options.now,
   });
-  return change;
+}
+
+export async function getConsoleChanges(
+  projectDir: string,
+  options: { scope?: ConsoleScope; env?: EnvLike } = {},
+): Promise<ChangeRecord[]> {
+  return await listChanges(baseDirForScope(projectDir, options.scope ?? 'book', options.env));
+}
+
+export async function rollbackConsoleChange(
+  projectDir: string,
+  changeId: string,
+  options: { scope?: ConsoleScope; env?: EnvLike; now?: Date } = {},
+): Promise<ChangeRecord> {
+  return await rollbackChange(baseDirForScope(projectDir, options.scope ?? 'book', options.env), changeId, {
+    now: options.now,
+  });
+}
+
+export function renderConsoleLog(changes: ChangeRecord[]): string {
+  if (changes.length === 0) return 'Changes: none\n';
+  return [
+    'Changes:',
+    ...changes.map((change) => [
+      `${change.id}  ${change.timestamp}  ${change.scope}  ${change.agent}`,
+      `  files: ${change.files.join(', ') || '(none)'}`,
+      `  prompt: ${change.userPrompt}`,
+      ...(change.rollbackOf ? [`  rollback_of: ${change.rollbackOf}`] : []),
+    ].join('\n')),
+    '',
+  ].join('\n');
+}
+
+export function renderConsoleRollback(record: ChangeRecord): string {
+  return [
+    `rollback: ${record.id}`,
+    `rollback_of: ${record.rollbackOf ?? '(unknown)'}`,
+    `files: ${record.files.join(', ')}`,
+    '',
+  ].join('\n');
 }
 
 async function renderDrillPreview(
@@ -502,28 +545,6 @@ function baseDirForScope(projectDir: string, scope: ConsoleScope, env: EnvLike |
   return projectDir;
 }
 
-async function writePlaceholderChange(
-  baseDir: string,
-  parsed: ParsedConsoleOutput,
-  options: { userPrompt: string; files: string[]; now?: Date },
-): Promise<ConsoleApplyResult> {
-  const now = options.now ?? new Date();
-  const stamp = timestampSlug(now);
-  const id = `CHG-${shortHash(`${stamp}:${options.userPrompt}:${options.files.join(',')}`)}`;
-  const changeDir = join(baseDir, 'changes', stamp);
-  await mkdir(changeDir, { recursive: true });
-  await writeFile(join(changeDir, 'user_prompt.txt'), `${options.userPrompt}\n`, 'utf8');
-  await writeFile(join(changeDir, 'agent_output.md'), parsed.raw.endsWith('\n') ? parsed.raw : `${parsed.raw}\n`, 'utf8');
-  await writeFile(join(changeDir, 'meta.json'), `${JSON.stringify({
-    change_id: id,
-    scope: parsed.scope,
-    files: options.files,
-    agent: 'author-console',
-    placeholder: true,
-  }, null, 2)}\n`, 'utf8');
-  return { id, files: options.files, changeDir };
-}
-
 async function renderConsoleBanner(projectDir: string): Promise<string> {
   const config = await readOptional(join(projectDir, '.authoros/config.yaml')) ?? '';
   const projectName = config.match(/project_name:\s*"?([^"\n]+)"?/)?.[1]?.trim() ?? basename(projectDir);
@@ -583,28 +604,6 @@ function excerptEdges(value: string, size: number): string {
   const normalized = value.trim();
   if (normalized.length <= size * 2) return normalized;
   return `${normalized.slice(0, size)}\n...\n${normalized.slice(-size)}`;
-}
-
-function timestampSlug(date: Date): string {
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return [
-    date.getFullYear(),
-    pad(date.getMonth() + 1),
-    pad(date.getDate()),
-    '-',
-    pad(date.getHours()),
-    pad(date.getMinutes()),
-    pad(date.getSeconds()),
-  ].join('');
-}
-
-function shortHash(input: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < input.length; index += 1) {
-    hash ^= input.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16).slice(0, 4).toUpperCase().padStart(4, '0');
 }
 
 function errorMessage(error: unknown): string {
