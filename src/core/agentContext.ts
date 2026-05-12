@@ -96,6 +96,21 @@ const agentContextPathMap: Record<string, string[]> = {
     memoryFile('memory/character_state.yaml'),
     memoryFile('memory/style.md'),
   ],
+  'author-console': [
+    identityFile('product.md'),
+    identityFile('author.md'),
+    identityFile('world.md'),
+    identityFile('outline.md'),
+    identityFile('characters.yaml'),
+    identityFile('review_rules.md'),
+    memoryFile('memory/canon.md'),
+    memoryFile('memory/foreshadowing.yaml'),
+    memoryFile('memory/plot_threads.yaml'),
+    memoryFile('memory/character_state.yaml'),
+    memoryFile('memory/style.md'),
+    '.authoros/strategy.json when available',
+    'chapters/<written-chapters> title + first/last 200 chars',
+  ],
 };
 
 export function agentContextPaths(agent: string): string[] {

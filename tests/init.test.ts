@@ -63,6 +63,7 @@ test('init creates the full v2 project layout', async () => {
       '.authoros/agents/feedback-analyzer.md',
       '.authoros/agents/decider.md',
       '.authoros/agents/memory-curator.md',
+      '.authoros/agents/author-console.md',
       '.authoros/templates/urban_power_anomaly/product.md',
     ];
 

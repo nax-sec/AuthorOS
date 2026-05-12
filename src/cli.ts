@@ -62,6 +62,12 @@ import {
   renderTemplateShow,
   showTemplate,
 } from './commands/template.ts';
+import {
+  renderConsoleDryRun,
+  runConsoleOneShot,
+  runConsoleRepl,
+  type ConsoleScope,
+} from './commands/console.ts';
 import { createOpenAiCompatibleClientFromProject, type LlmClient } from './core/llm.ts';
 import type { EnvLike } from './core/modelConfig.ts';
 import { resolveAuthorDir } from './core/authorSchema.ts';
@@ -161,6 +167,10 @@ export async function run(
 
     if (command === 'template') {
       return await runTemplate(rest, io, options);
+    }
+
+    if (command === 'console') {
+      return await runConsole(rest, cwd, io, options);
     }
 
     throw new AuthorOsError(`Unknown command: ${command}`);
@@ -783,6 +793,65 @@ async function runTemplate(args: string[], io: Io, options: RunOptions): Promise
   throw new AuthorOsError(`Unknown template subcommand: ${subcommand}`);
 }
 
+async function runConsole(args: string[], cwd: string, io: Io, options: RunOptions): Promise<number> {
+  const parsed = parseArgs(args);
+  if (parsed.flags.help || parsed.flags.h) {
+    io.stdout(consoleHelpText());
+    return 0;
+  }
+
+  if (parsed.flags.rollback) {
+    throw new AuthorOsError('author console --rollback is implemented in Ticket 10 with the changes/ snapshot module.');
+  }
+  if (parsed.positionals[0] === 'log') {
+    throw new AuthorOsError('author console log is implemented in Ticket 10 with the changes/ snapshot module.');
+  }
+
+  const scope = optionalConsoleScope(stringFlag(parsed.flags.scope));
+  const positionals = [...parsed.positionals];
+  if (typeof parsed.flags.write === 'string') {
+    positionals.unshift(parsed.flags.write);
+    parsed.flags.write = true;
+  }
+  if (typeof parsed.flags['dry-run'] === 'string') {
+    positionals.unshift(parsed.flags['dry-run']);
+    parsed.flags['dry-run'] = true;
+  }
+  if (parsed.flags.write === true && parsed.flags['dry-run'] === true) {
+    throw new AuthorOsError('Use either --write or --dry-run, not both.');
+  }
+  const env = options.env ?? process.env;
+  const llm = options.llm ?? await createWritingClient(cwd, env);
+  const instruction = positionals.join(' ').trim();
+
+  if (!instruction) {
+    await runConsoleRepl(cwd, {
+      llm,
+      env,
+      scope,
+      ask: options.ask ?? defaultReadlineAsk,
+      io,
+    });
+    return 0;
+  }
+
+  io.stdout(renderConsoleDryRun(await runConsoleOneShot(cwd, {
+    instruction,
+    llm,
+    env,
+    now: options.now,
+    scope,
+    write: parsed.flags.write === true,
+  })));
+  return 0;
+}
+
+function optionalConsoleScope(value: string | undefined): ConsoleScope | undefined {
+  if (value === undefined) return undefined;
+  if (value === 'book' || value === 'author' || value === 'both') return value;
+  throw new AuthorOsError('--scope must be one of: author, book, both.');
+}
+
 function optionalPositiveIntegerFlag(value: string | boolean | undefined, name: string): number | undefined {
   if (value === undefined) {
     return undefined;
@@ -886,6 +955,7 @@ function helpText(): string {
     '  author decide --chapter <N> [--model] [--write]',
     '  author memory update --chapter <N> [--model] [--write]',
     '  author template list | show | promote | forget | export',
+    '  author console ["instruction"] [--dry-run] [--write] [--scope author|book|both]',
     '  author skill install [--dir <skills-root>] [--force]',
     '',
     'Creative loop:',
@@ -906,6 +976,7 @@ function helpText(): string {
     '  decide     Produce the weighted creative decision report (decider)',
     '  memory     Emit typed memory delta proposals (memory-curator)',
     '  template   Manage seed and author-level templates',
+    '  console    Author control seat for shape edits through a 4-block diff protocol',
     '  skill      Install the bundled Claude Code skill (SKILL.md)',
     '',
   ].join('\n');
@@ -963,6 +1034,23 @@ function templateHelpText(): string {
     'Options:',
     '  --dir <path>        Author directory. Default: AUTHOROS_AUTHOR_DIR or ~/.authoros',
     '  --author-dir <path> Alias for --dir',
+    '',
+  ].join('\n');
+}
+
+function consoleHelpText(): string {
+  return [
+    'Author control console (author-console agent).',
+    '',
+    'Usage:',
+    '  author console',
+    '  author console "change product positioning"',
+    '  author console --dry-run "change product positioning"',
+    '  author console --write "change product positioning"',
+    '  author console --scope author|book|both "change shape"',
+    '',
+    'One-shot defaults to dry-run. --write applies the returned unified diff and writes a placeholder changes/ record.',
+    'REPL prompts for apply / edit / abort / drill <file> after each model proposal.',
     '',
   ].join('\n');
 }

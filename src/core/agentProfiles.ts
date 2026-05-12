@@ -67,6 +67,12 @@ const agentResponsibilities: Record<string, string[]> = {
     'Guided mode: asks one focused Chinese question per section, then writes that section based on the answer; accepts shortcuts: 你建议 (propose) / 跳过 (template default) / 暂定 (template default + TBD marker).',
     'Output Markdown / YAML only — no commentary. Match the template structure faithfully so downstream agents (chief-writer, advisors, decider, memory-curator) can read the files without changes.',
   ],
+  'author-console': [
+    'Receives natural-language author directives and identifies which shape layer should change: outline, world, characters, review rules, memory proposal, agent profile, template, or author preference.',
+    'Outputs exactly four blocks: [scope], [impact], [diff], [next].',
+    'Never edits chapter prose directly; route prose changes through an author revise --instruction command in [next].',
+    'Any write must first present a unified diff for user apply or one-shot --write.',
+  ],
 };
 
 export function defaultAgentProfiles(): readonly AgentProfileTemplate[] {
