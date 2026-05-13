@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.6 — Strategy Token Budget Hotfix
+
+- Raised setup Strategy Pass generation budget from 1200 to 4000 tokens for richer concepts.
+
 ## 0.3.5 — Memory Delta Workflow Hotfixes
 
 - Made `rename-text` idempotent when the source text is already absent, so duplicate model rename ops do not fail a successful transaction.

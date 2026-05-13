@@ -1,6 +1,6 @@
 {
   "name": "authoros",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "description": "Local-first CLI writing system for AI authors managing a single long-form novel.",
   "type": "module",
   "bin": {
