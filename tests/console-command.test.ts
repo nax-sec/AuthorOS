@@ -101,6 +101,9 @@ test('console one-shot dry-run prints four blocks and does not write files', asy
     assert.match(captured, /op: create-file/);
     assert.match(captured, /Use the exact file field `memory\/console-\*\.delta\.md`/);
     assert.match(captured, /Do not include memory\/canon\.md/);
+    assert.match(captured, /author memory deltas show <name>/);
+    assert.match(captured, /DO NOT suggest commands like `author memory apply-latest`/);
+    assert.match(captured, /AuthorOS does not auto-merge/);
     assert.match(captured, /# append to an existing file/);
     assert.match(captured, /op: append-to-file/);
     assert.match(captured, /Op selection rules/);
