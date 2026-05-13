@@ -20,7 +20,7 @@ test('README documents author console as section 13', async () => {
   const readme = await readFile('README.md', 'utf8');
   assert.match(readme, /## 13\./);
   assert.match(readme, /author console/);
-  assert.match(readme, /\[scope\][\s\S]*\[impact\][\s\S]*\[diff\][\s\S]*\[next\]/);
+  assert.match(readme, /\[scope\][\s\S]*\[impact\][\s\S]*\[edits\][\s\S]*\[next\]/);
   assert.match(readme, /--rollback/);
 });
 
@@ -48,4 +48,3 @@ test('CHANGELOG summarizes v0.3.0', async () => {
   assert.match(changelog, /author console/);
   assert.match(changelog, /changes\//);
 });
-

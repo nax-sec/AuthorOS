@@ -308,18 +308,23 @@ author console
 [scope] book | author | both
 [impact]
   <severity>: <file> - <reason>
-[diff]
---- <file>
-@@ ...
-<unified diff>
+[edits]
+- file: product.md
+  op: replace-text
+  find: |
+    <exact old text>
+  replace: |
+    <new text>
 [next]
   <command>
 ```
 
+`[edits]` 使用结构化 YAML op,支持 `append-after-heading`, `prepend-before-heading`, `replace-section`, `replace-text`, `append-to-file`, `create-file`, `set-yaml-key`, `append-yaml-array-item`, `delete-yaml-array-item`。
+
 REPL 支持:
 
-- `apply`:应用 diff,写入 `changes/<ts>/` 快照。
-- `edit`:把 diff 写到临时文件,用 `$EDITOR` 编辑后再决定。
+- `apply`:应用结构化 edits,写入 `changes/<ts>/` 快照。
+- `edit`:把 edits YAML 写到临时文件,用 `$EDITOR` 编辑后再决定。
 - `abort`:丢弃本次建议。
 - `drill <file>`:预览应用后该文件完整内容。
 
