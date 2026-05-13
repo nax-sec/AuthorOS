@@ -4,6 +4,7 @@ import {
   buildBannedVocabulary,
   buildGenerationPrompt,
   buildStrategyPrompt,
+  createSetupStrategy,
   parseSetupStrategy,
 } from '../src/commands/setup-strategy.ts';
 import { bookSchema } from '../src/core/bookSchema.ts';
@@ -48,6 +49,37 @@ test('parseSetupStrategy accepts raw model JSON', () => {
 
   assert.equal(strategy.base, 'mystery_thriller');
   assert.equal(strategy.per_section_intent['world.md'], '写小镇现实规则。');
+});
+
+test('createSetupStrategy uses enough maxTokens for rich concepts', async () => {
+  let capturedMaxTokens: number | undefined;
+  await createSetupStrategy({
+    projectName: 'hp-fanfic',
+    concept: 'HP 同人,战后霍格沃茨,多学院群像,魔法部改革,旧贵族暗线,友情与悬疑并行。',
+    metas,
+    llm: {
+      async generate(_prompt, options) {
+        capturedMaxTokens = options?.maxTokens;
+        return JSON.stringify({
+          base: 'none',
+          borrow_from: [],
+          invent: ['战后学校政治', '旧贵族暗线'],
+          scope_hint: 'this-book-only',
+          per_section_intent: {
+            'product.md': '写战后魔法校园群像定位。',
+            'author.md': '写重视角色关系和悬疑节奏的作者偏好。',
+            'outline.md': '写学年阶段和改革暗线。',
+            'world.md': '写魔法社会战后秩序。',
+            'characters.yaml': '写多学院群像。',
+            'review_rules.md': '写同人设定一致性检查。',
+          },
+          rationale: '丰富 concept 需要较大的 strategy 输出预算。',
+        });
+      },
+    },
+  });
+
+  assert.equal(capturedMaxTokens, 4000);
 });
 
 test('buildBannedVocabulary removes concept words and selected template tone words', () => {

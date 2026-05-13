@@ -58,7 +58,7 @@ export async function createSetupStrategy(args: {
   let lastRaw = '';
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
-      lastRaw = await args.llm.generate(prompt, { temperature: 0.4, maxTokens: 1200 });
+      lastRaw = await args.llm.generate(prompt, { temperature: 0.4, maxTokens: 4000 });
       return parseSetupStrategy(lastRaw);
     } catch (error) {
       if (attempt === 2) {
