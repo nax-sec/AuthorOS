@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.3 — Console Edits Hardening
+
+- Replaced fragile custom `[edits]` YAML parsing with the `yaml` runtime dependency.
+- Added substring-aware `replace-text` matching and a `rename-text` op for file-wide literal renames.
+- Added console op-selection guidance so append and rename requests prefer specific ops instead of fallback `replace-text`.
+- Expanded console edits coverage for YAML block forms, substring replacement, and global renames.
+
 ## 0.3.2 — Console Structured Edits
 
 - Replaced author-console unified diff output with structured `[edits]` YAML operations.
