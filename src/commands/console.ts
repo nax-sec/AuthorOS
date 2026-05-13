@@ -1,11 +1,12 @@
 import { spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, dirname, isAbsolute, join, normalize, sep } from 'node:path';
+import { basename, join } from 'node:path';
 import { bookSchema } from '../core/bookSchema.ts';
 import { defaultAgentProfileContent, readAgentProfile } from '../core/agentProfiles.ts';
 import { resolveAuthorDir } from '../core/authorSchema.ts';
 import { listChanges, recordChange, rollback as rollbackChange, type ChangeRecord } from '../core/changes.ts';
+import { applyEditOps, parseEditsBlock, previewEditOpsForFile, renderEditsYaml } from '../core/editOps.ts';
 import type { LlmClient } from '../core/llm.ts';
 import type { EnvLike } from '../core/modelConfig.ts';
 import { AuthorOsError } from '../core/schema.ts';
@@ -16,7 +17,7 @@ export interface ParsedConsoleOutput {
   raw: string;
   scope: ConsoleScope;
   impact: string;
-  diff: string;
+  edits: string;
   next: string;
 }
 
@@ -47,29 +48,11 @@ export interface ConsoleRunResult {
   apply?: ConsoleApplyResult;
 }
 
-interface FilePatch {
-  file: string;
-  hunks: Hunk[];
-}
-
-interface Hunk {
-  oldStart: number;
-  lines: string[];
-}
-
-const blockNames = ['scope', 'impact', 'diff', 'next'] as const;
-const blockedBookPathPrefixes = ['chapters/', 'reviews/', 'decisions/', 'feedback/'];
-const blockedBookFiles = new Set([
-  'memory/canon.md',
-  'memory/foreshadowing.yaml',
-  'memory/plot_threads.yaml',
-  'memory/character_state.yaml',
-  'memory/style.md',
-]);
+const blockNames = ['scope', 'impact', 'edits', 'next'] as const;
 
 export function parseConsoleOutput(raw: string): ParsedConsoleOutput {
   const normalized = raw.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
-  const markerRegex = /^\s*\[(scope|impact|diff|next)\]\s*(.*)$/gim;
+  const markerRegex = /^[ \t]*\[(scope|impact|edits|next)\][ \t]*(.*)$/gim;
   const markers: Array<{ name: typeof blockNames[number]; index: number; end: number; inline: string }> = [];
 
   for (const match of normalized.matchAll(markerRegex)) {
@@ -116,7 +99,7 @@ export function parseConsoleOutput(raw: string): ParsedConsoleOutput {
     raw,
     scope,
     impact: nonEmptyBlock(byName, 'impact'),
-    diff: nonEmptyBlock(byName, 'diff'),
+    edits: nonEmptyBlock(byName, 'edits'),
     next: nonEmptyBlock(byName, 'next'),
   };
 }
@@ -172,7 +155,7 @@ export async function runConsoleRepl(
         break;
       }
       if (action === 'edit') {
-        parsed = await editParsedDiff(parsed, options.env, options.io);
+        parsed = await editParsedEdits(parsed, options.env, options.io);
         continue;
       }
       if (action.startsWith('drill ')) {
@@ -190,8 +173,8 @@ export function renderConsoleDryRun(result: ConsoleRunResult): string {
     `[scope] ${result.parsed.scope}`,
     '[impact]',
     result.parsed.impact,
-    '[diff]',
-    result.parsed.diff,
+    '[edits]',
+    result.parsed.edits,
     '[next]',
     result.parsed.next,
   ];
@@ -251,7 +234,7 @@ async function buildConsolePrompt(
     'hard schema boundary:',
     '- bookSchema.ts and authorSchema.ts are the source of truth. Do not remove required fields.',
     '- Never directly edit chapters/, reviews/, decisions/, or feedback/. For chapter prose, put an author revise --instruction command in [next].',
-    '- Never directly edit memory/canon.md or memory/*.yaml. If memory changes are needed, create a console delta file in the diff.',
+    '- Never directly edit memory/canon.md or memory/*.yaml. If memory changes are needed, create a console delta file in [edits].',
     '',
     scopeLock,
     '',
@@ -267,14 +250,16 @@ async function buildConsolePrompt(
     '[impact]',
     '  <severity>: <file> - <reason>',
     '  <severity>: <file> - <reason>',
-    '[diff]',
-    '--- <file>',
-    '@@ ...',
-    '<unified diff>',
+    '[edits]',
+    '- file: product.md',
+    '  op: replace-text',
+    '  find: |',
+    '    <exact old text>',
+    '  replace: |',
+    '    <new text>',
     '',
-    '--- <file>',
-    '@@ ...',
-    '<unified diff>',
+    'Supported ops: append-after-heading, prepend-before-heading, replace-section, replace-text, append-to-file, create-file, set-yaml-key, append-yaml-array-item, delete-yaml-array-item.',
+    'Use anchors/headings or exact text; do not emit unified diffs.',
     '[next]',
     '  <command 1>',
     '  <command 2>',
@@ -330,19 +315,10 @@ export async function applyConsoleOutput(
   parsed: ParsedConsoleOutput,
   options: { userPrompt: string; env?: EnvLike; now?: Date },
 ): Promise<ConsoleApplyResult> {
-  const patches = parseUnifiedDiff(parsed.diff);
   const baseDir = baseDirForScope(projectDir, parsed.scope, options.env);
-  const fileChanges: Array<{ file: string; before: string | null; after: string }> = [];
-
-  for (const patch of patches) {
-    assertConsoleFileAllowed(parsed.scope, patch.file);
-    const absPath = join(baseDir, patch.file);
-    const before = await readOptional(absPath);
-    const after = applyPatchToText(before ?? '', patch);
-    await mkdir(dirname(absPath), { recursive: true });
-    await writeFile(absPath, after, 'utf8');
-    fileChanges.push({ file: patch.file, before, after });
-  }
+  const edits = parseEditsBlock(parsed.edits);
+  const applied = await applyEditOps({ baseDir, scope: parsed.scope, edits, now: options.now });
+  const editsYaml = renderEditsYaml(applied.edits);
 
   return await recordChange({
     baseDir,
@@ -350,7 +326,9 @@ export async function applyConsoleOutput(
     agent: 'author-console',
     userPrompt: options.userPrompt,
     agentOutput: parsed.raw,
-    fileChanges,
+    fileChanges: applied.fileChanges,
+    editsYaml,
+    editOps: applied.edits.map((edit) => edit.op),
     now: options.now,
   });
 }
@@ -401,28 +379,28 @@ async function renderDrillPreview(
   requestedFile: string,
   env: EnvLike | undefined,
 ): Promise<string> {
-  const file = sanitizeRelativeFile(requestedFile);
-  const patch = parseUnifiedDiff(parsed.diff).find((entry) => entry.file === file);
-  if (!patch) {
-    throw new AuthorOsError(`drill target is not present in [diff]: ${file}`);
-  }
   const baseDir = baseDirForScope(projectDir, parsed.scope, env);
-  const before = await readOptional(join(baseDir, file)) ?? '';
-  const after = applyPatchToText(before, patch);
-  return `Preview: ${file}\n${after}\n`;
+  const edits = parseEditsBlock(parsed.edits);
+  const after = await previewEditOpsForFile({
+    baseDir,
+    scope: parsed.scope,
+    edits,
+    file: requestedFile,
+  });
+  return `Preview: ${requestedFile}\n${after}\n`;
 }
 
-async function editParsedDiff(parsed: ParsedConsoleOutput, env: EnvLike | undefined, io: ConsoleIo): Promise<ParsedConsoleOutput> {
+async function editParsedEdits(parsed: ParsedConsoleOutput, env: EnvLike | undefined, io: ConsoleIo): Promise<ParsedConsoleOutput> {
   const tempDir = await mkdtemp(join(tmpdir(), 'authoros-console-edit-'));
-  const tempFile = join(tempDir, 'diff.patch');
-  await writeFile(tempFile, parsed.diff, 'utf8');
-  io.stdout(`edit file: ${tempFile}\n`);
+  const tempFile = join(tempDir, 'edits.yaml');
+  await writeFile(tempFile, parsed.edits, 'utf8');
+  io.stdout(`edits file: ${tempFile}\n`);
 
   const editor = env && Object.hasOwn(env, 'EDITOR')
     ? env.EDITOR?.trim()
     : process.env.EDITOR?.trim();
   if (!editor) {
-    io.stdout('EDITOR is not set; diff left unchanged.\n');
+    io.stdout('EDITOR is not set; edits left unchanged.\n');
     return parsed;
   }
 
@@ -431,162 +409,7 @@ async function editParsedDiff(parsed: ParsedConsoleOutput, env: EnvLike | undefi
     throw new AuthorOsError(`editor exited with status ${result.status ?? 'unknown'}.`);
   }
 
-  return { ...parsed, diff: await readFile(tempFile, 'utf8') };
-}
-
-function parseUnifiedDiff(diff: string): FilePatch[] {
-  const lines = diff.replace(/\r\n?/g, '\n').split('\n');
-  const patches: FilePatch[] = [];
-  let current: FilePatch | null = null;
-  let currentHunk: Hunk | null = null;
-
-  for (const line of lines) {
-    const fileMatch = line.match(/^---\s+(.+?)\s*$/);
-    if (fileMatch) {
-      current = { file: sanitizeRelativeFile(fileMatch[1]!), hunks: [] };
-      patches.push(current);
-      currentHunk = null;
-      continue;
-    }
-
-    if (!current || line.startsWith('+++ ')) continue;
-
-    const hunkMatch = line.match(/^@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@/);
-    if (hunkMatch) {
-      currentHunk = { oldStart: Number(hunkMatch[1]), lines: [] };
-      current.hunks.push(currentHunk);
-      continue;
-    }
-
-    if (currentHunk && (/^[ +\-\\]/.test(line) || line === '')) {
-      currentHunk.lines.push(line);
-    }
-  }
-
-  if (patches.length === 0) {
-    throw new AuthorOsError('console diff is empty; expected at least one --- <file> section.');
-  }
-  for (const patch of patches) {
-    if (patch.hunks.length === 0) {
-      throw new AuthorOsError(`console diff for ${patch.file} has no hunks.`);
-    }
-  }
-  return patches;
-}
-
-function applyPatchToText(input: string, patch: FilePatch): string {
-  try {
-    return applyPatchToTextStrict(input, patch);
-  } catch (error) {
-    const fuzzy = fuzzyApplyPatchToText(input, patch);
-    if (fuzzy !== null) return fuzzy;
-    throw error;
-  }
-}
-
-function applyPatchToTextStrict(input: string, patch: FilePatch): string {
-  const original = splitTextLines(input);
-  const output: string[] = [];
-  let cursor = 0;
-
-  for (const hunk of patch.hunks) {
-    const hunkStart = Math.max(0, hunk.oldStart - 1);
-    while (cursor < hunkStart) {
-      output.push(original[cursor++] ?? '');
-    }
-
-    for (const line of hunk.lines) {
-      if (line.startsWith('\\')) continue;
-      const text = line.slice(1);
-      if (line.startsWith(' ')) {
-        assertOriginalLine(patch.file, original[cursor], text);
-        output.push(original[cursor] ?? text);
-        cursor += 1;
-      } else if (line.startsWith('-')) {
-        assertOriginalLine(patch.file, original[cursor], text);
-        cursor += 1;
-      } else if (line.startsWith('+')) {
-        output.push(text);
-      }
-    }
-  }
-
-  while (cursor < original.length) {
-    output.push(original[cursor++] ?? '');
-  }
-  return `${output.join('\n')}\n`;
-}
-
-function fuzzyApplyPatchToText(input: string, patch: FilePatch): string | null {
-  const output = splitTextLines(input);
-  let offset = 0;
-  for (const hunk of patch.hunks) {
-    const removeLines = hunk.lines
-      .filter((line) => line.startsWith('-'))
-      .map((line) => line.slice(1));
-    const addLines = hunk.lines
-      .filter((line) => line.startsWith('+'))
-      .map((line) => line.slice(1));
-    if (removeLines.length === 0) return null;
-
-    const targetIndex = Math.max(0, hunk.oldStart - 1 + offset);
-    const index = findNearestLineBlock(output, removeLines, targetIndex, 5);
-    if (index === null) return null;
-    output.splice(index, removeLines.length, ...addLines);
-    offset += addLines.length - removeLines.length;
-  }
-  return `${output.join('\n')}\n`;
-}
-
-function findNearestLineBlock(lines: string[], expected: string[], targetIndex: number, windowSize: number): number | null {
-  const matches: Array<{ index: number; distance: number }> = [];
-  for (let index = 0; index <= lines.length - expected.length; index += 1) {
-    if (expected.every((line, offset) => sameLineIgnoringTrailingWhitespace(lines[index + offset], line))) {
-      const distance = Math.abs(index - targetIndex);
-      if (distance <= windowSize) {
-        matches.push({ index, distance });
-      }
-    }
-  }
-  matches.sort((a, b) => a.distance - b.distance || a.index - b.index);
-  return matches[0]?.index ?? null;
-}
-
-function splitTextLines(input: string): string[] {
-  const normalized = input.replace(/\r\n?/g, '\n');
-  if (normalized.length === 0) return [];
-  const lines = normalized.split('\n');
-  if (lines[lines.length - 1] === '') lines.pop();
-  return lines;
-}
-
-function assertOriginalLine(file: string, actual: string | undefined, expected: string): void {
-  if (!sameLineIgnoringTrailingWhitespace(actual, expected)) {
-    throw new AuthorOsError(
-      `console diff does not apply cleanly to ${file}. Expected "${expected}", got "${actual ?? '(end of file)'}".`,
-    );
-  }
-}
-
-function sameLineIgnoringTrailingWhitespace(actual: string | undefined, expected: string): boolean {
-  return actual?.trimEnd() === expected.trimEnd();
-}
-
-function sanitizeRelativeFile(input: string): string {
-  const cleaned = input.trim().replace(/^["']|["']$/g, '').replace(/\\/g, '/');
-  if (!cleaned || isAbsolute(cleaned) || cleaned.split('/').includes('..')) {
-    throw new AuthorOsError(`invalid console diff file path: ${input}`);
-  }
-  return normalize(cleaned).split(sep).join('/');
-}
-
-function assertConsoleFileAllowed(scope: ConsoleScope, file: string): void {
-  if (scope === 'author') return;
-  if (blockedBookPathPrefixes.some((prefix) => file.startsWith(prefix)) || blockedBookFiles.has(file)) {
-    throw new AuthorOsError(
-      `author-console cannot directly edit ${file}. Put a safe follow-up command in [next] instead.`,
-    );
-  }
+  return { ...parsed, edits: await readFile(tempFile, 'utf8') };
 }
 
 function baseDirForScope(projectDir: string, scope: ConsoleScope, env: EnvLike | undefined): string {

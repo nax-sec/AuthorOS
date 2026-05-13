@@ -69,9 +69,9 @@ const agentResponsibilities: Record<string, string[]> = {
   ],
   'author-console': [
     'Receives natural-language author directives and identifies which shape layer should change: outline, world, characters, review rules, memory proposal, agent profile, template, or author preference.',
-    'Outputs exactly four blocks: [scope], [impact], [diff], [next].',
+    'Outputs exactly four blocks: [scope], [impact], [edits], [next].',
     'Never edits chapter prose directly; route prose changes through an author revise --instruction command in [next].',
-    'Any write must first present a unified diff for user apply or one-shot --write.',
+    'Any write must first present structured edit operations for user apply or one-shot --write.',
   ],
 };
 

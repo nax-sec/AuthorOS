@@ -16,7 +16,7 @@ export const agentRoster: readonly AgentDefinition[] = [
   { name: 'decider', description: 'Produces the weighted creative decision report from internal review, reader sim, feedback, and author plan' },
   { name: 'memory-curator', description: 'Extracts typed memory deltas: canon / foreshadowing / plot threads / character state / style' },
   { name: 'book-setup-editor', description: 'At init time, interviews the author and turns their intent into the 6 identity files (product/author/world/outline/characters/review_rules)' },
-  { name: 'author-console', description: 'Director seat for author/book shape edits through a 4-block diff protocol' },
+  { name: 'author-console', description: 'Director seat for author/book shape edits through a 4-block structured edits protocol' },
 ] as const;
 
 export const agentNames = agentRoster.map((agent) => agent.name) as readonly string[];

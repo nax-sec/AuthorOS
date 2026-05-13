@@ -10,6 +10,7 @@ export interface ChangeRecord {
   agent: string;
   userPrompt: string;
   files: string[];
+  editOps?: string[];
   rollbackOf?: string;
 }
 
@@ -20,6 +21,8 @@ export interface RecordChangeOptions {
   userPrompt: string;
   agentOutput: string;
   fileChanges: Array<{ file: string; before: string | null; after: string }>;
+  editsYaml?: string;
+  editOps?: string[];
   rollbackOf?: string;
   now?: Date;
 }
@@ -41,6 +44,9 @@ export async function recordChange(opts: RecordChangeOptions): Promise<ChangeRec
   await mkdir(changeDir, { recursive: false });
   await writeFile(join(changeDir, 'user_prompt.txt'), ensureTrailingNewline(opts.userPrompt), 'utf8');
   await writeFile(join(changeDir, 'agent_output.md'), ensureTrailingNewline(opts.agentOutput), 'utf8');
+  if (opts.editsYaml !== undefined) {
+    await writeFile(join(changeDir, 'edits.yaml'), ensureTrailingNewline(opts.editsYaml), 'utf8');
+  }
 
   const fileStates: ChangeMeta['fileStates'] = [];
   for (let index = 0; index < opts.fileChanges.length; index += 1) {
@@ -60,6 +66,7 @@ export async function recordChange(opts: RecordChangeOptions): Promise<ChangeRec
     agent: opts.agent,
     userPrompt: opts.userPrompt,
     files,
+    ...(opts.editOps ? { editOps: opts.editOps } : {}),
     ...(opts.rollbackOf ? { rollbackOf: opts.rollbackOf } : {}),
   };
   const meta: ChangeMeta = { ...record, change_id: record.id, dir: dirName, fileStates };
@@ -130,6 +137,7 @@ async function listChangeMetas(baseDir: string): Promise<ChangeMeta[]> {
           agent: meta.agent ?? 'unknown',
           userPrompt: meta.userPrompt ?? '',
           files: Array.isArray(meta.files) ? meta.files : [],
+          ...(Array.isArray(meta.editOps) ? { editOps: meta.editOps } : {}),
           ...(meta.rollbackOf ? { rollbackOf: meta.rollbackOf } : {}),
           dir: meta.dir ?? entry,
           fileStates: Array.isArray(meta.fileStates)
@@ -177,8 +185,8 @@ function renderRollbackAgentOutput(original: ChangeRecord): string {
     `[scope] ${original.scope}`,
     '[impact]',
     `  high: ${original.files.join(', ')} - rollback ${original.id}`,
-    '[diff]',
-    '  rollback restored before snapshots',
+    '[edits]',
+    '[]',
     '[next]',
     '  review restored files',
     '',

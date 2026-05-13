@@ -991,7 +991,7 @@ function helpText(): string {
     '  decide     Produce the weighted creative decision report (decider)',
     '  memory     Emit typed memory delta proposals (memory-curator)',
     '  template   Manage seed and author-level templates',
-    '  console    Author control seat for shape edits through a 4-block diff protocol',
+    '  console    Author control seat for shape edits through a 4-block structured edits protocol',
     '  skill      Install the bundled Claude Code skill (SKILL.md)',
     '',
   ].join('\n');
@@ -1064,7 +1064,7 @@ function consoleHelpText(): string {
     '  author console --write "change product positioning"',
     '  author console --scope author|book|both "change shape"',
     '',
-    'One-shot defaults to dry-run. --write applies the returned unified diff and writes a changes/ snapshot record.',
+    'One-shot defaults to dry-run. --write applies returned structured edits and writes a changes/ snapshot record.',
     'REPL prompts for apply / edit / abort / drill <file> after each model proposal.',
     '',
   ].join('\n');

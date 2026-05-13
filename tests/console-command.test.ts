@@ -44,11 +44,13 @@ function renameProductReply(): string {
     '[scope] book',
     '[impact]',
     '  medium: product.md - rename the top heading',
-    '[diff]',
-    '--- product.md',
-    '@@ -1,1 +1,1 @@',
-    '-# 作品定位',
-    '+# 新作品定位',
+    '[edits]',
+    '- file: product.md',
+    '  op: replace-text',
+    '  find: |',
+    '    # 作品定位',
+    '  replace: |',
+    '    # 新作品定位',
     '[next]',
     '  author brief',
   ].join('\n');
@@ -69,7 +71,7 @@ test('console one-shot dry-run prints four blocks and does not write files', asy
     const output = io.out.join('');
     assert.match(output, /\[scope\] book/);
     assert.match(output, /\[impact\]/);
-    assert.match(output, /\[diff\]/);
+    assert.match(output, /\[edits\]/);
     assert.match(output, /\[next\]/);
     assert.match(output, /dry-run/);
     assert.match(captured, /Output MUST be exactly this structure/);
@@ -89,13 +91,13 @@ test('console one-shot invalid protocol reports the raw agent output', async () 
 
     assert.equal(exit, 1);
     const err = io.err.join('');
-    assert.match(err, /missing \[diff\] block/);
+    assert.match(err, /missing \[edits\] block/);
     assert.match(err, /raw agent output:/);
     assert.match(err, /\[scope\] book/);
   });
 });
 
-test('console one-shot --write applies diff and writes a full change record', async () => {
+test('console one-shot --write applies edits and writes a full change record', async () => {
   await withBook(async (bookDir) => {
     const io = silentIo();
 
@@ -113,9 +115,11 @@ test('console one-shot --write applies diff and writes a full change record', as
     const meta = await readFile(join(changeDir, 'meta.json'), 'utf8');
     assert.match(meta, /"agent": "author-console"/);
     assert.match(meta, /"files": \[\s*"product.md"/);
+    assert.match(meta, /"editOps": \[\s*"replace-text"/);
     assert.doesNotMatch(meta, /"placeholder": true/);
     assert.match(await readFile(join(changeDir, 'before/product.md'), 'utf8'), /^# 作品定位/);
     assert.match(await readFile(join(changeDir, 'after/product.md'), 'utf8'), /^# 新作品定位/);
+    assert.match(await readFile(join(changeDir, 'edits.yaml'), 'utf8'), /op: replace-text/);
   });
 });
 
@@ -206,7 +210,7 @@ test('console REPL supports abort and edit without applying by accident', async 
 
     assert.equal(exit, 0, io.err.join(''));
     const output = io.out.join('');
-    assert.match(output, /edit file:/);
+    assert.match(output, /edits file:/);
     assert.match(output, /aborted/);
     assert.equal(await readFile(join(bookDir, 'product.md'), 'utf8'), before);
   });

@@ -3,7 +3,7 @@
 ## Responsibilities
 
 - Receive natural-language author directives and identify which shape layer should change: outline, world, characters, rules, memory proposal, agent profile, template, or preference.
-- Output exactly four blocks: [scope], [impact], [diff], [next].
+- Output exactly four blocks: [scope], [impact], [edits], [next].
 - Do not edit chapter prose directly. Route prose changes through an `author revise --instruction` command in [next].
 
 ## Required Context
@@ -15,9 +15,8 @@
 
 ## Boundaries
 
-- Any write must first output [diff] and wait for user apply in REPL or `--write` in one-shot mode.
+- Any write must first output structured [edits] operations and wait for user apply in REPL or `--write` in one-shot mode.
 - Do not remove required bookSchema or authorSchema fields.
 - Do not directly write chapters/, reviews/, decisions/, or feedback/.
 - Do not directly write memory/canon.md or memory/*.yaml. Produce a console delta file for manual merge.
 - scope=author only changes the author layer. scope=book only changes the book layer. scope=both requires explicit user intent.
-
