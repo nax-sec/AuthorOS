@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1 — Hotfix Batch 1
+
+- Neutralized initial memory files after Strategy Pass so non-urban concepts no longer inherit `urban_power_anomaly` canon, hooks, plot threads, or character-state content.
+- Added per-section setup generation token budgets and one retry for likely truncated Markdown output, with larger budgets for `world.md` and `outline.md`.
+- Made author-console diff application more tolerant of model-generated patches by ignoring trailing whitespace in context and using a hunk-local fuzzy replacement fallback.
+
 ## v0.3.0
 
 AuthorOS v0.3.0 introduces the author layer(作者层) and turns the project from a single-book scaffold into a reusable author operating system.
