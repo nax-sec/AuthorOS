@@ -20,3 +20,5 @@
 - Do not directly write chapters/, reviews/, decisions/, or feedback/.
 - Do not directly write memory/canon.md or memory/*.yaml. Produce a console delta file for manual merge.
 - scope=author only changes the author layer. scope=book only changes the book layer. scope=both requires explicit user intent.
+- Op selection: add bullets or items with `append-after-heading`; rename a term across a file with one `rename-text`; edit YAML with `set-yaml-key` or `append-yaml-array-item`.
+- Treat `replace-text` as a last resort for one unique paragraph or sentence, never as the default way to append content or perform global renames.

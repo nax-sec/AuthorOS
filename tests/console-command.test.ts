@@ -75,6 +75,10 @@ test('console one-shot dry-run prints four blocks and does not write files', asy
     assert.match(output, /\[next\]/);
     assert.match(output, /dry-run/);
     assert.match(captured, /Output MUST be exactly this structure/);
+    assert.match(captured, /Op selection rules/);
+    assert.match(captured, /append-after-heading/);
+    assert.match(captured, /rename-text/);
+    assert.match(captured, /replace-text` is the last resort/);
     assert.match(captured, /把作品定位标题改掉/);
     assert.equal(await readFile(join(bookDir, 'product.md'), 'utf8'), before);
     await assert.rejects(() => stat(join(bookDir, 'changes')));

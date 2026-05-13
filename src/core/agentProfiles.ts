@@ -72,6 +72,7 @@ const agentResponsibilities: Record<string, string[]> = {
     'Outputs exactly four blocks: [scope], [impact], [edits], [next].',
     'Never edits chapter prose directly; route prose changes through an author revise --instruction command in [next].',
     'Any write must first present structured edit operations for user apply or one-shot --write.',
+    'Use append-after-heading for adding bullets/items under headings, rename-text for file-wide renames, and YAML ops for YAML files; replace-text is last resort for one unique text block.',
   ],
 };
 
