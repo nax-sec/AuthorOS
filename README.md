@@ -186,6 +186,7 @@ author feedback import --chapter <N> <input-file>
 author feedback analyze --chapter <N> [--model] [--write]
 author decide --chapter <N> [--model] [--write]
 author memory update --chapter <N> [--model] [--write]
+author memory deltas [show <name>]
 
 author console ["instruction"] [--dry-run] [--write] [--scope author|book|both]
 author console log
@@ -258,7 +259,7 @@ A: 跑 `author revise --chapter N --model --write`。chief-writer 会根据 leng
 A: 不行。decider 需要 internal review 和 reader-sim review。
 
 **Q: 记忆 delta 怎么合并**  
-A: 手动打开 `memory/chapter-NNNN.delta.md`,把采纳内容合并到 `memory/*`。AuthorOS 不自动改 canon。
+A: 先用 `author memory deltas` 查看待处理 delta,再用 `author memory deltas show <name>` 查看内容。把采纳内容手动合并到 `memory/canon.md` 的"变更记录"段,或合并到对应的 `memory/foreshadowing.yaml`、`memory/plot_threads.yaml`、`memory/character_state.yaml`。AuthorOS 不自动合并 canon 或 YAML。
 
 **Q: 为什么我的概念没生成异能内容**  
 A: v0.3 的 Strategy Pass 会先判断你的概念适合哪个模板,并用 banned vocabulary 防止不相关模板词汇串入。如果你的 concept 是侦探、校园、科幻等非异能方向,系统会避免把 `urban_power_anomaly` 的能力/代价词汇硬塞进去。

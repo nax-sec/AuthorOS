@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.5 — Memory Delta Workflow Hotfixes
+
+- Made `rename-text` idempotent when the source text is already absent, so duplicate model rename ops do not fail a successful transaction.
+- Added `author memory deltas` and `author memory deltas show <name>` for reviewing pending console/chapter delta proposals.
+- Updated author-console memory-delta guidance so it points to manual curation instead of non-existent auto-merge commands.
+
 ## 0.3.4 — Console Prompt Examples
 
 - Expanded the author-console `[edits]` prompt schema from one generic example to one minimal example per supported edit op.
