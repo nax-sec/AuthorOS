@@ -1,5 +1,6 @@
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, normalize, sep } from 'node:path';
+import { parse as parseYaml } from 'yaml';
 import { AuthorOsError } from './schema.ts';
 
 export type EditScope = 'book' | 'author' | 'both';
@@ -9,6 +10,7 @@ export type EditOp =
   | { file: string; op: 'prepend-before-heading'; anchor: string; content: string }
   | { file: string; op: 'replace-section'; anchor: string; content: string }
   | { file: string; op: 'replace-text'; find: string; replace: string }
+  | { file: string; op: 'rename-text'; from: string; to: string }
   | { file: string; op: 'append-to-file'; content: string }
   | { file: string; op: 'create-file'; content: string }
   | { file: string; op: 'set-yaml-key'; key: string; value: unknown }
@@ -25,6 +27,7 @@ const knownOps = new Set([
   'prepend-before-heading',
   'replace-section',
   'replace-text',
+  'rename-text',
   'append-to-file',
   'create-file',
   'set-yaml-key',
@@ -33,12 +36,22 @@ const knownOps = new Set([
 ]);
 
 export function parseEditsBlock(raw: string): EditOp[] {
-  const items = parseYamlArray(raw);
-  const edits = items.map(toEditOp);
-  if (edits.length === 0) {
-    return [];
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(raw);
+  } catch (error) {
+    throw new AuthorOsError(`[edits] block is not valid YAML: ${errorMessage(error)}`);
   }
-  return edits;
+  if (parsed === null && raw.trim() === '') return [];
+  if (!Array.isArray(parsed)) {
+    throw new AuthorOsError('[edits] block must be a YAML array.');
+  }
+  return parsed.map((item, index) => {
+    if (!isPlainObject(item)) {
+      throw new AuthorOsError(`[edits][${index}] must be an object.`);
+    }
+    return toEditOp(item);
+  });
 }
 
 export function renderEditsYaml(edits: readonly EditOp[]): string {
@@ -125,8 +138,11 @@ async function applyOneEdit(absPath: string, current: string, edit: EditOp, befo
   if (edit.op === 'replace-text') {
     return replaceText(current, edit.find, edit.replace, edit.file);
   }
+  if (edit.op === 'rename-text') {
+    return renameText(current, edit.from, edit.to, edit.file);
+  }
 
-  const doc = parseSimpleYaml(current);
+  const doc = parseYamlDocument(current, edit.file);
   if (edit.op === 'set-yaml-key') {
     setYamlPath(doc, edit.key, edit.value);
   } else if (edit.op === 'append-yaml-array-item') {
@@ -166,19 +182,27 @@ function replaceSection(input: string, anchor: string, content: string, file: st
 }
 
 function replaceText(input: string, find: string, replace: string, file: string): string {
-  const lines = splitLines(input);
-  const target = normalizeBlock(find);
-  const matches: number[] = [];
-  for (let index = 0; index <= lines.length - target.length; index += 1) {
-    const candidate = lines.slice(index, index + target.length).map(normalizeLine);
-    if (candidate.every((line, offset) => line === target[offset])) {
-      matches.push(index);
-    }
+  const content = normalizeTextForMatch(input);
+  const target = normalizeTextForMatch(find).trimEnd();
+  const replacement = normalizeTextForMatch(replace).trimEnd();
+  if (!target) throw new AuthorOsError(`replace-text: find block cannot be empty in ${file}.`);
+  const index = content.indexOf(target);
+  if (index < 0) throw new AuthorOsError(`replace-text: find block not found in ${file}.`);
+  const count = countOccurrences(content, target);
+  if (count > 1) {
+    throw new AuthorOsError(
+      `replace-text: find block matched ${count} times in ${file}. Make the anchor unique, or use rename-text for global replacement.`,
+    );
   }
-  if (matches.length === 0) throw new AuthorOsError(`text block not found in ${file}.`);
-  if (matches.length > 1) throw new AuthorOsError(`text block matched multiple times in ${file}.`);
-  lines.splice(matches[0]!, target.length, ...trimBlock(replace));
-  return lines.join('\n');
+  return content.slice(0, index) + replacement + content.slice(index + target.length);
+}
+
+function renameText(input: string, from: string, to: string, file: string): string {
+  if (!from) throw new AuthorOsError('rename-text: from cannot be empty.');
+  if (!input.includes(from)) {
+    throw new AuthorOsError(`rename-text: "${from}" not found in ${file}.`);
+  }
+  return input.split(from).join(to);
 }
 
 function appendToFile(input: string, content: string): string {
@@ -223,12 +247,18 @@ function trimBlock(input: string): string[] {
   return input.replace(/\r\n?/g, '\n').trim().split('\n');
 }
 
-function normalizeBlock(input: string): string[] {
-  return input.replace(/\r\n?/g, '\n').split('\n').map(normalizeLine);
+function normalizeTextForMatch(input: string): string {
+  return input.replace(/\r\n?/g, '\n').split('\n').map((line) => line.trimEnd()).join('\n');
 }
 
-function normalizeLine(line: string): string {
-  return line.trim().replace(/\s+/g, ' ');
+function countOccurrences(input: string, target: string): number {
+  let count = 0;
+  let index = input.indexOf(target);
+  while (index >= 0) {
+    count += 1;
+    index = input.indexOf(target, index + target.length);
+  }
+  return count;
 }
 
 function normalizeEditFile(edit: EditOp, now: Date): EditOp {
@@ -273,6 +303,9 @@ function toEditOp(input: Record<string, unknown>): EditOp {
   if (op === 'replace-text') {
     return { file, op, find: stringField(input, 'find'), replace: stringField(input, 'replace') };
   }
+  if (op === 'rename-text') {
+    return { file, op, from: stringField(input, 'from'), to: stringField(input, 'to') };
+  }
   if (op === 'append-to-file' || op === 'create-file') {
     return { file, op, content: stringField(input, 'content') };
   }
@@ -287,154 +320,17 @@ function toEditOp(input: Record<string, unknown>): EditOp {
   return { file, op: 'delete-yaml-array-item', key: stringField(input, 'key'), predicate: input.predicate };
 }
 
-function parseYamlArray(raw: string): Array<Record<string, unknown>> {
-  const text = raw.trim();
-  if (!text || text === '[]') return [];
-  const lines = raw.replace(/\r\n?/g, '\n').split('\n');
-  const items: Array<Record<string, unknown>> = [];
-  let current: Record<string, unknown> | null = null;
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index]!;
-    if (!line.trim()) continue;
-    const itemMatch = line.match(/^-\s+([^:]+):\s*(.*)$/);
-    if (itemMatch) {
-      current = {};
-      items.push(current);
-      assignYamlField(current, itemMatch[1]!.trim(), itemMatch[2]!.trim(), lines, index);
-      if (itemMatch[2]!.trim() === '|') index = consumeBlockScalar(current, itemMatch[1]!.trim(), lines, index);
-      continue;
-    }
-    if (!current) throw new AuthorOsError('edits YAML must be an array of objects.');
-    const fieldMatch = line.match(/^\s{2}([^:]+):\s*(.*)$/);
-    if (!fieldMatch) throw new AuthorOsError(`invalid edits YAML line: ${line}`);
-    const key = fieldMatch[1]!.trim();
-    const value = fieldMatch[2]!.trim();
-    if (value === '|') {
-      index = consumeBlockScalar(current, key, lines, index);
-    } else if (value === '') {
-      index = consumeNestedObject(current, key, lines, index);
-    } else {
-      current[key] = parseScalarOrInlineMap(value);
-    }
+function parseYamlDocument(raw: string, file: string): Record<string, unknown> {
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(raw || '{}') ?? {};
+  } catch (error) {
+    throw new AuthorOsError(`yaml target is not valid YAML in ${file}: ${errorMessage(error)}`);
   }
-  return items;
-}
-
-function assignYamlField(target: Record<string, unknown>, key: string, value: string, lines: string[], index: number): void {
-  if (value !== '|') target[key] = parseScalarOrInlineMap(value);
-}
-
-function consumeBlockScalar(target: Record<string, unknown>, key: string, lines: string[], start: number): number {
-  const out: string[] = [];
-  let index = start + 1;
-  for (; index < lines.length; index += 1) {
-    const line = lines[index]!;
-    if (!line.trim()) {
-      out.push('');
-      continue;
-    }
-    if (!line.startsWith('    ')) break;
-    out.push(line.slice(4));
+  if (!isPlainObject(parsed)) {
+    throw new AuthorOsError(`yaml target root must be an object in ${file}.`);
   }
-  target[key] = out.join('\n').trimEnd();
-  return index - 1;
-}
-
-function consumeNestedObject(target: Record<string, unknown>, key: string, lines: string[], start: number): number {
-  const out: Record<string, unknown> = {};
-  let index = start + 1;
-  for (; index < lines.length; index += 1) {
-    const line = lines[index]!;
-    if (!line.trim()) continue;
-    const match = line.match(/^\s{4}([^:]+):\s*(.*)$/);
-    if (!match) break;
-    out[match[1]!.trim()] = parseScalarOrInlineMap(match[2]!.trim());
-  }
-  target[key] = out;
-  return index - 1;
-}
-
-function parseScalarOrInlineMap(value: string): unknown {
-  const trimmed = value.trim();
-  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-    const body = trimmed.slice(1, -1).trim();
-    if (!body) return {};
-    const out: Record<string, unknown> = {};
-    for (const part of body.split(',')) {
-      const [key, ...rest] = part.split(':');
-      out[key!.trim()] = parseScalar(rest.join(':').trim());
-    }
-    return out;
-  }
-  return parseScalar(trimmed);
-}
-
-function parseScalar(value: string): unknown {
-  const trimmed = value.trim();
-  if (trimmed === '[]') return [];
-  if (trimmed === '{}') return {};
-  if (trimmed === 'true') return true;
-  if (trimmed === 'false') return false;
-  if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
-  return trimmed.replace(/^['"]|['"]$/g, '');
-}
-
-function parseSimpleYaml(raw: string): Record<string, unknown> {
-  const root: Record<string, unknown> = {};
-  const stack: Array<{ indent: number; value: Record<string, unknown> | unknown[]; key?: string; parent?: Record<string, unknown> }> = [{ indent: -1, value: root }];
-  const lines = raw.replace(/\r\n?/g, '\n').split('\n');
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-    const line = lines[lineIndex]!;
-    if (!line.trim()) continue;
-    const indent = line.match(/^\s*/)?.[0].length ?? 0;
-    const trimmed = line.trim();
-    while (stack.length > 1 && indent <= stack[stack.length - 1]!.indent) stack.pop();
-    const frame = stack[stack.length - 1]!;
-    if (trimmed.startsWith('- ')) {
-      if (!Array.isArray(frame.value)) continue;
-      const itemText = trimmed.slice(2).trim();
-      const item: Record<string, unknown> = {};
-      if (itemText.includes(':')) {
-        const [key, ...rest] = itemText.split(':');
-        item[key!.trim()] = parseScalar(rest.join(':').trim());
-      }
-      frame.value.push(item);
-      stack.push({ indent, value: item });
-      continue;
-    }
-    if (Array.isArray(frame.value)) continue;
-    const match = trimmed.match(/^([^:]+):\s*(.*)$/);
-    if (!match) continue;
-    const key = match[1]!.trim();
-    const valueText = match[2]!.trim();
-    const value = valueText ? parseScalar(valueText) : emptyYamlContainer(lines, lineIndex, indent);
-    frame.value[key] = value;
-    if (!valueText) stack.push({ indent, value: value as Record<string, unknown> | unknown[] });
-  }
-  normalizeYamlArrays(root);
-  return root;
-}
-
-function emptyYamlContainer(lines: string[], lineIndex: number, parentIndent: number): Record<string, unknown> | unknown[] {
-  for (let index = lineIndex + 1; index < lines.length; index += 1) {
-    const line = lines[index]!;
-    if (!line.trim()) continue;
-    const indent = line.match(/^\s*/)?.[0].length ?? 0;
-    if (indent <= parentIndent) return {};
-    return line.trim().startsWith('- ') ? [] : {};
-  }
-  return {};
-}
-
-function normalizeYamlArrays(node: unknown): void {
-  if (!isPlainObject(node)) return;
-  for (const [key, value] of Object.entries(node)) {
-    if (isPlainObject(value) && Object.keys(value).length === 0 && (key === 'major' || key === 'antagonists' || key === 'hooks' || key === 'threads')) {
-      node[key] = [];
-    } else if (isPlainObject(value)) {
-      normalizeYamlArrays(value);
-    }
-  }
+  return parsed;
 }
 
 function getYamlPath(doc: Record<string, unknown>, path: string): unknown {
@@ -575,4 +471,8 @@ function isMissingFileError(error: unknown): boolean {
   return error instanceof Error
     && 'code' in error
     && (error as NodeJS.ErrnoException).code === 'ENOENT';
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

@@ -31,6 +31,66 @@ test('parseEditsBlock accepts YAML array edit ops with block scalars', () => {
   assert.match(String(edits[0]?.content), /地理与街区使用/);
 });
 
+test('parseEditsBlock accepts literal blocks containing markdown bullets and blank lines', () => {
+  const edits = parseEditsBlock([
+    '- file: review_rules.md',
+    '  op: replace-text',
+    '  find: |',
+    '    - 过度揭示或停滞不前的情况是否会导致剧情动力丧失。',
+    '  replace: |',
+    '    - 过度揭示或停滞不前的情况是否会导致剧情动力丧失。',
+    '',
+    '    - **地理与街区使用**',
+    '        - 香港真实地理框架要服务调查。',
+    '        - 场景所在地段要符合阶层映射。',
+    '',
+  ].join('\n'));
+
+  assert.equal(edits[0]?.op, 'replace-text');
+  assert.match(String(edits[0]?.replace), /地理与街区使用/);
+  assert.match(String(edits[0]?.replace), /香港真实地理框架/);
+});
+
+test('parseEditsBlock accepts folded block scalars', () => {
+  const edits = parseEditsBlock([
+    '- file: product.md',
+    '  op: replace-text',
+    '  find: 旧定位',
+    '  replace: >',
+    '    新定位第一句',
+    '    新定位第二句',
+    '',
+  ].join('\n'));
+
+  assert.equal(edits[0]?.op, 'replace-text');
+  assert.match(String(edits[0]?.replace), /新定位第一句 新定位第二句/);
+});
+
+test('parseEditsBlock accepts inline maps and arrays', () => {
+  const edits = parseEditsBlock([
+    '- file: characters.yaml',
+    '  op: append-yaml-array-item',
+    '  key: major',
+    '  item: {id: M003, name: "周临"}',
+    '- file: characters.yaml',
+    '  op: set-yaml-key',
+    '  key: antagonists',
+    '  value: []',
+    '',
+  ].join('\n'));
+
+  assert.equal(edits.length, 2);
+  assert.deepEqual(edits[0]?.item, { id: 'M003', name: '周临' });
+  assert.deepEqual(edits[1]?.value, []);
+});
+
+test('parseEditsBlock rejects non-array YAML roots', () => {
+  assert.throws(
+    () => parseEditsBlock('file: outline.md\nop: replace-text\n'),
+    /must be a YAML array/,
+  );
+});
+
 test('append-after-heading appends to the target section end', async () => {
   await withTempDir(async (dir) => {
     await writeFile(join(dir, 'review_rules.md'), '# 章节评审规则\n\n## 必查项\n\n- 原项\n\n## 风险分级\n\n- 高: 断裂\n', 'utf8');
@@ -73,9 +133,9 @@ test('replace-section replaces section body but keeps the heading', async () => 
   });
 });
 
-test('replace-text replaces a unique normalized text block', async () => {
+test('replace-text replaces a unique text block', async () => {
   await withTempDir(async (dir) => {
-    await writeFile(join(dir, 'outline.md'), '# 主线大纲\n\n新港   重工\n旧线索\n', 'utf8');
+    await writeFile(join(dir, 'outline.md'), '# 主线大纲\n\n新港 重工\n旧线索\n', 'utf8');
     await applyEditOps({
       baseDir: dir,
       scope: 'book',

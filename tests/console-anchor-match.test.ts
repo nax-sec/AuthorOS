@@ -42,21 +42,21 @@ test('heading ops reject duplicate anchors', async () => {
   });
 });
 
-test('replace-text rejects ambiguous normalized matches', async () => {
+test('replace-text rejects ambiguous matches', async () => {
   await withTempDir(async (dir) => {
-    await writeFile(join(dir, 'outline.md'), '# 主线大纲\n\n新港   重工\n\n新港 重工\n', 'utf8');
+    await writeFile(join(dir, 'outline.md'), '# 主线大纲\n\n新港重工\n\n新港重工\n', 'utf8');
     await assert.rejects(
       () => applyEditOps({
         baseDir: dir,
         scope: 'book',
-        edits: parseEditsBlock('- file: outline.md\n  op: replace-text\n  find: "新港 重工"\n  replace: "鼎新重工"\n'),
+        edits: parseEditsBlock('- file: outline.md\n  op: replace-text\n  find: "新港重工"\n  replace: "鼎新重工"\n'),
       }),
-      /text block matched multiple times/,
+      /use rename-text/,
     );
   });
 });
 
-test('replace-text rejects missing normalized text', async () => {
+test('replace-text rejects missing text', async () => {
   await withTempDir(async (dir) => {
     await writeFile(join(dir, 'outline.md'), '# 主线大纲\n\n真实内容\n', 'utf8');
     await assert.rejects(
@@ -65,7 +65,7 @@ test('replace-text rejects missing normalized text', async () => {
         scope: 'book',
         edits: parseEditsBlock('- file: outline.md\n  op: replace-text\n  find: "不存在"\n  replace: "新内容"\n'),
       }),
-      /text block not found/,
+      /replace-text: find block not found/,
     );
   });
 });

@@ -2,7 +2,7 @@
 
 本地优先的 AI 作者 CLI。AuthorOS 把一本长篇小说当作一个可经营的产品,用 agent 闭环完成计划、写作、评审、修订、决策、记忆更新和作者级形状调整。
 
-License: MIT · Node.js >= 24 · 运行时零 npm 依赖
+License: MIT · Node.js >= 24 · 运行时仅 `yaml` 一个 npm 依赖
 
 ---
 
@@ -14,7 +14,7 @@ v0.3 引入了"作者层":首次使用前先运行 `author author init`,让 Auth
 - 任何能跑 `node` 的 shell(PowerShell / bash 都行)
 - 一个 OpenAI 兼容的 API key + base_url + 模型名
 
-运行时零 npm 依赖。dev 模式用 Node 24 native TypeScript type stripping 直接跑 `src/*.ts`;发布时 `npm pack` 会通过 prepack 脚本编译到 `dist/`。
+运行时仅 `yaml` 一个 npm 依赖,用于 console structured edits 解析。dev 模式用 Node 24 native TypeScript type stripping 直接跑 `src/*.ts`;发布时 `npm pack` 会通过 prepack 脚本编译到 `dist/`。
 
 ### Windows PowerShell 注意
 
