@@ -14,62 +14,70 @@ async function withTempDir(body: (dir: string) => Promise<void>): Promise<void> 
   }
 }
 
-test('rename-text replaces every literal occurrence in a file', async () => {
+test('rename-text is a noop when from is already absent', async () => {
   await withTempDir(async (dir) => {
-    await writeFile(join(dir, 'outline.md'), '新港重工\n新港重工 A\nB 新港重工 C\n新港重工，新港重工\n', 'utf8');
-    await applyEditOps({
+    await writeFile(join(dir, 'outline.md'), '# 主线大纲\n\n鼎新重工已登场。\n', 'utf8');
+
+    const result = await applyEditOps({
       baseDir: dir,
       scope: 'book',
-      edits: parseEditsBlock('- file: outline.md\n  op: rename-text\n  from: 新港重工\n  to: 鼎新重工\n'),
+      edits: parseEditsBlock('- file: outline.md\n  op: rename-text\n  from: "新港重工"\n  to: "鼎新重工"\n'),
     });
 
-    const text = await readFile(join(dir, 'outline.md'), 'utf8');
-    assert.equal((text.match(/新港重工/g) ?? []).length, 0);
-    assert.equal((text.match(/鼎新重工/g) ?? []).length, 5);
+    assert.deepEqual(result.fileChanges, []);
+    assert.deepEqual(result.noops, ['noop: rename-text on outline.md: "新港重工" already absent (likely already renamed)']);
+    assert.equal(await readFile(join(dir, 'outline.md'), 'utf8'), '# 主线大纲\n\n鼎新重工已登场。\n');
   });
 });
 
-test('rename-text rejects missing source text', async () => {
+test('duplicate rename-text ops succeed with the second op recorded as noop', async () => {
   await withTempDir(async (dir) => {
-    await writeFile(join(dir, 'outline.md'), '真实内容\n', 'utf8');
-    await assert.rejects(
-      () => applyEditOps({
-        baseDir: dir,
-        scope: 'book',
-        edits: parseEditsBlock('- file: outline.md\n  op: rename-text\n  from: 新港重工\n  to: 鼎新重工\n'),
-      }),
-      /rename-text: "新港重工" not found/,
-    );
-  });
-});
+    await writeFile(join(dir, 'outline.md'), '# 主线大纲\n\n新港重工掌握线索。新港重工再次出现。\n', 'utf8');
 
-test('rename-text rejects empty from value', async () => {
-  assert.throws(
-    () => parseEditsBlock('- file: outline.md\n  op: rename-text\n  from: ""\n  to: 鼎新重工\n'),
-    /from/,
-  );
-});
-
-test('rename-text applies independently across multiple files', async () => {
-  await withTempDir(async (dir) => {
-    await writeFile(join(dir, 'outline.md'), '新港重工\n', 'utf8');
-    await writeFile(join(dir, 'world.md'), '新港重工\n', 'utf8');
-    await applyEditOps({
+    const result = await applyEditOps({
       baseDir: dir,
       scope: 'book',
       edits: parseEditsBlock([
         '- file: outline.md',
         '  op: rename-text',
-        '  from: 新港重工',
-        '  to: 鼎新重工',
-        '- file: world.md',
+        '  from: "新港重工"',
+        '  to: "鼎新重工"',
+        '- file: outline.md',
         '  op: rename-text',
-        '  from: 新港重工',
-        '  to: 港岛重工',
+        '  from: "新港重工"',
+        '  to: "鼎新重工"',
       ].join('\n')),
     });
 
-    assert.equal(await readFile(join(dir, 'outline.md'), 'utf8'), '鼎新重工\n');
-    assert.equal(await readFile(join(dir, 'world.md'), 'utf8'), '港岛重工\n');
+    assert.deepEqual(result.fileChanges.map((change) => change.file), ['outline.md']);
+    assert.deepEqual(result.noops, ['noop: rename-text on outline.md: "新港重工" already absent (likely already renamed)']);
+    const text = await readFile(join(dir, 'outline.md'), 'utf8');
+    assert.equal((text.match(/鼎新重工/g) ?? []).length, 2);
+    assert.doesNotMatch(text, /新港重工/);
+  });
+});
+
+test('rename-text noop can share a transaction with a normal replace-text edit', async () => {
+  await withTempDir(async (dir) => {
+    await writeFile(join(dir, 'world.md'), '# 世界设定\n\n鼎新重工已存在。\n雨夜线索很弱。\n', 'utf8');
+
+    const result = await applyEditOps({
+      baseDir: dir,
+      scope: 'book',
+      edits: parseEditsBlock([
+        '- file: world.md',
+        '  op: rename-text',
+        '  from: "新港重工"',
+        '  to: "鼎新重工"',
+        '- file: world.md',
+        '  op: replace-text',
+        '  find: "雨夜线索很弱。"',
+        '  replace: "雨夜线索更强。"',
+      ].join('\n')),
+    });
+
+    assert.deepEqual(result.fileChanges.map((change) => change.file), ['world.md']);
+    assert.deepEqual(result.noops, ['noop: rename-text on world.md: "新港重工" already absent (likely already renamed)']);
+    assert.match(await readFile(join(dir, 'world.md'), 'utf8'), /雨夜线索更强。/);
   });
 });

@@ -20,6 +20,7 @@ export type EditOp =
 export interface ApplyEditOpsResult {
   fileChanges: Array<{ file: string; before: string | null; after: string }>;
   edits: EditOp[];
+  noops: string[];
 }
 
 const knownOps = new Set([
@@ -75,13 +76,18 @@ export async function applyEditOps(args: {
   }
 
   const fileChanges: ApplyEditOpsResult['fileChanges'] = [];
+  const noops: string[] = [];
   for (const [file, fileEdits] of byFile.entries()) {
     const absPath = join(args.baseDir, file);
     const before = await readOptional(absPath);
     let after = before ?? '';
     for (const edit of fileEdits) {
-      after = await applyOneEdit(absPath, after, edit, before);
+      const result = await applyOneEdit(absPath, after, edit, before);
+      after = result.content;
+      if (result.noop) noops.push(result.noop);
     }
+    const createsNewFile = before === null && fileEdits.some((edit) => edit.op === 'create-file');
+    if (!createsNewFile && after === (before ?? '')) continue;
     await mkdir(dirname(absPath), { recursive: true });
     if (fileEdits.some((edit) => edit.op === 'create-file') && before !== null) {
       throw new AuthorOsError(`create-file target already exists: ${file}`);
@@ -90,7 +96,7 @@ export async function applyEditOps(args: {
     fileChanges.push({ file, before, after: ensureTrailingNewline(after) });
   }
 
-  return { fileChanges, edits };
+  return { fileChanges, edits, noops };
 }
 
 export async function previewEditOpsForFile(args: {
@@ -113,30 +119,35 @@ export async function previewEditOpsForFile(args: {
   const before = await readOptional(absPath);
   let after = before ?? '';
   for (const edit of fileEdits) {
-    after = await applyOneEdit(absPath, after, edit, before);
+    after = (await applyOneEdit(absPath, after, edit, before)).content;
   }
   return ensureTrailingNewline(after);
 }
 
-async function applyOneEdit(absPath: string, current: string, edit: EditOp, before: string | null): Promise<string> {
+async function applyOneEdit(
+  absPath: string,
+  current: string,
+  edit: EditOp,
+  before: string | null,
+): Promise<{ content: string; noop?: string }> {
   if (edit.op === 'create-file') {
     if (before !== null) throw new AuthorOsError(`create-file target already exists: ${edit.file}`);
-    return edit.content;
+    return { content: edit.content };
   }
   if (edit.op === 'append-to-file') {
-    return appendToFile(current, edit.content);
+    return { content: appendToFile(current, edit.content) };
   }
   if (edit.op === 'append-after-heading') {
-    return appendAfterHeading(current, edit.anchor, edit.content, edit.file);
+    return { content: appendAfterHeading(current, edit.anchor, edit.content, edit.file) };
   }
   if (edit.op === 'prepend-before-heading') {
-    return prependBeforeHeading(current, edit.anchor, edit.content, edit.file);
+    return { content: prependBeforeHeading(current, edit.anchor, edit.content, edit.file) };
   }
   if (edit.op === 'replace-section') {
-    return replaceSection(current, edit.anchor, edit.content, edit.file);
+    return { content: replaceSection(current, edit.anchor, edit.content, edit.file) };
   }
   if (edit.op === 'replace-text') {
-    return replaceText(current, edit.find, edit.replace, edit.file);
+    return { content: replaceText(current, edit.find, edit.replace, edit.file) };
   }
   if (edit.op === 'rename-text') {
     return renameText(current, edit.from, edit.to, edit.file);
@@ -157,7 +168,7 @@ async function applyOneEdit(absPath: string, current: string, edit: EditOp, befo
     array.splice(index, 1);
   }
   await ensureFileLooksYaml(absPath, edit.file);
-  return renderYamlDocument(doc);
+  return { content: renderYamlDocument(doc) };
 }
 
 function appendAfterHeading(input: string, anchor: string, content: string, file: string): string {
@@ -197,12 +208,15 @@ function replaceText(input: string, find: string, replace: string, file: string)
   return content.slice(0, index) + replacement + content.slice(index + target.length);
 }
 
-function renameText(input: string, from: string, to: string, file: string): string {
+function renameText(input: string, from: string, to: string, file: string): { content: string; noop?: string } {
   if (!from) throw new AuthorOsError('rename-text: from cannot be empty.');
   if (!input.includes(from)) {
-    throw new AuthorOsError(`rename-text: "${from}" not found in ${file}.`);
+    return {
+      content: input,
+      noop: `noop: rename-text on ${file}: "${from}" already absent (likely already renamed)`,
+    };
   }
-  return input.split(from).join(to);
+  return { content: input.split(from).join(to) };
 }
 
 function appendToFile(input: string, content: string): string {

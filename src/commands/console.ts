@@ -40,6 +40,7 @@ export interface RunConsoleOptions {
 export interface ConsoleApplyResult {
   id: string;
   files: string[];
+  noops?: string[];
 }
 
 export interface ConsoleRunResult {
@@ -151,7 +152,8 @@ export async function runConsoleRepl(
           env: options.env,
           now: options.now,
         });
-        options.io.stdout(`applied: ${applied.id}\nfiles: ${applied.files.join(', ')}\n\n[next]\n${parsed.next}\n`);
+        const noops = applied.noops && applied.noops.length > 0 ? `${applied.noops.join('\n')}\n` : '';
+        options.io.stdout(`applied: ${applied.id}\nfiles: ${applied.files.join(', ')}\n${noops}\n[next]\n${parsed.next}\n`);
         break;
       }
       if (action === 'edit') {
@@ -182,6 +184,9 @@ export function renderConsoleDryRun(result: ConsoleRunResult): string {
     lines.push('', '(dry-run; use --write to apply)');
   } else if (result.apply) {
     lines.push('', `applied: ${result.apply.id}`, `files: ${result.apply.files.join(', ')}`);
+    if (result.apply.noops && result.apply.noops.length > 0) {
+      lines.push(...result.apply.noops);
+    }
   }
   lines.push('');
   return lines.join('\n');
@@ -417,7 +422,7 @@ export async function applyConsoleOutput(
   const applied = await applyEditOps({ baseDir, scope: parsed.scope, edits, now: options.now });
   const editsYaml = renderEditsYaml(applied.edits);
 
-  return await recordChange({
+  const change = await recordChange({
     baseDir,
     scope: parsed.scope,
     agent: 'author-console',
@@ -428,6 +433,7 @@ export async function applyConsoleOutput(
     editOps: applied.edits.map((edit) => edit.op),
     now: options.now,
   });
+  return { ...change, noops: applied.noops };
 }
 
 export async function getConsoleChanges(
