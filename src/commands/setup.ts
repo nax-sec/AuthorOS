@@ -42,6 +42,15 @@ export interface SetupResult {
 export type AskFn = (prompt: string) => Promise<string>;
 
 const setupAgent = 'book-setup-editor';
+const defaultGenerationMaxTokens = 2200;
+const sectionTokenBudgets: Record<string, number> = {
+  'product.md': 2200,
+  'author.md': 2200,
+  'world.md': 3600,
+  'outline.md': 4000,
+  'characters.yaml': 2400,
+  'review_rules.md': 2000,
+};
 
 export async function setupFromConcept(opts: {
   projectDir: string;
@@ -285,19 +294,15 @@ async function generateIdentityFiles(args: {
   await writeStrategyFile(args.projectDir, strategy);
   const bannedVocabulary = buildBannedVocabulary(args.concept, strategy, metas);
   const results = await Promise.all(bookSchema.identityFiles.map(async (section) => {
-    const reply = await invokeAgent(args.llm, `setup ${section.title}`, buildGenerationPrompt({
+    const prompt = buildGenerationPrompt({
       projectName: args.projectName,
       concept: args.concept,
       section,
       sectionIntent: strategy.per_section_intent[section.file] ?? '',
       agentProfile: profile,
       bannedVocabulary,
-    }), {
-      temperature: 0.5,
-      maxTokens: 2200,
     });
-
-    const content = sanitizeFileBody(reply);
+    const content = await generateSectionContent(args.llm, section, prompt);
     await writeFile(join(args.projectDir, section.file), content, 'utf8');
     return {
       file: section.file,
@@ -324,6 +329,55 @@ async function generateIdentityFiles(args: {
   });
 
   return { mode: args.mode, files: results, distill };
+}
+
+async function generateSectionContent(
+  llm: LlmClient,
+  section: SetupSection,
+  prompt: string,
+): Promise<string> {
+  const maxTokens = sectionTokenBudgets[section.file] ?? defaultGenerationMaxTokens;
+  const content = sanitizeFileBody(await invokeAgent(llm, `setup ${section.title}`, prompt, {
+    temperature: 0.5,
+    maxTokens,
+  }));
+  if (!looksTruncated(content, section)) {
+    return content;
+  }
+
+  const retryMaxTokens = Math.min(maxTokens * 2, 8000);
+  console.warn(`[Setup] warn: setup ${section.title} looked truncated; retrying with maxTokens=${retryMaxTokens}.`);
+  const retry = sanitizeFileBody(await invokeAgent(llm, `setup ${section.title} retry`, prompt, {
+    temperature: 0.5,
+    maxTokens: retryMaxTokens,
+  }));
+  if (looksTruncated(retry, section)) {
+    console.warn(`[Setup] warn: setup ${section.title} still looked truncated after retry; writing best effort output.`);
+  }
+  return retry;
+}
+
+function looksTruncated(content: string, section: SetupSection): boolean {
+  const trimmed = content.trimEnd();
+  if (!trimmed) return true;
+  if (section.file.endsWith('.yaml')) return false;
+  for (const heading of requiredHeadingsForSection(section.file)) {
+    if (!trimmed.split(/\r?\n/).map((line) => line.trim()).includes(heading)) {
+      return true;
+    }
+  }
+  const lastLine = trimmed.split('\n').pop() ?? '';
+  if (lastLine.length === 0) return false;
+  if (lastLine.trim().length <= 12) return false;
+  return !(/[。!?…”"」)\]\.\?\!\;\:]\s*$/.test(lastLine)
+    || /^\s*#/.test(lastLine)
+    || /^\s*\|/.test(lastLine)
+    || /^\s*-/.test(lastLine));
+}
+
+function requiredHeadingsForSection(file: string): string[] {
+  const entry = bookSchema.identityFiles.find((item) => item.file === file);
+  return entry && 'requiredHeadings' in entry ? entry.requiredHeadings : [];
 }
 
 async function writeStrategyFile(projectDir: string, strategy: SetupStrategy): Promise<void> {
