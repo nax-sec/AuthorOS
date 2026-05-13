@@ -137,34 +137,44 @@ test('runSetupDistill warns and refuses candidate when place names still leak af
   await withTempDirs(async (bookDir, authorDir) => {
     await writeGeneratedBook(bookDir);
     await writeFile(join(bookDir, 'world.md'), '# 世界与规则\n\n## 基础规则\n\n新港镇是义体黑市的核心据点。\n\n## 风险提醒\n\n技术不能万能。\n', 'utf8');
-
-    let calls = 0;
-    const llm = {
-      async generate(prompt: string) {
-        calls += 1;
-        if (calls === 2) {
-          assert.match(prompt, /Previous attempt leaked specific names: 新港镇/);
-        }
-        return JSON.stringify(distillTrue({
-          'world.md': '# 世界与规则\n\n## 基础规则\n\n新港镇式义体黑市城市。\n\n## 风险提醒\n\n不能万能。\n',
-        }));
-      },
+    const warnings: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (message?: unknown) => {
+      warnings.push(String(message));
     };
 
-    const result = await runSetupDistill({
-      bookDir,
-      authorDir,
-      projectName: 'demo',
-      concept: '赛博朋克义体侦探',
-      llm,
-      now: new Date('2026-05-12T00:00:00Z'),
-    });
+    try {
+      let calls = 0;
+      const llm = {
+        async generate(prompt: string) {
+          calls += 1;
+          if (calls === 2) {
+            assert.match(prompt, /Previous attempt leaked specific names: 新港镇/);
+          }
+          return JSON.stringify(distillTrue({
+            'world.md': '# 世界与规则\n\n## 基础规则\n\n新港镇式义体黑市城市。\n\n## 风险提醒\n\n不能万能。\n',
+          }));
+        },
+      };
 
-    assert.equal(calls, 2);
-    assert.equal(result.shouldCreate, false);
-    assert.match(result.reason, /warning/i);
-    assert.ok(result.leakedTerms?.includes('新港镇'));
-    await assert.rejects(() => stat(join(authorDir, 'templates')));
+      const result = await runSetupDistill({
+        bookDir,
+        authorDir,
+        projectName: 'demo',
+        concept: '赛博朋克义体侦探',
+        llm,
+        now: new Date('2026-05-12T00:00:00Z'),
+      });
+
+      assert.equal(calls, 2);
+      assert.equal(result.shouldCreate, false);
+      assert.match(result.reason, /distill skipped:/);
+      assert.match(warnings.join('\n'), /\[Distill\] warn:/);
+      assert.ok(result.leakedTerms?.includes('新港镇'));
+      await assert.rejects(() => stat(join(authorDir, 'templates')));
+    } finally {
+      console.warn = originalWarn;
+    }
   });
 });
 

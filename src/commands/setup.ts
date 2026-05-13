@@ -170,7 +170,7 @@ export function renderSetupResult(result: SetupResult): string {
     lines.push('');
     if (result.distill.shouldCreate) {
       lines.push(`Distill: proposed candidate template "${result.distill.key}". Promote with: author template promote ${result.distill.key}`);
-    } else if (result.distill.leakedTerms && result.distill.leakedTerms.length > 0) {
+    } else if ((result.distill.leakedTerms && result.distill.leakedTerms.length > 0) || result.distill.reason.startsWith('distill skipped:')) {
       lines.push(`Distill warning: ${result.distill.reason}`);
     } else {
       lines.push(`Distill: no new template needed (${result.distill.reason})`);

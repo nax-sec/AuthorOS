@@ -56,6 +56,21 @@ export async function runSetupDistill(args: {
   llm: LlmClient;
   now?: Date;
 }): Promise<SetupDistillResult> {
+  try {
+    return await runSetupDistillStrict(args);
+  } catch (error) {
+    return skipDistill(errorMessage(error));
+  }
+}
+
+async function runSetupDistillStrict(args: {
+  bookDir: string;
+  authorDir: string;
+  projectName: string;
+  concept: string;
+  llm: LlmClient;
+  now?: Date;
+}): Promise<SetupDistillResult> {
   const strategyJson = await readFile(join(args.bookDir, '.authoros/strategy.json'), 'utf8');
   const generatedBookFiles = await readGeneratedBookFiles(args.bookDir);
   const existingTemplateMetas = await loadExistingTemplateMetas(args.authorDir);
@@ -91,7 +106,7 @@ export async function runSetupDistill(args: {
     }
     leaked = findLeakedTerms(parsed.skeleton_files ?? {}, concreteTerms);
     if (leaked.length > 0) {
-      return { shouldCreate: false, reason: `warning: distill aborted (concrete leak): ${leaked.join(', ')}`, leakedTerms: leaked };
+      return skipDistill(`concrete leak after retry: ${leaked.join(', ')}`, leaked);
     }
   }
 
@@ -244,7 +259,7 @@ async function readGeneratedBookFiles(bookDir: string): Promise<Record<string, s
 
 async function generateDistill(llm: LlmClient, prompt: string): Promise<string> {
   try {
-    return await llm.generate(prompt, { temperature: 0.35, maxTokens: 5000 });
+    return await llm.generate(prompt, { temperature: 0.35, maxTokens: 6000 });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new AuthorOsError(`Setup distill model generation failed. ${detail}`);
@@ -296,6 +311,16 @@ function addConcreteTerm(terms: Set<string>, raw: string | undefined): void {
   if (value && !value.includes('<') && value.length >= 2) {
     terms.add(value);
   }
+}
+
+function skipDistill(detail: string, leakedTerms?: string[]): SetupDistillResult {
+  const reason = `distill skipped: ${detail}`;
+  console.warn(`[Distill] warn: ${reason}`);
+  return { shouldCreate: false, reason, leakedTerms };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function writeCandidateTemplate(args: {
