@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.4 — Console Prompt Examples
+
+- Expanded the author-console `[edits]` prompt schema from one generic example to one minimal example per supported edit op.
+- Clarified book-vs-author scope selection for common book files and delta files.
+- Tightened console delta guidance so the model uses `memory/console-*.delta.md` and proposes canon/memory changes through deltas.
+- Raised the author-console output budget to fit the longer structured prompt examples.
+- Added explicit empty-chapter context text so the console agent does not infer drafted chapter prose when none exists.
+
 ## 0.3.3 — Console Edits Hardening
 
 - Replaced fragile custom `[edits]` YAML parsing with the `yaml` runtime dependency.

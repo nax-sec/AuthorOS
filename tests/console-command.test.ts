@@ -30,10 +30,10 @@ function silentIo() {
   };
 }
 
-function fakeLlm(reply: string, capture?: (prompt: string) => void) {
+function fakeLlm(reply: string, capture?: (prompt: string, options?: { maxTokens?: number }) => void) {
   return {
-    async generate(prompt: string) {
-      capture?.(prompt);
+    async generate(prompt: string, options?: { maxTokens?: number }) {
+      capture?.(prompt, options);
       return reply;
     },
   };
@@ -60,10 +60,14 @@ test('console one-shot dry-run prints four blocks and does not write files', asy
   await withBook(async (bookDir) => {
     const before = await readFile(join(bookDir, 'product.md'), 'utf8');
     let captured = '';
+    let capturedMaxTokens: number | undefined;
     const io = silentIo();
 
     const exit = await run(['console', '把作品定位标题改掉'], bookDir, io.io, {
-      llm: fakeLlm(renameProductReply(), (prompt) => { captured = prompt; }),
+      llm: fakeLlm(renameProductReply(), (prompt, options) => {
+        captured = prompt;
+        capturedMaxTokens = options?.maxTokens;
+      }),
       env: { OPENAI_API_KEY: 'k', AUTHOROS_MODEL: 'm' },
     });
 
@@ -75,11 +79,37 @@ test('console one-shot dry-run prints four blocks and does not write files', asy
     assert.match(output, /\[next\]/);
     assert.match(output, /dry-run/);
     assert.match(captured, /Output MUST be exactly this structure/);
+    assert.match(captured, /Scope selection rules/);
+    assert.match(captured, /review_rules\.md/);
+    assert.match(captured, /# append a section after an existing heading/);
+    assert.match(captured, /op: append-after-heading/);
+    assert.match(captured, /# rename a string across the whole file/);
+    assert.match(captured, /op: rename-text/);
+    assert.match(captured, /# replace a unique text block with new wording/);
+    assert.match(captured, /op: replace-text/);
+    assert.match(captured, /# replace a whole section with new content/);
+    assert.match(captured, /op: replace-section/);
+    assert.match(captured, /# prepend before a heading/);
+    assert.match(captured, /op: prepend-before-heading/);
+    assert.match(captured, /# set a yaml scalar field/);
+    assert.match(captured, /op: set-yaml-key/);
+    assert.match(captured, /# append item to yaml array/);
+    assert.match(captured, /op: append-yaml-array-item/);
+    assert.match(captured, /# delete yaml array item by predicate/);
+    assert.match(captured, /op: delete-yaml-array-item/);
+    assert.match(captured, /# create a new console delta file/);
+    assert.match(captured, /op: create-file/);
+    assert.match(captured, /Use the exact file field `memory\/console-\*\.delta\.md`/);
+    assert.match(captured, /Do not include memory\/canon\.md/);
+    assert.match(captured, /# append to an existing file/);
+    assert.match(captured, /op: append-to-file/);
     assert.match(captured, /Op selection rules/);
     assert.match(captured, /append-after-heading/);
     assert.match(captured, /rename-text/);
     assert.match(captured, /replace-text` is the last resort/);
+    assert.match(captured, /no chapters drafted yet/);
     assert.match(captured, /把作品定位标题改掉/);
+    assert.equal(capturedMaxTokens, 5000);
     assert.equal(await readFile(join(bookDir, 'product.md'), 'utf8'), before);
     await assert.rejects(() => stat(join(bookDir, 'changes')));
   });
