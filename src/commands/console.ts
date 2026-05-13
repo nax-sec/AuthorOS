@@ -475,6 +475,16 @@ function parseUnifiedDiff(diff: string): FilePatch[] {
 }
 
 function applyPatchToText(input: string, patch: FilePatch): string {
+  try {
+    return applyPatchToTextStrict(input, patch);
+  } catch (error) {
+    const fuzzy = fuzzyApplyPatchToText(input, patch);
+    if (fuzzy !== null) return fuzzy;
+    throw error;
+  }
+}
+
+function applyPatchToTextStrict(input: string, patch: FilePatch): string {
   const original = splitTextLines(input);
   const output: string[] = [];
   let cursor = 0;
@@ -490,7 +500,7 @@ function applyPatchToText(input: string, patch: FilePatch): string {
       const text = line.slice(1);
       if (line.startsWith(' ')) {
         assertOriginalLine(patch.file, original[cursor], text);
-        output.push(text);
+        output.push(original[cursor] ?? text);
         cursor += 1;
       } else if (line.startsWith('-')) {
         assertOriginalLine(patch.file, original[cursor], text);
@@ -507,6 +517,41 @@ function applyPatchToText(input: string, patch: FilePatch): string {
   return `${output.join('\n')}\n`;
 }
 
+function fuzzyApplyPatchToText(input: string, patch: FilePatch): string | null {
+  const output = splitTextLines(input);
+  let offset = 0;
+  for (const hunk of patch.hunks) {
+    const removeLines = hunk.lines
+      .filter((line) => line.startsWith('-'))
+      .map((line) => line.slice(1));
+    const addLines = hunk.lines
+      .filter((line) => line.startsWith('+'))
+      .map((line) => line.slice(1));
+    if (removeLines.length === 0) return null;
+
+    const targetIndex = Math.max(0, hunk.oldStart - 1 + offset);
+    const index = findNearestLineBlock(output, removeLines, targetIndex, 5);
+    if (index === null) return null;
+    output.splice(index, removeLines.length, ...addLines);
+    offset += addLines.length - removeLines.length;
+  }
+  return `${output.join('\n')}\n`;
+}
+
+function findNearestLineBlock(lines: string[], expected: string[], targetIndex: number, windowSize: number): number | null {
+  const matches: Array<{ index: number; distance: number }> = [];
+  for (let index = 0; index <= lines.length - expected.length; index += 1) {
+    if (expected.every((line, offset) => sameLineIgnoringTrailingWhitespace(lines[index + offset], line))) {
+      const distance = Math.abs(index - targetIndex);
+      if (distance <= windowSize) {
+        matches.push({ index, distance });
+      }
+    }
+  }
+  matches.sort((a, b) => a.distance - b.distance || a.index - b.index);
+  return matches[0]?.index ?? null;
+}
+
 function splitTextLines(input: string): string[] {
   const normalized = input.replace(/\r\n?/g, '\n');
   if (normalized.length === 0) return [];
@@ -516,11 +561,15 @@ function splitTextLines(input: string): string[] {
 }
 
 function assertOriginalLine(file: string, actual: string | undefined, expected: string): void {
-  if (actual !== expected) {
+  if (!sameLineIgnoringTrailingWhitespace(actual, expected)) {
     throw new AuthorOsError(
       `console diff does not apply cleanly to ${file}. Expected "${expected}", got "${actual ?? '(end of file)'}".`,
     );
   }
+}
+
+function sameLineIgnoringTrailingWhitespace(actual: string | undefined, expected: string): boolean {
+  return actual?.trimEnd() === expected.trimEnd();
 }
 
 function sanitizeRelativeFile(input: string): string {
