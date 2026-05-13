@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   assembleAgentContext,
@@ -28,6 +28,12 @@ export interface MemoryUpdateResult {
   body: string;
   written: boolean;
   contextInputs: string[];
+}
+
+export interface PendingMemoryDelta {
+  name: string;
+  kind: 'console' | 'chapter';
+  description: string;
 }
 
 const memoryAgent = 'memory-curator';
@@ -86,6 +92,68 @@ export function renderMemoryUpdateResult(result: MemoryUpdateResult): string {
     '',
   ];
   return lines.join('\n');
+}
+
+export async function listMemoryDeltas(projectDir: string): Promise<PendingMemoryDelta[]> {
+  const memoryDir = join(projectDir, memoryDirectory);
+  const entries = await readMemoryEntries(memoryDir);
+  const canon = await readOptional(join(memoryDir, 'canon.md')) ?? '';
+  const pending: PendingMemoryDelta[] = [];
+
+  for (const name of entries.sort()) {
+    if (/^console-[^/\\]+\.delta\.md$/.test(name)) {
+      pending.push({
+        name,
+        kind: 'console',
+        description: 'created from console session, scope: book',
+      });
+      continue;
+    }
+
+    const chapterMatch = name.match(/^chapter-(\d{4})\.delta\.md$/);
+    if (chapterMatch && !canon.includes(name)) {
+      pending.push({
+        name,
+        kind: 'chapter',
+        description: `chapter ${Number(chapterMatch[1])} memory delta, not yet merged`,
+      });
+    }
+  }
+
+  return pending;
+}
+
+export function renderMemoryDeltas(deltas: readonly PendingMemoryDelta[]): string {
+  const lines = deltas.length > 0
+    ? [
+        'Pending memory deltas:',
+        ...deltas.map((delta) => `  ${delta.name.padEnd(36)} (${delta.description})`),
+      ]
+    : [
+        'Pending memory deltas:',
+        '  (none)',
+      ];
+
+  lines.push(
+    '',
+    'Merge instructions:',
+    '  1. Review a delta with `author memory deltas show <name>`',
+    '  2. Copy adopted entries into memory/canon.md (变更记录 段)',
+    '     or memory/foreshadowing.yaml / plot_threads.yaml / character_state.yaml as appropriate',
+    '  3. After integration, you can optionally delete the delta file',
+    '',
+  );
+  return lines.join('\n');
+}
+
+export async function showMemoryDelta(projectDir: string, name: string): Promise<string> {
+  const safeName = sanitizeDeltaName(name);
+  const path = join(projectDir, memoryDirectory, safeName);
+  const content = await readOptional(path);
+  if (content === null) {
+    throw new AuthorOsError(`memory delta not found: ${name}`);
+  }
+  return content.endsWith('\n') ? content : `${content}\n`;
 }
 
 async function generateMemoryDeltaWithModel(
@@ -169,4 +237,36 @@ function validateChapter(chapter: number): number {
     throw new AuthorOsError('--chapter must be a positive integer.');
   }
   return chapter;
+}
+
+async function readMemoryEntries(memoryDir: string): Promise<string[]> {
+  try {
+    return await readdir(memoryDir);
+  } catch (error) {
+    if (isMissingFileError(error)) return [];
+    throw error;
+  }
+}
+
+async function readOptional(path: string): Promise<string | null> {
+  try {
+    return await readFile(path, 'utf8');
+  } catch (error) {
+    if (isMissingFileError(error)) return null;
+    throw error;
+  }
+}
+
+function sanitizeDeltaName(name: string): string {
+  const cleaned = name.trim().replace(/^["']|["']$/g, '');
+  if (!/^((console-[^/\\]+)|(chapter-\d{4}))\.delta\.md$/.test(cleaned)) {
+    throw new AuthorOsError(`invalid memory delta name: ${name}`);
+  }
+  return cleaned;
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return error instanceof Error
+    && 'code' in error
+    && (error as NodeJS.ErrnoException).code === 'ENOENT';
 }

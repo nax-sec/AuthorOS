@@ -32,7 +32,13 @@ import {
   renderFeedbackImportResult,
 } from './commands/feedback.ts';
 import { createChapterDecision, renderDecideResult } from './commands/decide.ts';
-import { createMemoryUpdate, renderMemoryUpdateResult } from './commands/memory.ts';
+import {
+  createMemoryUpdate,
+  listMemoryDeltas,
+  renderMemoryDeltas,
+  renderMemoryUpdateResult,
+  showMemoryDelta,
+} from './commands/memory.ts';
 import { installSkill, renderSkillInstallResult } from './commands/skill.ts';
 import {
   getAuthorDoctor,
@@ -692,6 +698,21 @@ async function runMemory(args: string[], cwd: string, io: Io, options: RunOption
     return 0;
   }
 
+  if (subcommand === 'deltas') {
+    const [action, name, ...extra] = rest;
+    if (!action || action === 'list') {
+      io.stdout(renderMemoryDeltas(await listMemoryDeltas(cwd)));
+      return 0;
+    }
+    if (action === 'show') {
+      if (!name) throw new AuthorOsError('author memory deltas show requires a delta file name.');
+      if (extra.length > 0) throw new AuthorOsError('author memory deltas show accepts exactly one delta file name.');
+      io.stdout(await showMemoryDelta(cwd, name));
+      return 0;
+    }
+    throw new AuthorOsError(`Unknown memory deltas action: ${action}`);
+  }
+
   if (subcommand !== 'update') {
     throw new AuthorOsError(`Unknown memory subcommand: ${subcommand}`);
   }
@@ -969,6 +990,7 @@ function helpText(): string {
     '  author feedback analyze --chapter <N> [--model] [--write]',
     '  author decide --chapter <N> [--model] [--write]',
     '  author memory update --chapter <N> [--model] [--write]',
+    '  author memory deltas [show <name>]',
     '  author template list | show | promote | forget | export',
     '  author console ["instruction"] [--dry-run] [--write] [--scope author|book|both]',
     '  author skill install [--dir <skills-root>] [--force]',
@@ -1343,9 +1365,12 @@ function memoryHelpText(): string {
     '',
     'Usage:',
     '  author memory update --chapter 1 --model --write',
+    '  author memory deltas',
+    '  author memory deltas show <name>',
     '',
     'Outputs memory/chapter-NNNN.delta.md with proposed changes to:',
     '  canon / foreshadowing / plot_threads / character_state / style',
+    'Use `author memory deltas` to list pending console/chapter delta proposals.',
     '',
     'The delta file is a proposal; you merge changes into memory/* manually.',
     'AuthorOS v1 intentionally does not auto-edit canon or YAMLs.',
