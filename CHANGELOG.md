@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.2 — Console Structured Edits
+
+- Replaced author-console unified diff output with structured `[edits]` YAML operations.
+- Added scoped edit validation for book and author files, including safe console delta files and hard blocks for canonical runtime artifacts.
+- Stored applied edit operations in `changes/<id>/edits.yaml` and change metadata for easier audit and rollback review.
+- Updated console docs, help text, and tests around apply/edit/drill behavior.
+
 ## 0.3.1 — Hotfix Batch 1
 
 - Neutralized initial memory files after Strategy Pass so non-urban concepts no longer inherit `urban_power_anomaly` canon, hooks, plot threads, or character-state content.
