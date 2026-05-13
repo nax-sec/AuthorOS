@@ -13,6 +13,7 @@ import {
   type SetupStrategy,
   type TemplateMeta,
 } from './setup-strategy.ts';
+import { neutralizeMemoryFiles } from './setup-memory-neutralize.ts';
 import { validateAndRepairBookFiles } from './setup-validate.ts';
 import { runSetupDistill, type SetupDistillResult } from './setup-distill.ts';
 
@@ -312,6 +313,7 @@ async function generateIdentityFiles(args: {
     files: bookSchema.identityFiles.map((entry) => entry.file),
     llm: args.llm,
   });
+  await neutralizeMemoryFiles(args.projectDir, strategy, args.projectName);
 
   const distill = args.noDistill ? undefined : await runSetupDistill({
     bookDir: args.projectDir,
