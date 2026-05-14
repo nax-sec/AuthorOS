@@ -149,7 +149,7 @@ test('write injects chapter_word_count target and range into prompt', async () =
       io.err.join(''),
     );
     assert.match(captured, /target_chinese_chars: 3000/);
-    assert.match(captured, /acceptable_range: 2400 - 4500 \(floor 80% \/ ceiling 150% of target\)/);
+    assert.match(captured, /acceptable_range: 2100 - 4500 \(floor 70% \/ ceiling 150% of target\)/);
     assert.match(captured, /never stop mid-sentence/);
   });
 });
@@ -202,7 +202,7 @@ test('write respects custom chapter_word_count from config.yaml', async () => {
       0,
     );
     assert.match(captured, /target_chinese_chars: 5000/);
-    assert.match(captured, /acceptable_range: 4000 - 7500/);
+    assert.match(captured, /acceptable_range: 3500 - 7500/);
   });
 });
 
@@ -210,7 +210,7 @@ test('write respects custom floor/ceiling percent from config.yaml', async () =>
   await withProjectWithPlan(async (cwd) => {
     const configPath = join(cwd, '.authoros/config.yaml');
     let config = await readFile(configPath, 'utf8');
-    config = config.replace(/chapter_word_count_floor_percent: 80/, 'chapter_word_count_floor_percent: 70');
+    config = config.replace(/chapter_word_count_floor_percent: 70/, 'chapter_word_count_floor_percent: 60');
     config = config.replace(/chapter_word_count_ceiling_percent: 150/, 'chapter_word_count_ceiling_percent: 200');
     await writeFile(configPath, config, 'utf8');
 
@@ -223,8 +223,8 @@ test('write respects custom floor/ceiling percent from config.yaml', async () =>
       }),
       0,
     );
-    // 3000 * 0.7 = 2100; 3000 * 2.0 = 6000
-    assert.match(captured, /acceptable_range: 2100 - 6000 \(floor 70% \/ ceiling 200% of target\)/);
+    // 3000 * 0.6 = 1800; 3000 * 2.0 = 6000
+    assert.match(captured, /acceptable_range: 1800 - 6000 \(floor 60% \/ ceiling 200% of target\)/);
   });
 });
 

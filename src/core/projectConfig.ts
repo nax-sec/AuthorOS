@@ -17,7 +17,7 @@ export const defaultProjectConfig: ProjectConfig = {
   template: 'urban_power_anomaly',
   language: 'zh-CN',
   chapterWordCount: 3000,
-  chapterWordCountFloorPercent: 80,
+  chapterWordCountFloorPercent: 70,
   chapterWordCountCeilingPercent: 150,
 };
 

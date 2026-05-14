@@ -449,8 +449,10 @@ async function runPlan(args: string[], cwd: string, io: Io, options: RunOptions)
     return 0;
   }
 
+  const projectDir = resolveProjectDir(cwd, parsed);
+
   if (parsed.positionals[0] === 'status') {
-    io.stdout(renderPlanStatus(await getPlanStatus(cwd)));
+    io.stdout(renderPlanStatus(await getPlanStatus(projectDir)));
     return 0;
   }
 
@@ -467,9 +469,9 @@ async function runPlan(args: string[], cwd: string, io: Io, options: RunOptions)
 
   const env = options.env ?? process.env;
   const useModel = parsed.flags.model === true;
-  const llm = useModel ? options.llm ?? await createWritingClient(cwd, env) : undefined;
+  const llm = useModel ? options.llm ?? await createWritingClient(projectDir, env) : undefined;
 
-  io.stdout(renderPlanResult(await createChapterPlan(cwd, {
+  io.stdout(renderPlanResult(await createChapterPlan(projectDir, {
     chapter,
     next,
     llm,
@@ -519,6 +521,7 @@ async function runWrite(args: string[], cwd: string, io: Io, options: RunOptions
     return 0;
   }
 
+  const projectDir = resolveProjectDir(cwd, parsed);
   const chapter = optionalPositiveIntegerFlag(parsed.flags.chapter, 'chapter');
   const next = parsed.flags.next === true;
   if (chapter === undefined && !next) {
@@ -530,9 +533,9 @@ async function runWrite(args: string[], cwd: string, io: Io, options: RunOptions
 
   const env = options.env ?? process.env;
   const useModel = parsed.flags.model === true;
-  const llm = useModel ? options.llm ?? await createWritingClient(cwd, env) : undefined;
+  const llm = useModel ? options.llm ?? await createWritingClient(projectDir, env) : undefined;
 
-  io.stdout(renderWriteResult(await createChapterDraft(cwd, {
+  io.stdout(renderWriteResult(await createChapterDraft(projectDir, {
     chapter,
     next,
     llm,
@@ -549,6 +552,7 @@ async function runReview(args: string[], cwd: string, io: Io, options: RunOption
     return 0;
   }
 
+  const projectDir = resolveProjectDir(cwd, parsed);
   const chapter = optionalPositiveIntegerFlag(parsed.flags.chapter, 'chapter');
   if (chapter === undefined) {
     throw new AuthorOsError('author review requires --chapter <N>.');
@@ -562,9 +566,9 @@ async function runReview(args: string[], cwd: string, io: Io, options: RunOption
 
   const env = options.env ?? process.env;
   const useModel = parsed.flags.model === true;
-  const llm = useModel ? options.llm ?? await createWritingClient(cwd, env) : undefined;
+  const llm = useModel ? options.llm ?? await createWritingClient(projectDir, env) : undefined;
 
-  io.stdout(renderReviewResult(await createChapterReview(cwd, {
+  io.stdout(renderReviewResult(await createChapterReview(projectDir, {
     chapter,
     mode,
     llm,
@@ -973,6 +977,14 @@ function stringFlag(value: string | boolean | undefined): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+function resolveProjectDir(cwd: string, parsed: ParsedArgs): string {
+  const dir = parsed.flags.dir;
+  if (dir === true) {
+    throw new AuthorOsError('--dir requires a path.');
+  }
+  return typeof dir === 'string' ? resolve(cwd, dir) : cwd;
+}
+
 function helpText(): string {
   return [
     'AuthorOS CLI',
@@ -982,9 +994,9 @@ function helpText(): string {
     '  author author init | show | doctor | edit-profile',
     '  author model config | doctor | smoke',
     '  author state | brief | profile',
-    '  author plan --chapter <N> | --next [--model] [--write]',
-    '  author write --chapter <N> | --next [--model] [--write]',
-    '  author review --chapter <N> [--mode internal|reader-sim|all] [--model] [--write]',
+    '  author plan --chapter <N> | --next [--model] [--write] [--dir <book>]',
+    '  author write --chapter <N> | --next [--model] [--write] [--dir <book>]',
+    '  author review --chapter <N> [--mode internal|reader-sim|all] [--model] [--write] [--dir <book>]',
     '  author revise --chapter <N> [--model] [--write]',
     '  author feedback import --chapter <N> <input-file>',
     '  author feedback analyze --chapter <N> [--model] [--write]',
@@ -1138,13 +1150,14 @@ function planHelpText(): string {
     '  author plan --chapter 1',
     '  author plan --chapter 1 --model --write',
     '  author plan --next --model --write',
-    '  author plan status',
+    '  author plan status --dir ./book',
     '',
     'Options:',
     '  --chapter <N>      Plan a specific chapter number',
     '  --next             Plan the next chapter without a plan file yet',
     '  --model            Ask the configured model to write the plan',
     '  --write            Save to plans/NNNN.md instead of printing only',
+    '  --dir <path>       Book directory. Default: current directory',
     '',
     'Without --model, the command prints a scaffold so structure can be reviewed before paying for tokens.',
     '',
@@ -1251,7 +1264,7 @@ function writeHelpText(): string {
     'Usage:',
     '  author write --chapter 1',
     '  author write --chapter 1 --model --write',
-    '  author write --next --model --write',
+    '  author write --next --model --write --dir ./book',
     '',
     'Requires plans/NNNN.md (run author plan first).',
     '',
@@ -1260,6 +1273,7 @@ function writeHelpText(): string {
     '  --next             Draft the smallest chapter that has a plan but no draft',
     '  --model            Ask the configured model to draft',
     '  --write            Save to chapters/NNNN.md',
+    '  --dir <path>       Book directory. Default: current directory',
     '',
   ].join('\n');
 }
@@ -1271,7 +1285,7 @@ function reviewHelpText(): string {
     'Usage:',
     '  author review --chapter 1 --mode internal',
     '  author review --chapter 1 --mode reader-sim',
-    '  author review --chapter 1 --mode all --model --write',
+    '  author review --chapter 1 --mode all --model --write --dir ./book',
     '',
     'Modes:',
     '  internal      world / character / plot / style advisors + editor synthesis',
@@ -1285,6 +1299,7 @@ function reviewHelpText(): string {
     '  --mode <name>      internal | reader-sim | all. Default: internal.',
     '  --model            Ask the configured model for each agent step',
     '  --write            Save the review file(s)',
+    '  --dir <path>       Book directory. Default: current directory',
     '',
   ].join('\n');
 }

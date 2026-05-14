@@ -40,6 +40,7 @@ export interface SetupResult {
 }
 
 export type AskFn = (prompt: string) => Promise<string>;
+type SetupIo = { stdout: (m: string) => void };
 
 const setupAgent = 'book-setup-editor';
 const defaultGenerationMaxTokens = 2200;
@@ -158,6 +159,7 @@ export async function setupGuided(opts: {
     mode: 'guided',
     source: 'guided',
     profile,
+    io: opts.io,
     noDistill: opts.noDistill === true,
   });
 }
@@ -267,18 +269,20 @@ async function generateIdentityFiles(args: {
   source: SetupFileResult['source'];
   profile?: string;
   ask?: AskFn;
-  io?: { stdout: (m: string) => void };
+  io?: SetupIo;
   strategyConfirm?: boolean;
   noDistill?: boolean;
 }): Promise<SetupResult> {
   const profile = args.profile ?? await readAgentProfile(args.projectDir, setupAgent);
   const metas = await loadTemplateMetas(args.authorDir);
+  reportSetup(args.io, 'strategy: selecting template strategy');
   const strategy = await createSetupStrategy({
     projectName: args.projectName,
     concept: args.concept,
     metas,
     llm: args.llm,
   });
+  reportSetup(args.io, `strategy: selected base=${strategy.base}`);
 
   if (args.strategyConfirm) {
     if (!args.ask || !args.io) {
@@ -294,6 +298,7 @@ async function generateIdentityFiles(args: {
   await writeStrategyFile(args.projectDir, strategy);
   const bannedVocabulary = buildBannedVocabulary(args.concept, strategy, metas);
   const results = await Promise.all(bookSchema.identityFiles.map(async (section) => {
+    reportSetup(args.io, `${section.file}: generating ${section.title}`);
     const prompt = buildGenerationPrompt({
       projectName: args.projectName,
       concept: args.concept,
@@ -304,6 +309,7 @@ async function generateIdentityFiles(args: {
     });
     const content = await generateSectionContent(args.llm, section, prompt);
     await writeFile(join(args.projectDir, section.file), content, 'utf8');
+    reportSetup(args.io, `${section.file}: written (${content.length} chars)`);
     return {
       file: section.file,
       title: section.title,
@@ -312,23 +318,40 @@ async function generateIdentityFiles(args: {
     };
   }));
 
+  reportSetup(args.io, 'validate: checking generated book files');
   await validateAndRepairBookFiles({
     bookDir: args.projectDir,
     projectName: args.projectName,
     files: bookSchema.identityFiles.map((entry) => entry.file),
     llm: args.llm,
   });
+  reportSetup(args.io, 'validate: complete');
+  reportSetup(args.io, 'memory: neutralizing template memory');
   await neutralizeMemoryFiles(args.projectDir, strategy, args.projectName);
+  reportSetup(args.io, 'memory: complete');
 
-  const distill = args.noDistill ? undefined : await runSetupDistill({
-    bookDir: args.projectDir,
-    authorDir: args.authorDir,
-    projectName: args.projectName,
-    concept: args.concept,
-    llm: args.llm,
-  });
+  let distill: SetupDistillResult | undefined;
+  if (args.noDistill) {
+    reportSetup(args.io, 'distill: skipped (--no-distill)');
+  } else {
+    reportSetup(args.io, 'distill: checking reusable template candidate');
+    distill = await runSetupDistill({
+      bookDir: args.projectDir,
+      authorDir: args.authorDir,
+      projectName: args.projectName,
+      concept: args.concept,
+      llm: args.llm,
+    });
+    reportSetup(args.io, distill.shouldCreate
+      ? `distill: candidate proposed (${distill.key})`
+      : `distill: complete (${distill.reason})`);
+  }
 
   return { mode: args.mode, files: results, distill };
+}
+
+function reportSetup(io: SetupIo | undefined, message: string): void {
+  io?.stdout(`[Setup] ${message}\n`);
 }
 
 async function generateSectionContent(

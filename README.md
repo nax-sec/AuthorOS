@@ -143,9 +143,9 @@ cd <book 目录>
 author model doctor
 author model smoke
 
-author plan --chapter 1 --model --write
-author write --chapter 1 --model --write
-author review --chapter 1 --mode all --model --write
+author plan --chapter 1 --model --write --dir <book-dir>
+author write --chapter 1 --model --write --dir <book-dir>
+author review --chapter 1 --mode all --model --write --dir <book-dir>
 author revise --chapter 1 --model --write
 author decide --chapter 1 --model --write
 author memory update --chapter 1 --model --write
@@ -178,9 +178,9 @@ author state
 author brief
 author profile
 
-author plan --chapter <N> | --next [--model] [--write]
-author write --chapter <N> | --next [--model] [--write]
-author review --chapter <N> [--mode internal|reader-sim|all] [--model] [--write]
+author plan --chapter <N> | --next [--model] [--write] [--dir <book-dir>]
+author write --chapter <N> | --next [--model] [--write] [--dir <book-dir>]
+author review --chapter <N> [--mode internal|reader-sim|all] [--model] [--write] [--dir <book-dir>]
 author revise --chapter <N> [--model] [--write] [--instruction "<directive>"]
 author feedback import --chapter <N> <input-file>
 author feedback analyze --chapter <N> [--model] [--write]
@@ -204,7 +204,7 @@ author skill install [--dir <skills-root>] [--force]
 
 ```yaml
 chapter_word_count: 3000
-chapter_word_count_floor_percent: 80
+chapter_word_count_floor_percent: 70
 chapter_word_count_ceiling_percent: 150
 ```
 

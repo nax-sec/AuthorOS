@@ -97,6 +97,9 @@ test('init writes a config.yaml that references project name and template', asyn
     assert.match(config, /project_name: "我的小说"/);
     assert.match(config, /template: urban_power_anomaly/);
     assert.match(config, /language: zh-CN/);
+    assert.match(config, /chapter_word_count: 3000/);
+    assert.match(config, /chapter_word_count_floor_percent: 70/);
+    assert.match(config, /chapter_word_count_ceiling_percent: 150/);
   });
 });
 
@@ -250,7 +253,7 @@ test('init --concept calls book-setup-editor once per identity file and writes c
         return replyBySection[marker] ?? `# ${marker}\nfallback`;
       },
     };
-    const { io } = silentIo();
+    const { io, out } = silentIo();
     const exit = await run(
       ['init', 'demo', '--concept', '概念测试都市异能爽文,主角是数据分析师'],
       cwd, io,
@@ -260,6 +263,11 @@ test('init --concept calls book-setup-editor once per identity file and writes c
 
     assert.deepEqual(new Set(seen), new Set(['STRATEGY', 'PRODUCT', 'AUTHOR', 'WORLD', 'OUTLINE', 'CHARACTERS', 'REVIEW_RULES']));
     assert.ok(seen.includes('STRATEGY'));
+    const output = out.join('');
+    assert.match(output, /\[Setup\] strategy: selecting template strategy/);
+    assert.match(output, /\[Setup\] product\.md: generating 作品定位/);
+    assert.match(output, /\[Setup\] validate: checking generated book files/);
+    assert.match(output, /\[Setup\] distill: checking reusable template candidate/);
 
     const product = await readFile(join(cwd, 'demo/product.md'), 'utf8');
     assert.match(product, /概念测试题材/);
