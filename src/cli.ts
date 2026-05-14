@@ -78,6 +78,25 @@ import {
   runConsoleRepl,
   type ConsoleScope,
 } from './commands/console.ts';
+import {
+  applyPrivateFeedback,
+  continuePrivateBook,
+  createPrivateBook,
+  getCurrentPrivateBook,
+  getPrivateStatus,
+  listPrivateBooks,
+  previewPrivateFeedback,
+  readPrivateChapter,
+  renderPrivateApplyResult,
+  renderPrivateContinueResult,
+  renderPrivateCurrent,
+  renderPrivateFeedbackResult,
+  renderPrivateList,
+  renderPrivateNewResult,
+  renderPrivateReadResult,
+  renderPrivateStatus,
+  switchPrivateBook,
+} from './commands/private.ts';
 import { createOpenAiCompatibleClientFromProject, type LlmClient } from './core/llm.ts';
 import type { EnvLike } from './core/modelConfig.ts';
 import { resolveAuthorDir } from './core/authorSchema.ts';
@@ -181,6 +200,10 @@ export async function run(
 
     if (command === 'console') {
       return await runConsole(rest, cwd, io, options);
+    }
+
+    if (command === 'private') {
+      return await runPrivate(rest, cwd, io, options);
     }
 
     throw new AuthorOsError(`Unknown command: ${command}`);
@@ -886,10 +909,127 @@ async function runConsole(args: string[], cwd: string, io: Io, options: RunOptio
   return 0;
 }
 
+async function runPrivate(args: string[], cwd: string, io: Io, options: RunOptions): Promise<number> {
+  const [subcommand, ...rest] = args;
+  if (!subcommand || subcommand === '--help' || subcommand === '-h') {
+    io.stdout(privateHelpText());
+    return 0;
+  }
+
+  const parsed = parseArgs(rest);
+  if (parsed.flags.help || parsed.flags.h) {
+    io.stdout(privateHelpText());
+    return 0;
+  }
+
+  const env = options.env ?? process.env;
+  const root = resolvePrivateRoot(cwd, parsed, env);
+
+  if (subcommand === 'new') {
+    const concept = stringFlag(parsed.flags.concept);
+    if (!concept?.trim()) {
+      throw new AuthorOsError('author private new requires --concept <text>.');
+    }
+    const llm = options.llm ?? await createWritingClient(root, env);
+    io.stdout(renderPrivateNewResult(await createPrivateBook({
+      root,
+      title: stringFlag(parsed.flags.title),
+      concept,
+      template: stringFlag(parsed.flags.template),
+      authorDir: stringFlag(parsed.flags['author-dir']) ?? resolveAuthorDir(undefined, env),
+      llm,
+      now: options.now,
+      io,
+      noDistill: parsed.flags['no-distill'] === true,
+    })));
+    return 0;
+  }
+
+  if (subcommand === 'list') {
+    io.stdout(renderPrivateList(await listPrivateBooks(root)));
+    return 0;
+  }
+
+  if (subcommand === 'switch') {
+    const book = stringFlag(parsed.flags.book) ?? parsed.positionals[0];
+    if (!book) throw new AuthorOsError('author private switch requires --book <id>.');
+    io.stdout(renderPrivateCurrent(await switchPrivateBook(root, book, options.now)));
+    return 0;
+  }
+
+  if (subcommand === 'current') {
+    io.stdout(renderPrivateCurrent(await getCurrentPrivateBook(root)));
+    return 0;
+  }
+
+  if (subcommand === 'status') {
+    io.stdout(renderPrivateStatus(await getPrivateStatus(root)));
+    return 0;
+  }
+
+  if (subcommand === 'continue') {
+    const llm = options.llm ?? await createWritingClient(await privateCurrentProjectDir(root), env);
+    io.stdout(renderPrivateContinueResult(await continuePrivateBook(root, {
+      llm,
+      now: options.now,
+    })));
+    return 0;
+  }
+
+  if (subcommand === 'read') {
+    io.stdout(renderPrivateReadResult(await readPrivateChapter(root, {
+      chapter: optionalPrivateChapter(parsed.flags.chapter),
+    })));
+    return 0;
+  }
+
+  if (subcommand === 'feedback') {
+    const text = stringFlag(parsed.flags.text) ?? parsed.positionals.join(' ');
+    if (!text.trim()) throw new AuthorOsError('author private feedback requires --text <reader feedback>.');
+    const llm = options.llm ?? await createWritingClient(await privateCurrentProjectDir(root), env);
+    io.stdout(renderPrivateFeedbackResult(await previewPrivateFeedback(root, {
+      chapter: optionalPrivateChapter(parsed.flags.chapter),
+      text,
+      llm,
+      now: options.now,
+    })));
+    return 0;
+  }
+
+  if (subcommand === 'apply') {
+    const llm = options.llm ?? await createWritingClient(await privateCurrentProjectDir(root), env);
+    io.stdout(renderPrivateApplyResult(await applyPrivateFeedback(root, {
+      llm,
+      now: options.now,
+    })));
+    return 0;
+  }
+
+  throw new AuthorOsError(`Unknown private subcommand: ${subcommand}`);
+}
+
 function optionalConsoleScope(value: string | undefined): ConsoleScope | undefined {
   if (value === undefined) return undefined;
   if (value === 'book' || value === 'author' || value === 'both') return value;
   throw new AuthorOsError('--scope must be one of: author, book, both.');
+}
+
+function optionalPrivateChapter(value: string | boolean | undefined): number | 'latest' | undefined {
+  if (value === undefined) return undefined;
+  if (value === true) throw new AuthorOsError('--chapter requires a positive integer or "latest".');
+  if (value === 'latest') return 'latest';
+  return optionalPositiveIntegerFlag(value, 'chapter');
+}
+
+function resolvePrivateRoot(cwd: string, parsed: ParsedArgs, env: EnvLike): string {
+  const root = parsed.flags.root;
+  if (root === true) throw new AuthorOsError('--root requires a path.');
+  return resolve(cwd, typeof root === 'string' ? root : env.AUTHOROS_PRIVATE_ROOT ?? 'private-author');
+}
+
+async function privateCurrentProjectDir(root: string): Promise<string> {
+  const book = await getCurrentPrivateBook(root);
+  return resolve(root, book.path);
 }
 
 function optionalPositiveIntegerFlag(value: string | boolean | undefined, name: string): number | undefined {
@@ -1005,6 +1145,7 @@ function helpText(): string {
     '  author memory deltas [show <name>]',
     '  author template list | show | promote | forget | export',
     '  author console ["instruction"] [--dry-run] [--write] [--scope author|book|both]',
+    '  author private new|list|switch|current|status|continue|read|feedback|apply',
     '  author skill install [--dir <skills-root>] [--force]',
     '',
     'Creative loop:',
@@ -1026,6 +1167,7 @@ function helpText(): string {
     '  memory     Emit typed memory delta proposals (memory-curator)',
     '  template   Manage seed and author-level templates',
     '  console    Author control seat for shape edits through a 4-block structured edits protocol',
+    '  private    Private AI author bookshelf mode for one reader and many books',
     '  skill      Install the bundled Claude Code skill (SKILL.md)',
     '',
   ].join('\n');
@@ -1100,6 +1242,27 @@ function consoleHelpText(): string {
     '',
     'One-shot defaults to dry-run. --write applies returned structured edits and writes a changes/ snapshot record.',
     'REPL prompts for apply / edit / abort / drill <file> after each model proposal.',
+    '',
+  ].join('\n');
+}
+
+function privateHelpText(): string {
+  return [
+    'Private AI author mode: one-reader bookshelf wrapper around AuthorOS books.',
+    '',
+    'Usage:',
+    '  author private new --title <name> --concept <text> [--root <dir>]',
+    '  author private list [--root <dir>]',
+    '  author private switch --book <id> [--root <dir>]',
+    '  author private current [--root <dir>]',
+    '  author private status [--root <dir>]',
+    '  author private continue [--root <dir>]',
+    '  author private read [--chapter latest|N] [--root <dir>]',
+    '  author private feedback --chapter latest|N --text <feedback> [--root <dir>]',
+    '  author private apply [--root <dir>]',
+    '',
+    'Default root: AUTHOROS_PRIVATE_ROOT or ./private-author.',
+    'new / continue / feedback / apply require the configured model.',
     '',
   ].join('\n');
 }

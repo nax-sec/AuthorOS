@@ -192,6 +192,14 @@ author console ["instruction"] [--dry-run] [--write] [--scope author|book|both]
 author console log
 author console --rollback <CHG-ID>
 
+author private new --title <name> --concept "<idea>" [--root <bookshelf-dir>]
+author private list | current | status [--root <bookshelf-dir>]
+author private switch --book <id> [--root <bookshelf-dir>]
+author private continue [--root <bookshelf-dir>]
+author private read [--chapter latest|N] [--root <bookshelf-dir>]
+author private feedback --chapter latest|N --text "<reader feedback>" [--root <bookshelf-dir>]
+author private apply [--root <bookshelf-dir>]
+
 author template list | show <key> | promote <key> | forget <key> | export <key> <file.zip>
 author skill install [--dir <skills-root>] [--force]
 ```
@@ -366,6 +374,58 @@ author template export <key> <file.zip>
 - `export`:打包成 zip,方便迁移或提 PR 进入 seed templates。
 
 candidate template 来自 Distill Pass。它代表"这本书总结出的可复用结构",需要人工 promote 后才进入常用模板库。
+
+---
+
+## 15. 私人 AI 作者模式
+
+`author private` 是给单个读者/朋友体验用的外层 bookshelf。它不改变 AuthorOS 的核心设计:每一本书仍然是一个标准书层项目,只是统一放在一个 root 下并记录当前书。
+
+目录结构:
+
+```text
+<bookshelf-dir>/
+  bookshelf.json
+  books/
+    <book-id>/
+      product.md
+      outline.md
+      chapters/
+      .authoros/
+```
+
+推荐 root:
+
+```powershell
+$env:AUTHOROS_PRIVATE_ROOT="D:\Books\private-author"
+```
+
+最小体验流:
+
+```powershell
+author private new --title "战后魔法部审计" --concept "HP 同人,主角是战后魔法部审计员"
+author private continue
+author private read --chapter latest
+author private feedback --chapter latest --text "这一章冷幽默不够,茶杯案可以更荒诞一点"
+author private apply
+```
+
+多书切换:
+
+```powershell
+author private list
+author private switch --book <id>
+author private current
+author private status
+```
+
+行为边界:
+
+- `new` 会建一本标准 AuthorOS 书并写入 `bookshelf.json`,自动设为当前书。
+- `continue` 等价于对当前书跑 `plan --next --model --write` 后再跑 `write --next --model --write`。
+- `feedback` 只做预览,把读者意见转成 `revise --instruction` 的 dry-run,并保存一条 pending feedback。
+- `apply` 才会把 pending feedback 应用到章节正文;原章备份仍由 `revise` 放到 `chapters/NNNN.draft.md`。
+- 不支持删书。想停看一本书就切到别的书,旧书目录会保留。
 
 ---
 
