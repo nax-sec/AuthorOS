@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 test('README documents author layer initialization in section 1', async () => {
-  const readme = await readFile('README.md', 'utf8');
+  const readme = await readFile('README.zh.md', 'utf8');
   assert.match(readme, /v0\.3[\s\S]*作者层/);
   assert.match(readme, /author author init/);
 });
 
 test('README documents the three-layer identity model', async () => {
-  const readme = await readFile('README.md', 'utf8');
+  const readme = await readFile('README.zh.md', 'utf8');
   assert.match(readme, /## 2\.5\./);
   assert.match(readme, /作者层/);
   assert.match(readme, /书层/);
@@ -17,7 +17,7 @@ test('README documents the three-layer identity model', async () => {
 });
 
 test('README documents author console as section 13', async () => {
-  const readme = await readFile('README.md', 'utf8');
+  const readme = await readFile('README.zh.md', 'utf8');
   assert.match(readme, /## 13\./);
   assert.match(readme, /author console/);
   assert.match(readme, /\[scope\][\s\S]*\[impact\][\s\S]*\[edits\][\s\S]*\[next\]/);
@@ -25,7 +25,7 @@ test('README documents author console as section 13', async () => {
 });
 
 test('README documents template management as section 14', async () => {
-  const readme = await readFile('README.md', 'utf8');
+  const readme = await readFile('README.zh.md', 'utf8');
   assert.match(readme, /## 14\./);
   assert.match(readme, /author template list/);
   assert.match(readme, /author template promote/);
@@ -33,7 +33,7 @@ test('README documents template management as section 14', async () => {
 });
 
 test('README FAQ explains strategy bleed prevention and candidate templates', async () => {
-  const readme = await readFile('README.md', 'utf8');
+  const readme = await readFile('README.zh.md', 'utf8');
   assert.match(readme, /为什么我的概念没生成异能内容/);
   assert.match(readme, /Strategy Pass/);
   assert.match(readme, /banned vocabulary/);
