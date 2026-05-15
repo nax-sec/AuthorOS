@@ -194,12 +194,12 @@ async function resolveAgentMessage(
 ) {
   const mode = options.agentMode ?? optionalAgentMode(env.AUTHOROS_WEB_AGENT) ?? 'hybrid';
   if (mode === 'rule') return handleAgentMessage(session, message);
-  if (mode === 'hybrid') {
-    const ruleResult = handleAgentMessage(session, message);
-    if (ruleResult.action !== 'unknown') return ruleResult;
+  try {
+    const llm = options.agentLlm ?? await createAgentClient(options.root, env);
+    return await handleAgentMessageWithLlm(session, message, { mode, llm });
+  } catch {
+    return handleAgentMessage(session, message);
   }
-  const llm = options.agentLlm ?? await createAgentClient(options.root, env);
-  return await handleAgentMessageWithLlm(session, message, { mode, llm });
 }
 
 async function webListBooks(options: CreateWebServerOptions): Promise<PrivateShelf> {

@@ -80,6 +80,52 @@ test('web server can use llm agent mode for vague messages', async () => {
   assert.equal(body.command.type, 'feedback');
 });
 
+test('web server hybrid mode calls receptionist before rule routing', async () => {
+  let called = false;
+  const server = createWebServer({
+    root: 'D:\\tmp\\missing',
+    agentMode: 'hybrid',
+    agentLlm: {
+      async generate() {
+        called = true;
+        return JSON.stringify({
+          action: 'new_book_intake',
+          message: '我先接待，再决定是否建书。',
+        });
+      },
+    },
+  });
+
+  const response = await server.fetch(new Request('http://local/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ message: '我也不知道写什么，你随便写一本书' }),
+  }));
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(called, true);
+  assert.equal(body.action, 'new_book_intake');
+  assert.equal(body.message, '我先接待，再决定是否建书。');
+});
+
+test('web server hybrid chat falls back to rules when receptionist client is unavailable', async () => {
+  const server = createWebServer({
+    root: 'D:\\tmp\\missing',
+    agentMode: 'hybrid',
+    env: {},
+  });
+
+  const response = await server.fetch(new Request('http://local/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ message: '继续写' }),
+  }));
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.action, 'continue_book');
+  assert.equal(body.command.type, 'continue');
+});
+
 test('web server hybrid chat falls back to rules when receptionist model is unavailable', async () => {
   const server = createWebServer({
     root: 'D:\\tmp\\missing',
