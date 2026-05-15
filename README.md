@@ -1,5 +1,7 @@
 # AuthorOS
 
+English: [README.en.md](README.en.md)
+
 本地优先的 AI 作者 CLI。AuthorOS 把一本长篇小说当作一个可经营的产品,用 agent 闭环完成计划、写作、评审、修订、决策、记忆更新和作者级形状调整。
 
 License: MIT · Node.js >= 24 · 运行时仅 `yaml` 一个 npm 依赖
