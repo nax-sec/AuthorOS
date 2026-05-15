@@ -80,6 +80,24 @@ test('web server can use llm agent mode for vague messages', async () => {
   assert.equal(body.command.type, 'feedback');
 });
 
+test('web server hybrid chat falls back to rules when receptionist model is unavailable', async () => {
+  const server = createWebServer({
+    root: 'D:\\tmp\\missing',
+    agentMode: 'hybrid',
+    env: {},
+  });
+
+  const response = await server.fetch(new Request('http://local/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ message: '继续写' }),
+  }));
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.action, 'continue_book');
+  assert.equal(body.command.type, 'continue');
+});
+
 test('web server maps access codes to fixed room URLs', async () => {
   const server = createWebServer({
     root: 'D:\\Books\\authoros-web',

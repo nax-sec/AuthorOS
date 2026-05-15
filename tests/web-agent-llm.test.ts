@@ -12,20 +12,40 @@ function llmReturning(content: string): LlmClient {
   };
 }
 
-test('hybrid agent uses rules for explicit commands without calling llm', async () => {
+test('hybrid agent lets receptionist handle chat before rule fallback', async () => {
   let called = false;
   const llm: LlmClient = {
     async generate() {
       called = true;
-      return '{}';
+      return JSON.stringify({
+        action: 'new_book_intake',
+        message: '我先问两个关键问题，再开始。',
+      });
     },
   };
 
-  const result = await handleAgentMessageWithLlm(createWebAgentSession(), '继续写', { llm, mode: 'hybrid' });
+  const result = await handleAgentMessageWithLlm(createWebAgentSession(), '我也不知道写什么，你随便写一本', { llm, mode: 'hybrid' });
 
-  assert.equal(result.action, 'continue_book');
+  assert.equal(result.action, 'new_book_intake');
+  assert.equal(result.kind, 'reply');
+  assert.equal(called, true);
+});
+
+test('llm receptionist can create a book and continue into chapter one', async () => {
+  const result = await handleAgentMessageWithLlm(createWebAgentSession(), '你决定，直接开始写', {
+    mode: 'hybrid',
+    llm: llmReturning(JSON.stringify({
+      action: 'create_book_and_continue',
+      message: '收到，我会先建书，然后直接写第 1 章。',
+      title: '记忆交易所',
+      concept: '近未来记忆交易悬疑小说。',
+    })),
+  });
+
   assert.equal(result.kind, 'job');
-  assert.equal(called, false);
+  assert.equal(result.action, 'create_book_and_continue');
+  assert.equal(result.command.type, 'new_book_and_continue');
+  assert.equal(result.command.title, '记忆交易所');
 });
 
 test('llm agent can route vague feedback into feedback preview', async () => {
@@ -53,4 +73,3 @@ test('llm agent falls back to rules when model returns invalid json', async () =
   assert.equal(result.action, 'read_chapter');
   assert.equal(result.kind, 'job');
 });
-

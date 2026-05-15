@@ -222,6 +222,16 @@ async function runCommandJob(
       jobs.complete(jobId, { book: result.book });
       return;
     }
+    if (command.type === 'new_book_and_continue') {
+      jobs.append(jobId, 'setup', '正在建立作品设定。完成后会直接开始第 1 章。');
+      const setupLlm = await createClient(root, env);
+      const setup = await createPrivateBook({ root, concept: command.concept, title: command.title, llm: setupLlm });
+      jobs.append(jobId, 'planning', '作品已建好，正在规划第 1 章。');
+      const writeLlm = await createClientForCurrentBook(root, env);
+      const result = await continuePrivateBook(root, { llm: writeLlm });
+      jobs.complete(jobId, { book: setup.book, chapter: result.write.chapter });
+      return;
+    }
     if (command.type === 'continue') {
       jobs.append(jobId, 'planning', '正在规划下一章');
       const llm = await createClientForCurrentBook(root, env);

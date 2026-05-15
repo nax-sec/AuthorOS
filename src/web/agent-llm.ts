@@ -1,6 +1,5 @@
 import {
   handleAgentMessage,
-  type WebAgentAction,
   type WebAgentResult,
   type WebAgentSession,
 } from './agent.ts';
@@ -16,6 +15,7 @@ export interface HandleAgentMessageWithLlmOptions {
 type LlmAgentAction =
   | { action: 'new_book_intake'; message: string }
   | { action: 'new_book_confirmed'; message: string; title?: string; concept: string }
+  | { action: 'create_book_and_continue'; message: string; title?: string; concept: string }
   | { action: 'continue_book'; message: string }
   | { action: 'read_chapter'; message: string }
   | { action: 'feedback_preview'; message: string; text: string }
@@ -25,19 +25,6 @@ type LlmAgentAction =
   | { action: 'status'; message: string }
   | { action: 'unknown'; message: string };
 
-const knownRuleActions = new Set<WebAgentAction>([
-  'new_book_intake',
-  'new_book_confirm',
-  'new_book_confirmed',
-  'continue_book',
-  'read_chapter',
-  'feedback_preview',
-  'feedback_apply',
-  'download_current_chapter',
-  'download_all_chapters',
-  'status',
-]);
-
 export async function handleAgentMessageWithLlm(
   session: WebAgentSession,
   rawMessage: string,
@@ -46,11 +33,6 @@ export async function handleAgentMessageWithLlm(
   const mode = options.mode ?? 'hybrid';
   if (mode === 'rule') return handleAgentMessage(session, rawMessage);
 
-  const ruleResult = handleAgentMessage(session, rawMessage);
-  if (mode === 'hybrid' && knownRuleActions.has(ruleResult.action) && ruleResult.action !== 'unknown') {
-    return ruleResult;
-  }
-
   try {
     const parsed = parseLlmAgentAction(await options.llm.generate(buildAgentPrompt(rawMessage), {
       temperature: 0.2,
@@ -58,7 +40,7 @@ export async function handleAgentMessageWithLlm(
     }));
     return applyLlmAction(session, rawMessage, parsed);
   } catch {
-    return ruleResult;
+    return handleAgentMessage(session, rawMessage);
   }
 }
 
@@ -75,6 +57,7 @@ function buildAgentPrompt(message: string): string {
     'Allowed actions:',
     '- new_book_intake: ask compact setup questions before creating a book.',
     '- new_book_confirmed: create a book only if explicit direct-start/confirmation is present.',
+    '- create_book_and_continue: create a book and immediately plan/write chapter 1 unless the user asked to only create setup.',
     '- continue_book',
     '- read_chapter',
     '- feedback_preview',
@@ -105,6 +88,12 @@ function parseLlmAgentAction(raw: string): LlmAgentAction {
     case 'new_book_confirmed': {
       const concept = 'concept' in parsed && typeof parsed.concept === 'string' ? parsed.concept.trim() : '';
       if (!concept) throw new Error('new_book_confirmed requires concept.');
+      const title = 'title' in parsed && typeof parsed.title === 'string' ? parsed.title.trim() : undefined;
+      return { action: parsed.action, message, title, concept };
+    }
+    case 'create_book_and_continue': {
+      const concept = 'concept' in parsed && typeof parsed.concept === 'string' ? parsed.concept.trim() : '';
+      if (!concept) throw new Error('create_book_and_continue requires concept.');
       const title = 'title' in parsed && typeof parsed.title === 'string' ? parsed.title.trim() : undefined;
       return { action: parsed.action, message, title, concept };
     }
@@ -139,6 +128,14 @@ function applyLlmAction(session: WebAgentSession, rawMessage: string, action: Ll
       command: { type: 'new_book', title: action.title, concept: action.concept },
     };
   }
+  if (action.action === 'create_book_and_continue') {
+    return {
+      kind: 'job',
+      action: action.action,
+      message: action.message,
+      command: { type: 'new_book_and_continue', title: action.title, concept: action.concept },
+    };
+  }
   if (action.action === 'continue_book') {
     return { kind: 'job', action: action.action, message: action.message, command: { type: 'continue' } };
   }
@@ -162,4 +159,3 @@ function applyLlmAction(session: WebAgentSession, rawMessage: string, action: Ll
   }
   return { kind: 'reply', action: 'unknown', message: action.message };
 }
-

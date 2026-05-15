@@ -2,6 +2,7 @@ export type WebAgentAction =
   | 'new_book_intake'
   | 'new_book_confirm'
   | 'new_book_confirmed'
+  | 'create_book_and_continue'
   | 'continue_book'
   | 'read_chapter'
   | 'feedback_preview'
@@ -36,6 +37,7 @@ export type WebAgentResult =
 
 export type WebAgentCommand =
   | { type: 'new_book'; title?: string; concept: string }
+  | { type: 'new_book_and_continue'; title?: string; concept: string }
   | { type: 'continue' }
   | { type: 'read'; chapter: 'latest' }
   | { type: 'feedback'; chapter: 'latest'; text: string }
@@ -174,4 +176,3 @@ function isDownloadAll(message: string): boolean {
 function looksLikeFeedback(message: string): boolean {
   return /不好|不行|太|改|修改|反馈|别|不要|更|少一点|多一点|问题/.test(message);
 }
-
