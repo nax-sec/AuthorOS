@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AuthorOS Private Web</title>
+  <style>
+    :root { color-scheme: light; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; }
+    body { margin: 0; background: #f6f7f9; color: #1d2430; }
+    header { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 1px solid #d9dee7; background: #ffffff; }
+    main { display: grid; grid-template-columns: minmax(280px, 34%) 1fr 280px; min-height: calc(100vh - 57px); }
+    section { border-right: 1px solid #d9dee7; padding: 16px; overflow: auto; }
+    section:last-child { border-right: 0; }
+    h1 { font-size: 18px; margin: 0; }
+    h2 { font-size: 15px; margin: 0 0 12px; }
+    #chatLog, #progressLog, #chapter { white-space: pre-wrap; }
+    #chatLog { min-height: 50vh; display: flex; flex-direction: column; gap: 10px; }
+    .msg { padding: 10px 12px; border-radius: 8px; background: #fff; border: 1px solid #d9dee7; }
+    .me { background: #eaf2ff; }
+    textarea { box-sizing: border-box; width: 100%; min-height: 84px; resize: vertical; border: 1px solid #b9c2d0; border-radius: 8px; padding: 10px; font: inherit; }
+    button, input { font: inherit; }
+    button { border: 1px solid #1f5eff; background: #1f5eff; color: white; border-radius: 7px; padding: 8px 12px; cursor: pointer; }
+    button.secondary { background: #fff; color: #1d2430; border-color: #b9c2d0; }
+    .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+    .stack { display: grid; gap: 10px; }
+    .muted { color: #667085; font-size: 13px; }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; } section { border-right: 0; border-bottom: 1px solid #d9dee7; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AuthorOS Private Web</h1>
+    <span class="muted">本机私人 AI 作者</span>
+  </header>
+  <main>
+    <section>
+      <h2>对话</h2>
+      <div id="chatLog"></div>
+      <div class="stack">
+        <textarea id="message" placeholder="开一本新书、继续写、读最新章，或直接说哪里要改"></textarea>
+        <button id="send">发送</button>
+      </div>
+    </section>
+    <section>
+      <h2>当前章节</h2>
+      <article id="chapter" class="msg">还没有读取章节。</article>
+    </section>
+    <section>
+      <h2>书架与下载</h2>
+      <div id="books" class="stack muted">加载中...</div>
+      <div class="row">
+        <button class="secondary" id="refresh">刷新</button>
+        <button class="secondary" id="downloadChapter">下载当前章</button>
+      </div>
+      <div class="row">
+        <button class="secondary" id="downloadAll">下载全部章节</button>
+      </div>
+      <h2 style="margin-top:20px">进度</h2>
+      <div id="progressLog" class="msg muted">等待任务。</div>
+    </section>
+  </main>
+  <script>
+    const chatLog = document.querySelector('#chatLog');
+    const progressLog = document.querySelector('#progressLog');
+    const chapter = document.querySelector('#chapter');
+    const books = document.querySelector('#books');
+    const token = sessionStorage.getItem('authoros_token') || prompt('访问码（如果没有配置可留空）') || '';
+    sessionStorage.setItem('authoros_token', token);
+
+    function headers() {
+      return { 'content-type': 'application/json', authorization: `Bearer ${token}` };
+    }
+    function addMessage(text, own = false) {
+      const div = document.createElement('div');
+      div.className = `msg${own ? ' me' : ''}`;
+      div.textContent = text;
+      chatLog.appendChild(div);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+    async function api(path, options = {}) {
+      const response = await fetch(path, { ...options, headers: { ...headers(), ...(options.headers || {}) } });
+      if (!response.ok) throw new Error((await response.json()).error || response.statusText);
+      return response.json();
+    }
+    async function refreshBooks() {
+      const shelf = await api('/api/books');
+      books.textContent = shelf.books.length ? shelf.books.map(b => `${b.id === shelf.current ? '* ' : '  '}${b.title} (${b.id})`).join('\n') : '还没有书。';
+    }
+    async function send() {
+      const input = document.querySelector('#message');
+      const message = input.value.trim();
+      if (!message) return;
+      input.value = '';
+      addMessage(message, true);
+      try {
+        const result = await api('/api/chat', { method: 'POST', body: JSON.stringify({ message }) });
+        addMessage(result.message);
+        if (result.jobId) watchJob(result.jobId);
+      } catch (error) {
+        addMessage(`失败：${error.message}`);
+      }
+    }
+    async function watchJob(id) {
+      const events = new EventSource(`/api/jobs/${id}/events?token=${encodeURIComponent(token)}`);
+      events.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        progressLog.textContent += `\n[${data.type}] ${data.message}`;
+        if (data.type === 'completed' || data.type === 'failed') {
+          events.close();
+          refreshBooks().catch(() => {});
+        }
+      };
+    }
+    document.querySelector('#send').addEventListener('click', send);
+    document.querySelector('#refresh').addEventListener('click', refreshBooks);
+    document.querySelector('#downloadChapter').addEventListener('click', () => location.href = `/download/chapter/latest?token=${encodeURIComponent(token)}`);
+    document.querySelector('#downloadAll').addEventListener('click', () => location.href = `/download/chapters.zip?token=${encodeURIComponent(token)}`);
+    refreshBooks().catch(error => { books.textContent = `加载失败：${error.message}`; });
+  </script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+export type WebJobStatus = 'running' | 'completed' | 'failed';
+
+export interface WebJobEvent {
+  type: string;
+  message: string;
+  at: string;
+  data?: unknown;
+}
+
+export interface WebJob {
+  id: string;
+  action: string;
+  status: WebJobStatus;
+  createdAt: string;
+  updatedAt: string;
+  events: WebJobEvent[];
+  result?: unknown;
+  error?: string;
+}
+
+export interface JobStore {
+  createJob(action: string, message: string): WebJob;
+  append(id: string, type: string, message: string, data?: unknown): WebJob;
+  complete(id: string, result?: unknown): WebJob;
+  fail(id: string, message: string): WebJob;
+  get(id: string): WebJob | undefined;
+  listEvents(id: string, after?: number): WebJobEvent[];
+  subscribe(id: string, listener: (event: WebJobEvent) => void): () => void;
+}
+
+export function createJobStore(opts: { now?: () => Date } = {}): JobStore {
+  const now = opts.now ?? (() => new Date());
+  const jobs = new Map<string, WebJob>();
+  const listeners = new Map<string, Set<(event: WebJobEvent) => void>>();
+  let nextId = 1;
+
+  function timestamp(): string {
+    return now().toISOString();
+  }
+
+  function requireJob(id: string): WebJob {
+    const job = jobs.get(id);
+    if (!job) throw new Error(`Unknown web job: ${id}`);
+    return job;
+  }
+
+  function push(job: WebJob, type: string, message: string, data?: unknown): WebJob {
+    const at = timestamp();
+    job.updatedAt = at;
+    const event: WebJobEvent = { type, message, at };
+    if (data !== undefined) event.data = data;
+    job.events.push(event);
+    for (const listener of listeners.get(job.id) ?? []) listener(event);
+    return job;
+  }
+
+  return {
+    createJob(action, message) {
+      const at = timestamp();
+      const job: WebJob = {
+        id: `job-${nextId++}`,
+        action,
+        status: 'running',
+        createdAt: at,
+        updatedAt: at,
+        events: [],
+      };
+      jobs.set(job.id, job);
+      push(job, 'received', message);
+      return job;
+    },
+    append(id, type, message, data) {
+      return push(requireJob(id), type, message, data);
+    },
+    complete(id, result) {
+      const job = requireJob(id);
+      job.status = 'completed';
+      job.result = result;
+      return push(job, 'completed', '完成', result);
+    },
+    fail(id, message) {
+      const job = requireJob(id);
+      job.status = 'failed';
+      job.error = message;
+      return push(job, 'failed', message);
+    },
+    get(id) {
+      return jobs.get(id);
+    },
+    listEvents(id, after = 0) {
+      return requireJob(id).events.slice(after);
+    },
+    subscribe(id, listener) {
+      requireJob(id);
+      const set = listeners.get(id) ?? new Set<(event: WebJobEvent) => void>();
+      set.add(listener);
+      listeners.set(id, set);
+      return () => {
+        set.delete(listener);
+        if (set.size === 0) listeners.delete(id);
+      };
+    },
+  };
+}

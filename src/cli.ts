@@ -101,6 +101,7 @@ import { createOpenAiCompatibleClientFromProject, type LlmClient } from './core/
 import type { EnvLike } from './core/modelConfig.ts';
 import { resolveAuthorDir } from './core/authorSchema.ts';
 import { AuthorOsError } from './core/schema.ts';
+import { createWebServer } from './web/server.ts';
 
 export interface Io {
   stdout: (message: string) => void;
@@ -204,6 +205,10 @@ export async function run(
 
     if (command === 'private') {
       return await runPrivate(rest, cwd, io, options);
+    }
+
+    if (command === 'web') {
+      return await runWeb(rest, cwd, io, options);
     }
 
     throw new AuthorOsError(`Unknown command: ${command}`);
@@ -1032,6 +1037,31 @@ async function privateCurrentProjectDir(root: string): Promise<string> {
   return resolve(root, book.path);
 }
 
+async function runWeb(args: string[], cwd: string, io: Io, options: RunOptions): Promise<number> {
+  const parsed = parseArgs(args);
+  if (parsed.flags.help || parsed.flags.h) {
+    io.stdout(webHelpText());
+    return 0;
+  }
+
+  const env = options.env ?? process.env;
+  const root = resolvePrivateRoot(cwd, parsed, env);
+  const port = optionalPositiveIntegerFlag(parsed.flags.port, 'port') ?? 8787;
+  const host = stringFlag(parsed.flags.host) ?? '127.0.0.1';
+  const token = stringFlag(parsed.flags.token) ?? env.AUTHOROS_WEB_TOKEN;
+  const server = createWebServer({ root, token, env });
+  await server.listen(port, host);
+  io.stdout([
+    `AuthorOS web listening: http://${host}:${port}`,
+    `root: ${root}`,
+    token ? 'token: enabled' : 'token: disabled',
+    'Press Ctrl+C to stop.',
+    '',
+  ].join('\n'));
+  await new Promise(() => undefined);
+  return 0;
+}
+
 function optionalPositiveIntegerFlag(value: string | boolean | undefined, name: string): number | undefined {
   if (value === undefined) {
     return undefined;
@@ -1117,6 +1147,25 @@ function stringFlag(value: string | boolean | undefined): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+function webHelpText(): string {
+  return [
+    'AuthorOS private web server',
+    '',
+    'Usage:',
+    '  author web [--root <dir>] [--port <n>] [--host <host>] [--token <access-code>]',
+    '',
+    'Defaults:',
+    '  --root   AUTHOROS_PRIVATE_ROOT or ./private-author',
+    '  --port   8787',
+    '  --host   127.0.0.1',
+    '  --token  AUTHOROS_WEB_TOKEN when set',
+    '',
+    'Example:',
+    '  author web --root D:\\Books\\authoros-web --port 8787',
+    '',
+  ].join('\n');
+}
+
 function resolveProjectDir(cwd: string, parsed: ParsedArgs): string {
   const dir = parsed.flags.dir;
   if (dir === true) {
@@ -1146,6 +1195,7 @@ function helpText(): string {
     '  author template list | show | promote | forget | export',
     '  author console ["instruction"] [--dry-run] [--write] [--scope author|book|both]',
     '  author private new|list|switch|current|status|continue|read|feedback|apply',
+    '  author web [--root <dir>] [--port <n>]',
     '  author skill install [--dir <skills-root>] [--force]',
     '',
     'Creative loop:',

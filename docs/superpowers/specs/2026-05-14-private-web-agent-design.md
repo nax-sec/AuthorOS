@@ -28,7 +28,7 @@ Friend browser
   -> local AuthorOS Web server on 127.0.0.1:8787
   -> Author Agent Controller
   -> AuthorOS CLI/core
-  -> D:\Books\private-author
+  -> D:\Books\authoros-web
 ```
 
 Access is protected by a simple token configured through `AUTHOROS_WEB_TOKEN`. The token is not a replacement for real auth, but it prevents accidental access from a leaked temporary URL during MVP testing.
@@ -64,7 +64,7 @@ Responsibilities:
 - Route safe actions to AuthorOS private commands.
 - Emit progress events before and during long tasks.
 - Translate CLI/core results into reader-facing replies.
-- Keep one active bookshelf root, defaulting to `D:\Books\private-author`.
+- Keep one active bookshelf root, defaulting to `D:\Books\authoros-web`.
 
 Intent categories:
 
@@ -147,7 +147,7 @@ Initial API surface:
 Use the existing AuthorOS private root:
 
 ```text
-D:\Books\private-author
+D:\Books\authoros-web
   bookshelf.json
   books\<book-id>\
 ```
@@ -155,7 +155,7 @@ D:\Books\private-author
 The web layer may store its own small runtime state under:
 
 ```text
-D:\Books\private-author\.authoros-web\
+D:\Books\authoros-web\.authoros-web\
   sessions.json
   jobs\
 ```
@@ -178,13 +178,13 @@ src/web/public/
 Add CLI entrypoint:
 
 ```powershell
-author web --root D:\Books\private-author --port 8787
+author web --root D:\Books\authoros-web --port 8787
 ```
 
 Environment:
 
 ```powershell
-$env:AUTHOROS_PRIVATE_ROOT="D:\Books\private-author"
+$env:AUTHOROS_PRIVATE_ROOT="D:\Books\authoros-web"
 $env:AUTHOROS_WEB_TOKEN="<temporary access code>"
 $env:OPENAI_API_KEY=[Environment]::GetEnvironmentVariable('OPENAI_API_KEY','User')
 $env:OPENAI_BASE_URL=[Environment]::GetEnvironmentVariable('OPENAI_BASE_URL','User')
@@ -238,7 +238,7 @@ Unit tests:
 
 Manual smoke test:
 
-1. Start `author web --root D:\Books\private-author --port 8787`.
+1. Start `author web --root D:\Books\authoros-web --port 8787`.
 2. Open `http://127.0.0.1:8787`.
 3. Enter access token.
 4. Create a new book through intake and confirmation.
@@ -263,4 +263,3 @@ Tunnel smoke test:
 - Chapter feedback preview never overwrites content until explicit confirmation.
 - The user can download the current chapter and all chapters.
 - Existing AuthorOS CLI tests remain green.
-
