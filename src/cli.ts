@@ -1055,6 +1055,7 @@ async function runWeb(args: string[], cwd: string, io: Io, options: RunOptions):
     `AuthorOS web listening: http://${host}:${port}`,
     `root: ${root}`,
     token ? 'token: enabled' : 'token: disabled',
+    env.AUTHOROS_WEB_ROOMS ? `rooms: ${env.AUTHOROS_WEB_ROOMS}` : 'rooms: disabled',
     'Press Ctrl+C to stop.',
     '',
   ].join('\n'));
@@ -1159,6 +1160,7 @@ function webHelpText(): string {
     '  --port   8787',
     '  --host   127.0.0.1',
     '  --token  AUTHOROS_WEB_TOKEN when set',
+    '  rooms    AUTHOROS_WEB_ROOMS=1,2,3,4,999 maps access codes to /room/room1 ... /room/room999',
     '',
     'Example:',
     '  author web --root D:\\Books\\authoros-web --port 8787',

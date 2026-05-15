@@ -23,7 +23,7 @@ import { createOpenAiCompatibleClientFromProject, type LlmClient } from '../core
 import type { EnvLike } from '../core/modelConfig.ts';
 
 export interface PrivateWebApi {
-  listBooks?: () => Promise<PrivateShelf>;
+  listBooks?: (root: string) => Promise<PrivateShelf>;
 }
 
 export interface CreateWebServerOptions {
@@ -35,6 +35,17 @@ export interface CreateWebServerOptions {
   agentLlm?: LlmClient;
 }
 
+interface WebRoom {
+  id: string;
+  token: string;
+  root: string;
+}
+
+interface WebRuntime {
+  session: ReturnType<typeof createWebAgentSession>;
+  jobs: ReturnType<typeof createJobStore>;
+}
+
 export interface AuthorWebServer {
   fetch(request: Request): Promise<Response>;
   listen(port: number, host?: string): Promise<{ close: () => Promise<void> }>;
@@ -43,9 +54,10 @@ export interface AuthorWebServer {
 const appHtmlUrl = new URL('./public/app.html', import.meta.url);
 
 export function createWebServer(options: CreateWebServerOptions): AuthorWebServer {
-  const session = createWebAgentSession();
-  const jobs = createJobStore();
   const env = options.env ?? process.env;
+  const rooms = parseRooms(options.root, env.AUTHOROS_WEB_ROOMS);
+  const singleRuntime: WebRuntime = { session: createWebAgentSession(), jobs: createJobStore() };
+  const roomRuntimes = new Map<string, WebRuntime>();
 
   async function fetchHandler(request: Request): Promise<Response> {
     const url = new URL(request.url);
@@ -54,46 +66,64 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
         return html(await readFile(fileURLToPath(appHtmlUrl), 'utf8'));
       }
       if (url.pathname === '/api/session') {
-        return json({ tokenRequired: Boolean(options.token) });
+        return json({ tokenRequired: Boolean(options.token) || rooms.length > 0, rooms: rooms.length > 0 });
       }
-      if ((url.pathname.startsWith('/api/') || url.pathname.startsWith('/download/')) && !isAuthorized(request, options.token)) {
+      if (url.pathname === '/api/login' && request.method === 'POST') {
+        if (rooms.length === 0) return json({ ok: true, roomPath: '/' });
+        const body = await request.json() as { token?: string };
+        const room = rooms.find((candidate) => candidate.token === (body.token ?? '').trim());
+        if (!room) return json({ error: 'invalid access code' }, 401);
+        return json({ ok: true, roomId: room.id, roomPath: `/room/${room.id}` });
+      }
+      const roomRoute = resolveRoomRoute(url.pathname, rooms);
+      if (roomRoute?.page) {
+        return html(await readFile(fileURLToPath(appHtmlUrl), 'utf8'));
+      }
+      if (rooms.length > 0 && !roomRoute && (url.pathname.startsWith('/api/') || url.pathname.startsWith('/download/') || url.pathname.startsWith('/room/'))) {
+        return json({ error: 'room required' }, 404);
+      }
+      const routePath = roomRoute?.path ?? url.pathname;
+      const root = roomRoute?.room.root ?? options.root;
+      const token = roomRoute?.room.token ?? options.token;
+      const runtime = roomRoute?.room ? runtimeForRoom(roomRuntimes, roomRoute.room.id) : singleRuntime;
+      if ((routePath.startsWith('/api/') || routePath.startsWith('/download/')) && !isAuthorized(request, token)) {
         return json({ error: 'access token required' }, 401);
       }
-      if (url.pathname === '/api/books' && request.method === 'GET') {
-        return json(await webListBooks(options));
+      if (routePath === '/api/books' && request.method === 'GET') {
+        return json(await webListBooks({ ...options, root }));
       }
-      if (url.pathname === '/api/status' && request.method === 'GET') {
-        return json(await getPrivateStatus(options.root));
+      if (routePath === '/api/status' && request.method === 'GET') {
+        return json(await getPrivateStatus(root));
       }
-      if (url.pathname === '/api/chat' && request.method === 'POST') {
+      if (routePath === '/api/chat' && request.method === 'POST') {
         const body = await request.json() as { message?: string };
-        const result = await resolveAgentMessage(options, session, body.message ?? '', env);
+        const result = await resolveAgentMessage({ ...options, root }, runtime.session, body.message ?? '', env);
         if (result.kind === 'reply') return json(result);
-        const job = jobs.createJob(result.action, result.message);
-        void runCommandJob(options.root, result.command, jobs, job.id, env);
+        const job = runtime.jobs.createJob(result.action, result.message);
+        void runCommandJob(root, result.command, runtime.jobs, job.id, env);
         return json({ ...result, jobId: job.id });
       }
-      const jobEventsMatch = url.pathname.match(/^\/api\/jobs\/([^/]+)\/events$/);
+      const jobEventsMatch = routePath.match(/^\/api\/jobs\/([^/]+)\/events$/);
       if (jobEventsMatch?.[1] && request.method === 'GET') {
-        return sseStream(jobs, jobEventsMatch[1], request.signal);
+        return sseStream(runtime.jobs, jobEventsMatch[1], request.signal);
       }
-      const chapterMatch = url.pathname.match(/^\/api\/chapters\/([^/]+)$/);
+      const chapterMatch = routePath.match(/^\/api\/chapters\/([^/]+)$/);
       if (chapterMatch?.[1] && request.method === 'GET') {
         const chapter = chapterMatch[1] === 'latest' ? 'latest' : Number(chapterMatch[1]);
         if (chapter !== 'latest' && !Number.isInteger(chapter)) return json({ error: 'invalid chapter' }, 400);
-        return json(await readPrivateChapter(options.root, { chapter }));
+        return json(await readPrivateChapter(root, { chapter }));
       }
-      const downloadChapterMatch = url.pathname.match(/^\/download\/chapter\/([^/]+)$/);
+      const downloadChapterMatch = routePath.match(/^\/download\/chapter\/([^/]+)$/);
       if (downloadChapterMatch?.[1] && request.method === 'GET') {
         const chapter = downloadChapterMatch[1];
         const result = chapter === 'latest'
-          ? await latestChapterDownload(options.root)
-          : await currentBookChapterDownload(options.root, Number(chapter));
+          ? await latestChapterDownload(root)
+          : await currentBookChapterDownload(root, Number(chapter));
         return download(result);
       }
-      if (url.pathname === '/download/chapters.zip' && request.method === 'GET') {
-        const book = await getCurrentPrivateBook(options.root);
-        return download(await buildChaptersZip(join(options.root, book.path)));
+      if (routePath === '/download/chapters.zip' && request.method === 'GET') {
+        const book = await getCurrentPrivateBook(root);
+        return download(await buildChaptersZip(join(root, book.path)));
       }
       return json({ error: 'not found' }, 404);
     } catch (error) {
@@ -120,6 +150,42 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
   };
 }
 
+function parseRooms(root: string, value: string | undefined): WebRoom[] {
+  if (!value?.trim()) return [];
+  return value.split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const [rawId, rawToken] = part.includes(':') ? part.split(':', 2) : [`room${part}`, part];
+      const id = safeRoomId(rawId.trim());
+      const token = (rawToken ?? '').trim();
+      if (!id || !token) throw new Error(`invalid room config entry: ${part}`);
+      return { id, token, root: join(root, 'rooms', id) };
+    });
+}
+
+function safeRoomId(value: string): string {
+  return /^[a-zA-Z0-9_-]+$/.test(value) ? value : '';
+}
+
+function resolveRoomRoute(pathname: string, rooms: WebRoom[]): { room: WebRoom; path: string; page: boolean } | undefined {
+  if (rooms.length === 0) return undefined;
+  const match = pathname.match(/^\/room\/([^/]+)(\/.*)?$/);
+  if (!match?.[1]) return undefined;
+  const room = rooms.find((candidate) => candidate.id === match[1]);
+  if (!room) return undefined;
+  const rest = match[2] ?? '/';
+  return { room, path: rest === '/index.html' ? '/' : rest, page: rest === '/' || rest === '/index.html' };
+}
+
+function runtimeForRoom(runtimes: Map<string, WebRuntime>, id: string): WebRuntime {
+  const existing = runtimes.get(id);
+  if (existing) return existing;
+  const runtime = { session: createWebAgentSession(), jobs: createJobStore() };
+  runtimes.set(id, runtime);
+  return runtime;
+}
+
 async function resolveAgentMessage(
   options: CreateWebServerOptions,
   session: ReturnType<typeof createWebAgentSession>,
@@ -137,7 +203,7 @@ async function resolveAgentMessage(
 }
 
 async function webListBooks(options: CreateWebServerOptions): Promise<PrivateShelf> {
-  if (options.privateApi?.listBooks) return await options.privateApi.listBooks();
+  if (options.privateApi?.listBooks) return await options.privateApi.listBooks(options.root);
   return await listPrivateBooks(options.root);
 }
 

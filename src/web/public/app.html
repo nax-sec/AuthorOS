@@ -64,8 +64,9 @@
     const progressLog = document.querySelector('#progressLog');
     const chapter = document.querySelector('#chapter');
     const books = document.querySelector('#books');
-    const token = sessionStorage.getItem('authoros_token') || prompt('访问码（如果没有配置可留空）') || '';
-    sessionStorage.setItem('authoros_token', token);
+    const roomPrefix = (location.pathname.match(/^\/room\/[^/]+/) || [''])[0];
+    const tokenKey = `authoros_token:${roomPrefix || 'single'}`;
+    let token = sessionStorage.getItem(tokenKey) || '';
 
     function headers() {
       return { 'content-type': 'application/json', authorization: `Bearer ${token}` };
@@ -78,9 +79,34 @@
       chatLog.scrollTop = chatLog.scrollHeight;
     }
     async function api(path, options = {}) {
-      const response = await fetch(path, { ...options, headers: { ...headers(), ...(options.headers || {}) } });
+      const response = await fetch(`${roomPrefix}${path}`, { ...options, headers: { ...headers(), ...(options.headers || {}) } });
       if (!response.ok) throw new Error((await response.json()).error || response.statusText);
       return response.json();
+    }
+    async function loginIfNeeded() {
+      const session = await fetch('/api/session').then(response => response.json());
+      if (!session.tokenRequired) return;
+      token = sessionStorage.getItem(tokenKey) || prompt('访问码（如果没有配置可留空）') || '';
+      if (!token) return;
+      if (session.rooms && !roomPrefix) {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ token }),
+        });
+        if (!response.ok) {
+          alert((await response.json()).error || 'invalid access code');
+          sessionStorage.removeItem(tokenKey);
+          location.reload();
+          return;
+        }
+        const result = await response.json();
+        sessionStorage.setItem(`authoros_token:${result.roomPath}`, token);
+        location.href = result.roomPath;
+        return false;
+      }
+      sessionStorage.setItem(tokenKey, token);
+      return true;
     }
     async function refreshBooks() {
       const shelf = await api('/api/books');
@@ -101,7 +127,7 @@
       }
     }
     async function watchJob(id) {
-      const events = new EventSource(`/api/jobs/${id}/events?token=${encodeURIComponent(token)}`);
+      const events = new EventSource(`${roomPrefix}/api/jobs/${id}/events?token=${encodeURIComponent(token)}`);
       events.onmessage = (event) => {
         const data = JSON.parse(event.data);
         progressLog.textContent += `\n[${data.type}] ${data.message}`;
@@ -113,9 +139,9 @@
     }
     document.querySelector('#send').addEventListener('click', send);
     document.querySelector('#refresh').addEventListener('click', refreshBooks);
-    document.querySelector('#downloadChapter').addEventListener('click', () => location.href = `/download/chapter/latest?token=${encodeURIComponent(token)}`);
-    document.querySelector('#downloadAll').addEventListener('click', () => location.href = `/download/chapters.zip?token=${encodeURIComponent(token)}`);
-    refreshBooks().catch(error => { books.textContent = `加载失败：${error.message}`; });
+    document.querySelector('#downloadChapter').addEventListener('click', () => location.href = `${roomPrefix}/download/chapter/latest?token=${encodeURIComponent(token)}`);
+    document.querySelector('#downloadAll').addEventListener('click', () => location.href = `${roomPrefix}/download/chapters.zip?token=${encodeURIComponent(token)}`);
+    loginIfNeeded().then((ready) => ready === false ? undefined : refreshBooks()).catch(error => { books.textContent = `加载失败：${error.message}`; });
   </script>
 </body>
 </html>

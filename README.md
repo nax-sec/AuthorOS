@@ -66,6 +66,15 @@ export AUTHOROS_WEB_AGENT="hybrid"
 node src/cli.ts web --root "$AUTHOROS_PRIVATE_ROOT" --port 8787
 ```
 
+For five isolated temporary rooms, use access codes as the room selector:
+
+```bash
+export AUTHOROS_WEB_ROOMS="1,2,3,4,999"
+node src/cli.ts web --root "$AUTHOROS_PRIVATE_ROOT" --port 8787
+```
+
+The public entry URL stays the same. A visitor enters code `1`, `2`, `3`, `4`, or `999` and is routed to `/room/room1`, `/room/room2`, `/room/room3`, `/room/room4`, or `/room/room999`. Each room has its own bookshelf under `$AUTHOROS_PRIVATE_ROOT/rooms/<room-id>`.
+
 Open:
 
 ```text

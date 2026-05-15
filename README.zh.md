@@ -64,6 +64,15 @@ $env:AUTHOROS_WEB_AGENT="hybrid"   # rule | hybrid | llm
 author web --root D:\Books\authoros-web --port 8787
 ```
 
+如果要临时开 5 个隔离房间,用访问码决定房间:
+
+```powershell
+$env:AUTHOROS_WEB_ROOMS="1,2,3,4,999"
+author web --root D:\Books\authoros-web --port 8787
+```
+
+公网入口链接不变。访问者输入 `1`、`2`、`3`、`4` 或 `999` 后,会分别进入 `/room/room1`、`/room/room2`、`/room/room3`、`/room/room4`、`/room/room999`。每个房间的书架独立保存在 `D:\Books\authoros-web\rooms\<room-id>`。
+
 本机打开:
 
 ```text

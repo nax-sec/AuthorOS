@@ -80,6 +80,55 @@ test('web server can use llm agent mode for vague messages', async () => {
   assert.equal(body.command.type, 'feedback');
 });
 
+test('web server maps access codes to fixed room URLs', async () => {
+  const server = createWebServer({
+    root: 'D:\\Books\\authoros-web',
+    env: { AUTHOROS_WEB_ROOMS: '1,2,3,4,999' },
+  });
+
+  const session = await server.fetch(new Request('http://local/api/session'));
+  assert.deepEqual(await session.json(), { tokenRequired: true, rooms: true });
+
+  const response = await server.fetch(new Request('http://local/api/login', {
+    method: 'POST',
+    body: JSON.stringify({ token: '999' }),
+  }));
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true, roomId: 'room999', roomPath: '/room/room999' });
+});
+
+test('web server isolates room roots and tokens', async () => {
+  const seenRoots: string[] = [];
+  const server = createWebServer({
+    root: 'D:\\Books\\authoros-web',
+    env: { AUTHOROS_WEB_ROOMS: '1,2,3,4,999' },
+    privateApi: {
+      async listBooks(root) {
+        seenRoots.push(root);
+        return { version: 1, current: null, books: [{ id: 'book', title: root, path: 'books/book' }] };
+      },
+    },
+  });
+
+  const ok = await server.fetch(new Request('http://local/room/room1/api/books', {
+    headers: { authorization: 'Bearer 1' },
+  }));
+  assert.equal(ok.status, 200);
+  assert.match(seenRoots[0] ?? '', /rooms[\\/]room1$/);
+
+  const wrongToken = await server.fetch(new Request('http://local/room/room2/api/books', {
+    headers: { authorization: 'Bearer 1' },
+  }));
+  assert.equal(wrongToken.status, 401);
+
+  const unscoped = await server.fetch(new Request('http://local/api/books', {
+    headers: { authorization: 'Bearer 1' },
+  }));
+  assert.equal(unscoped.status, 404);
+  assert.deepEqual(await unscoped.json(), { error: 'room required' });
+});
+
 test('web command help is available from the CLI', async () => {
   const out: string[] = [];
   const err: string[] = [];
