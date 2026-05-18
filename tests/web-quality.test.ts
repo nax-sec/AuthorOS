@@ -162,6 +162,11 @@ test('quality overview reports pending feedback preview without applying it', as
       text: '结尾压力不够',
       instruction: 'revise chapter 1',
       created_at: '2026-05-18T08:00:00.000Z',
+      original_hash: 'abc123',
+      preview_content: '# 第 1 章\n\n修改后的正文',
+      rationale: '强化结尾压力',
+      original_char_count: 9,
+      revised_char_count: 12,
     }), 'utf8');
     const state = await getProjectState(bookDir);
 
@@ -170,6 +175,8 @@ test('quality overview reports pending feedback preview without applying it', as
     assert.equal(overview.pendingPreview?.kind, 'feedback');
     assert.equal(overview.pendingPreview?.chapter, 1);
     assert.equal(overview.pendingPreview?.text, '结尾压力不够');
+    assert.equal(overview.pendingPreview?.previewContent, '# 第 1 章\n\n修改后的正文');
+    assert.equal(overview.pendingPreview?.rationale, '强化结尾压力');
     assert.equal(overview.signals.some((signal) => signal.kind === 'warning' && signal.label.includes('修改预览')), true);
   });
 });

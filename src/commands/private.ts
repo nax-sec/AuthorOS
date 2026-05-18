@@ -84,6 +84,11 @@ export interface PrivatePendingFeedback {
   text: string;
   instruction: string;
   created_at: string;
+  original_hash?: string;
+  preview_content?: string;
+  rationale?: string;
+  original_char_count?: number;
+  revised_char_count?: number | null;
 }
 
 export interface PrivatePendingStyleRewrite {
@@ -244,6 +249,8 @@ export async function previewPrivateFeedback(root: string, opts: {
   const chapter = opts.chapter === undefined || opts.chapter === 'latest'
     ? await latestChapter(projectDir)
     : opts.chapter;
+  const chapterId = formatChapterNumber(chapter);
+  const originalContent = await readFile(join(projectDir, 'chapters', `${chapterId}.md`), 'utf8');
   const instruction = buildPrivateFeedbackInstruction(chapter, text);
 
   await ensurePrivateReviewPlaceholder(projectDir, chapter, opts.now);
@@ -262,6 +269,13 @@ export async function previewPrivateFeedback(root: string, opts: {
     instruction,
     created_at: (opts.now ?? new Date()).toISOString(),
   };
+  if (revise.previewContent) {
+    pending.original_hash = sha256(originalContent);
+    pending.preview_content = revise.previewContent;
+    pending.rationale = revise.rationale;
+    pending.original_char_count = revise.originalCharCount;
+    pending.revised_char_count = revise.revisedCharCount;
+  }
   const pendingPath = await writePendingFeedback(projectDir, pending);
   await touchCurrentBook(resolvedRoot, shelf, book, opts.now);
   return { book, chapter, pendingPath, revise };
@@ -281,6 +295,13 @@ export async function applyPrivateFeedback(root: string, opts: {
     throw new AuthorOsError(`Pending feedback belongs to "${pending.book_id}", but current book is "${book.id}".`);
   }
 
+  if (pending.preview_content && pending.original_hash) {
+    const revise = await applySavedFeedbackPreview(projectDir, pending, opts.now);
+    await unlink(pendingPath);
+    await touchCurrentBook(resolvedRoot, shelf, book, opts.now);
+    return { book, chapter: pending.chapter, revise };
+  }
+
   await ensurePrivateReviewPlaceholder(projectDir, pending.chapter, opts.now);
   const revise = await reviseChapter(projectDir, {
     chapter: pending.chapter,
@@ -292,6 +313,47 @@ export async function applyPrivateFeedback(root: string, opts: {
   await unlink(pendingPath);
   await touchCurrentBook(resolvedRoot, shelf, book, opts.now);
   return { book, chapter: pending.chapter, revise };
+}
+
+async function applySavedFeedbackPreview(
+  projectDir: string,
+  pending: PrivatePendingFeedback,
+  now?: Date,
+): Promise<ReviseResult> {
+  const previewContent = pending.preview_content;
+  if (!previewContent || !pending.original_hash) {
+    throw new AuthorOsError('Pending feedback does not include a saved preview.');
+  }
+  const chapterId = formatChapterNumber(pending.chapter);
+  const relativeChapterPath = `chapters/${chapterId}.md`;
+  const relativeBackupPath = `chapters/${chapterId}.draft.md`;
+  const chapterPath = join(projectDir, relativeChapterPath);
+  const currentContent = await readFile(chapterPath, 'utf8');
+  if (sha256(currentContent) !== pending.original_hash) {
+    throw new AuthorOsError('Current chapter has changed since the feedback preview was created. Generate a new feedback preview before applying.');
+  }
+
+  const backupPath = join(projectDir, relativeBackupPath);
+  if (!await fileExists(backupPath)) {
+    await mkdir(join(projectDir, chaptersDirectory()), { recursive: true });
+    await copyFile(chapterPath, backupPath);
+  }
+  await writeFile(chapterPath, previewContent, 'utf8');
+  return {
+    chapter: pending.chapter,
+    chapterId,
+    chapterPath: relativeChapterPath,
+    draftBackupPath: relativeBackupPath,
+    changed: true,
+    source: 'model',
+    generatedAt: (now ?? new Date(pending.created_at)).toISOString(),
+    rationale: pending.rationale ?? pending.text,
+    originalCharCount: pending.original_char_count ?? 0,
+    revisedCharCount: pending.revised_char_count ?? null,
+    previewContent,
+    written: true,
+    contextInputs: [],
+  };
 }
 
 export async function previewPrivateStyleRewrite(root: string, opts: {
@@ -562,6 +624,13 @@ function stringField(record: Record<string, unknown>, key: string): string {
   return value;
 }
 
+function optionalStringField(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') throw new AuthorOsError(`Invalid private book field: ${key}`);
+  return value;
+}
+
 function currentBook(shelf: PrivateShelf): PrivateBook {
   if (!shelf.current) {
     throw new AuthorOsError('No current private book. Run `author private new --concept "<idea>"` first.');
@@ -735,13 +804,37 @@ function parsePendingFeedback(raw: string): PrivatePendingFeedback {
   if (!Number.isInteger(chapter) || (chapter as number) < 1) {
     throw new AuthorOsError('Invalid pending private feedback chapter.');
   }
-  return {
+  const result: PrivatePendingFeedback = {
     book_id: stringField(value, 'book_id'),
     chapter: chapter as number,
     text: stringField(value, 'text'),
     instruction: stringField(value, 'instruction'),
     created_at: stringField(value, 'created_at'),
   };
+  const originalHash = optionalStringField(value, 'original_hash');
+  const previewContent = optionalStringField(value, 'preview_content');
+  if (originalHash !== undefined || previewContent !== undefined) {
+    if (!originalHash || !previewContent) {
+      throw new AuthorOsError('Invalid pending private feedback preview content.');
+    }
+    if (!/^[a-f0-9]{64}$/.test(originalHash)) {
+      throw new AuthorOsError('Invalid pending private feedback original_hash.');
+    }
+    result.original_hash = originalHash;
+    result.preview_content = previewContent;
+    result.rationale = optionalStringField(value, 'rationale') ?? '';
+    const originalCharCount = value.original_char_count;
+    if (originalCharCount !== undefined && !Number.isInteger(originalCharCount)) {
+      throw new AuthorOsError('Invalid pending private feedback original_char_count.');
+    }
+    const revisedCharCount = value.revised_char_count;
+    if (revisedCharCount !== undefined && revisedCharCount !== null && !Number.isInteger(revisedCharCount)) {
+      throw new AuthorOsError('Invalid pending private feedback revised_char_count.');
+    }
+    result.original_char_count = originalCharCount as number | undefined;
+    result.revised_char_count = revisedCharCount as number | null | undefined;
+  }
+  return result;
 }
 
 function parsePendingStyleRewrite(raw: string): PrivatePendingStyleRewrite {

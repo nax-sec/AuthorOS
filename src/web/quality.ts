@@ -33,8 +33,12 @@ export interface QualityPendingPreview {
   kind: 'feedback';
   chapter: number;
   text: string;
+  previewContent?: string;
   instruction: string;
   createdAt: string;
+  rationale?: string;
+  originalCharCount?: number;
+  revisedCharCount?: number | null;
   path: string;
 }
 
@@ -416,7 +420,7 @@ async function readPendingFeedback(projectDir: string): Promise<QualityPendingPr
     throw new Error('Invalid pending private feedback.');
   }
 
-  return {
+  const preview: QualityPendingPreview = {
     kind: 'feedback',
     chapter: parsed.chapter,
     text: parsed.text,
@@ -424,6 +428,15 @@ async function readPendingFeedback(projectDir: string): Promise<QualityPendingPr
     createdAt: parsed.created_at,
     path: '.authoros/private/pending-feedback.json',
   };
+  if (typeof parsed.preview_content === 'string') {
+    preview.previewContent = parsed.preview_content;
+    if (typeof parsed.rationale === 'string') preview.rationale = parsed.rationale;
+    if (Number.isInteger(parsed.original_char_count)) preview.originalCharCount = parsed.original_char_count;
+    if (parsed.revised_char_count === null || Number.isInteger(parsed.revised_char_count)) {
+      preview.revisedCharCount = parsed.revised_char_count as number | null;
+    }
+  }
+  return preview;
 }
 
 async function readPendingStyleRewrite(projectDir: string): Promise<QualityStyleRewritePreview | null> {

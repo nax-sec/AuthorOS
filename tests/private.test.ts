@@ -291,6 +291,9 @@ test('private feedback previews a chapter revision and apply writes it', async (
     }), 0, feedbackIo.err.join(''));
     assert.match(feedbackIo.out.join(''), /Private Author: feedback preview/);
     await stat(join(root, 'books/hp-audit/.authoros/private/pending-feedback.json'));
+    const pending = JSON.parse(await readFile(join(root, 'books/hp-audit/.authoros/private/pending-feedback.json'), 'utf8'));
+    assert.match(pending.preview_content, /自愿繁殖声明/);
+    assert.match(pending.original_hash, /^[a-f0-9]{64}$/);
 
     const before = await readFile(join(root, 'books/hp-audit/chapters/0001.md'), 'utf8');
     assert.doesNotMatch(before, /自愿繁殖声明/);
@@ -298,7 +301,11 @@ test('private feedback previews a chapter revision and apply writes it', async (
     const applyIo = silentIo();
     assert.equal(await run(['private', 'apply', '--root', root], root, applyIo.io, {
       env: { OPENAI_API_KEY: 'k', AUTHOROS_MODEL: 'm' },
-      llm,
+      llm: {
+        async generate() {
+          throw new Error('apply should use saved feedback preview');
+        },
+      },
     }), 0, applyIo.err.join(''));
     assert.match(applyIo.out.join(''), /Private Author: feedback applied/);
 

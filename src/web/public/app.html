@@ -678,8 +678,21 @@
         previewText.textContent = quality.pendingPreview.text;
         const previewMeta = document.createElement('div');
         previewMeta.className = 'muted';
-        previewMeta.textContent = `${quality.pendingPreview.instruction} · ${quality.pendingPreview.createdAt}`;
+        previewMeta.textContent = `${quality.pendingPreview.rationale || quality.pendingPreview.instruction} · ${quality.pendingPreview.createdAt}`;
         pendingPreview.append(previewTitle, previewText, previewMeta);
+        if (quality.pendingPreview.previewContent) {
+          const feedbackContentTitle = document.createElement('div');
+          feedbackContentTitle.className = 'muted';
+          feedbackContentTitle.textContent = '修改预览正文';
+          const feedbackContent = document.createElement('pre');
+          feedbackContent.id = 'feedbackPreviewContent';
+          feedbackContent.className = 'memory-delta-content';
+          feedbackContent.textContent = quality.pendingPreview.previewContent;
+          const feedbackStats = document.createElement('div');
+          feedbackStats.className = 'muted';
+          feedbackStats.textContent = `原文 ${quality.pendingPreview.originalCharCount || 0} 字 · 预览 ${quality.pendingPreview.revisedCharCount ?? '未知'} 字`;
+          pendingPreview.append(feedbackContentTitle, feedbackContent, feedbackStats);
+        }
       }
 
       if (quality.styleRewritePreview) {
