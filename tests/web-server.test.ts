@@ -280,6 +280,71 @@ test('web server exposes job history', async () => {
   });
 });
 
+test('web server exposes cockpit overview', async () => {
+  await withTempRoot(async (root) => {
+    const server = createWebServer({
+      root,
+      env: { OPENAI_API_KEY: 'key', AUTHOROS_MODEL: 'gpt-test' },
+    });
+
+    const response = await server.fetch(new Request('http://local/api/cockpit'));
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.current, null);
+    assert.equal(body.nextAction.kind, 'new_book');
+    assert.equal(body.model.apiKeySet, true);
+    assert.equal(body.model.model, 'gpt-test');
+  });
+});
+
+test('web server keeps room cockpit overview isolated', async () => {
+  await withTempRoot(async (root) => {
+    const server = createWebServer({
+      root,
+      env: { AUTHOROS_WEB_ROOMS: '1,2' },
+    });
+
+    const ok = await server.fetch(new Request('http://local/room/room1/api/cockpit', {
+      headers: { authorization: 'Bearer 1' },
+    }));
+    const wrongToken = await server.fetch(new Request('http://local/room/room1/api/cockpit', {
+      headers: { authorization: 'Bearer 2' },
+    }));
+
+    assert.equal(ok.status, 200);
+    assert.equal((await ok.json()).nextAction.kind, 'new_book');
+    assert.equal(wrongToken.status, 401);
+  });
+});
+
+test('web server keeps room cockpit jobs isolated', async () => {
+  await withTempRoot(async (root) => {
+    const server = createWebServer({
+      root,
+      env: { AUTHOROS_WEB_ROOMS: '1,2' },
+      agentMode: 'rule',
+    });
+
+    await server.fetch(new Request('http://local/room/room1/api/chat', {
+      method: 'POST',
+      headers: { authorization: 'Bearer 1' },
+      body: JSON.stringify({ message: '读最新章' }),
+    }));
+    await waitForJob(server, 'http://local/room/room1/api/jobs', { authorization: 'Bearer 1' });
+
+    const room1 = await server.fetch(new Request('http://local/room/room1/api/cockpit', {
+      headers: { authorization: 'Bearer 1' },
+    }));
+    const room2 = await server.fetch(new Request('http://local/room/room2/api/cockpit', {
+      headers: { authorization: 'Bearer 2' },
+    }));
+
+    assert.equal((await room1.json()).jobs.length, 1);
+    assert.equal((await room2.json()).jobs.length, 0);
+  });
+});
+
 test('web server persists job history across server instances', async () => {
   await withTempRoot(async (root) => {
     const first = createWebServer({ root, agentMode: 'rule', env: {} });

@@ -6,6 +6,7 @@ import { createWebAgentSession, handleAgentMessage, type WebAgentCommand } from 
 import { createJobStore, type WebJob } from './jobs.ts';
 import { loadWebJobHistory, saveWebJobHistory } from './job-persistence.ts';
 import { isAuthorized } from './auth.ts';
+import { getCockpitOverview } from './cockpit.ts';
 import { buildChaptersZip, readChapterDownload, type DownloadResult } from './downloads.ts';
 import { handleAgentMessageWithLlm, type WebAgentMode } from './agent-llm.ts';
 import {
@@ -94,6 +95,10 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
       }
       if (routePath === '/api/status' && request.method === 'GET') {
         return json(await getPrivateStatus(root));
+      }
+      if (routePath === '/api/cockpit' && request.method === 'GET') {
+        const runtime = runtimeForRoute(roomRoute, () => singleRuntime ??= createRuntimeForRoot(options.root), roomRuntimes);
+        return json(await getCockpitOverview(root, env, runtime.jobs));
       }
       if (routePath === '/api/jobs' && request.method === 'GET') {
         const runtime = runtimeForRoute(roomRoute, () => singleRuntime ??= createRuntimeForRoot(options.root), roomRuntimes);
