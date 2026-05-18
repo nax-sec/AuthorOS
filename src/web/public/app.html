@@ -411,6 +411,15 @@
       return labels[phase] || phase;
     }
 
+    function jobStatusLabel(status) {
+      const labels = {
+        running: '进行中',
+        completed: '已完成',
+        failed: '失败',
+      };
+      return labels[status] || status;
+    }
+
     function renderStagePill(stage) {
       const pill = document.createElement('span');
       pill.className = `stage-pill ${stage.status}`;
@@ -446,9 +455,9 @@
         const top = document.createElement('div');
         top.className = 'job-top';
         const action = document.createElement('span');
-        action.textContent = job.action;
+        action.textContent = jobActionLabel(job.action);
         const status = document.createElement('span');
-        status.textContent = job.status;
+        status.textContent = jobStatusLabel(job.status);
         top.append(action, status);
         const message = document.createElement('div');
         message.className = 'muted';

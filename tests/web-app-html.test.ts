@@ -23,8 +23,10 @@ test('private web app exposes personal cockpit regions', async () => {
   assert.match(html, /确认已有正文后，再读取最新章。/);
   assert.match(html, /jobActionLabel/);
   assert.match(html, /jobPhaseLabel/);
+  assert.match(html, /jobStatusLabel/);
   assert.match(html, /读取章节/);
   assert.match(html, /接收任务/);
+  assert.match(html, /进行中/);
   assert.match(html, /renderStagePill/);
   assert.match(html, /stageStatusLabel/);
   assert.match(html, /已完成/);
