@@ -58,7 +58,10 @@ export function createWebAgentSession(): WebAgentSession {
 
 export function handleAgentMessage(session: WebAgentSession, rawMessage: string): WebAgentResult {
   const message = rawMessage.trim();
-  if (!message) return reply('unknown', '我没收到具体内容。你可以说“开一本新书”“继续写”“读最新章”，或者直接提修改意见。');
+  if (!message) return reply('unknown', [
+    '我在。你可以直接丢一个很粗的想法，我先帮你收住方向。',
+    '也可以说“开一本新书”“继续写”“读最新章”，或者把这一章哪里不顺直接告诉我。',
+  ].join('\n'));
 
   if (session.pendingNewBook) {
     return handlePendingNewBook(session, message);
@@ -97,9 +100,9 @@ export function handleAgentMessage(session: WebAgentSession, rawMessage: string)
     }
     session.pendingNewBook = { stage: 'intake', seed: message };
     return reply('new_book_intake', [
-      '先确认几个开书问题，避免我直接跑偏：',
-      '1. 书名或临时书名？',
-      '2. 主角是谁？',
+      '我先帮你把这本书的方向钉稳，再开工：',
+      '1. 书名或临时书名是什么？',
+      '2. 主角是谁，最想要什么？',
       '3. 核心冲突或最大看点是什么？',
       '4. 想要什么语气和节奏？',
       '5. 明确不要什么？',
@@ -115,7 +118,14 @@ export function handleAgentMessage(session: WebAgentSession, rawMessage: string)
     });
   }
 
-  return reply('unknown', '我不确定你要我做什么。你可以说：开新书、继续写、读最新章、下载这一章，或者直接指出哪里要改。');
+  return reply('unknown', [
+    '我先把下一步收窄一下：',
+    '- 如果你想启动新项目，说“开新书”，再给我一个粗方向。',
+    '- 如果你想推进当前书，说“继续写”。',
+    '- 如果你想回看正文，说“读最新章”。',
+    '',
+    '也可以直接说卡在哪里，我会先转成一个可执行的写作动作。',
+  ].join('\n'));
 }
 
 function handlePendingNewBook(session: WebAgentSession, message: string): WebAgentResult {
@@ -125,7 +135,7 @@ function handlePendingNewBook(session: WebAgentSession, message: string): WebAge
     pending.stage = 'confirm';
     pending.brief = message;
     return reply('new_book_confirm', [
-      '我先按这个方向理解：',
+      '我先把方向整理成一个开书承诺：',
       `- 初始想法：${pending.seed}`,
       `- 补充设定：${message}`,
       '- 我会把它整理成一本可持续写的 AuthorOS 书，而不是一次性短文。',

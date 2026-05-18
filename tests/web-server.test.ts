@@ -176,7 +176,7 @@ test('web server chat returns immediate agent reply for new book intake', async 
 
     assert.equal(response.status, 200);
     assert.equal(body.action, 'new_book_intake');
-    assert.match(body.message, /先确认几个开书问题/);
+    assert.match(body.message, /方向钉稳/);
   });
 });
 
@@ -550,6 +550,63 @@ test('web server exposes cockpit overview', async () => {
     assert.equal(body.nextAction.kind, 'new_book');
     assert.equal(body.model.apiKeySet, true);
     assert.equal(body.model.model, 'gpt-test');
+  });
+});
+
+test('web server exposes model doctor for recovery checks', async () => {
+  await withTempRoot(async (root) => {
+    const server = createWebServer({ root, env: {} });
+
+    const response = await server.fetch(new Request('http://local/api/model/doctor'));
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.scope.kind, 'private_root');
+    assert.equal(body.doctor.ready, false);
+    assert.equal(body.doctor.apiKeyEnv, 'OPENAI_API_KEY');
+    assert.equal(body.doctor.apiKeySet, false);
+    assert.equal(body.doctor.model, undefined);
+    assert.equal(body.doctor.blockers.includes('API key env OPENAI_API_KEY is not set'), true);
+    assert.equal(body.doctor.blockers.includes('model is not set (use --model, AUTHOROS_MODEL, or OPENAI_MODEL)'), true);
+  });
+});
+
+test('web server model doctor checks the current private book config when available', async () => {
+  await withTempRoot(async (root) => {
+    await mkdir(join(root, 'books/demo/.authoros'), { recursive: true });
+    await writeFile(join(root, 'books/demo/.authoros/model.json'), JSON.stringify({
+      provider: 'openai_compatible',
+      apiKeyEnv: 'BOOK_KEY',
+      baseUrl: 'https://models.example/v1',
+      model: 'book-model',
+    }), 'utf8');
+    await writeFile(join(root, 'bookshelf.json'), JSON.stringify({
+      version: 1,
+      current: 'demo',
+      books: [{
+        id: 'demo',
+        title: 'Demo Book',
+        concept: 'model doctor scope',
+        path: 'books/demo',
+        created_at: '2026-05-18T00:00:00.000Z',
+        last_active_at: '2026-05-18T00:00:00.000Z',
+      }],
+    }), 'utf8');
+    const server = createWebServer({ root, env: { BOOK_KEY: 'secret' } });
+
+    const response = await server.fetch(new Request('http://local/api/model/doctor'));
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.scope.kind, 'current_book');
+    assert.equal(body.scope.bookId, 'demo');
+    assert.equal(body.scope.label, 'Demo Book');
+    assert.equal(body.doctor.ready, true);
+    assert.equal(body.doctor.apiKeyEnv, 'BOOK_KEY');
+    assert.equal(body.doctor.apiKeySet, true);
+    assert.equal(body.doctor.baseUrl, 'https://models.example/v1');
+    assert.equal(body.doctor.model, 'book-model');
+    assert.deepEqual(body.doctor.blockers, []);
   });
 });
 

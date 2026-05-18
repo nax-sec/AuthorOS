@@ -78,6 +78,9 @@ test('llm prompt lists style rewrite actions', async () => {
 
   await handleAgentMessageWithLlm(createWebAgentSession(), '看看状态', { mode: 'llm', llm });
 
+  assert.match(prompt, /常驻写作搭档/);
+  assert.match(prompt, /不要像命令分类器/);
+  assert.match(prompt, /模糊/);
   assert.match(prompt, /style_rewrite_preview/);
   assert.match(prompt, /style_rewrite_apply/);
 });

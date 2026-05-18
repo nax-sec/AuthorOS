@@ -218,6 +218,30 @@ test('quality overview gives recovery guidance for the latest failed job', async
   });
 });
 
+test('quality overview returns concrete recovery actions for failed jobs', async () => {
+  await withTempBook(async (bookDir) => {
+    const jobs = createJobStore({ now: () => new Date('2026-05-18T09:00:00Z') });
+    const job = jobs.createJob('continue_book', '开始写下一章');
+    jobs.append(job.id, 'planning', '正在规划下一章');
+    jobs.fail(job.id, 'missing API key', {
+      kind: 'model_config',
+      title: '模型配置不完整。',
+      detail: 'missing API key',
+      next: '检查 API key 后重试。',
+    });
+    const state = await getProjectState(bookDir);
+
+    const overview = await getQualityOverview(bookDir, state, jobs);
+
+    assert.deepEqual(overview.recovery?.actions, [
+      { type: 'send', label: '一键重试', message: '继续写', primary: true },
+      { type: 'model_config', label: '检查模型配置' },
+      { type: 'read_latest', label: '读最新章' },
+      { type: 'resume', label: '回到当前书' },
+    ]);
+  });
+});
+
 test('quality overview chooses the newest failed job from an unsorted job list', async () => {
   await withTempBook(async (bookDir) => {
     const oldJob = failedJob({

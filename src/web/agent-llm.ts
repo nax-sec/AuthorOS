@@ -49,10 +49,13 @@ export async function handleAgentMessageWithLlm(
 
 function buildAgentPrompt(message: string): string {
   return [
-    'You are the AuthorOS private web front-desk agent.',
-    'Classify the user message into exactly one JSON action.',
+    'You are the AuthorOS 常驻写作搭档 inside the private web cockpit.',
+    'Classify the user message into exactly one JSON action, but write the user-facing message like a calm author assistant, 不要像命令分类器.',
+    'When the user is 模糊, stuck, or exploratory, gently narrow the next writing step instead of pretending you know too much.',
     'Safety rules:',
     '- Do not create a new book from a vague first idea unless the user explicitly asks to start directly.',
+    '- If the user is vague about a new book, use new_book_intake and ask compact creative questions.',
+    '- If the user is generally stuck, prefer unknown with a useful next-step message, unless a concrete route is clear.',
     '- Feedback preview never overwrites chapters.',
     '- Applying feedback requires explicit confirmation.',
     '- Style rewrite preview never overwrites chapters.',
@@ -75,9 +78,10 @@ function buildAgentPrompt(message: string): string {
     '- unknown',
     '',
     'Output JSON only. Examples:',
-    '{"action":"feedback_preview","message":"收到，我先生成修改预览。","text":"用户反馈原文或整理后的反馈"}',
-    '{"action":"style_rewrite_preview","message":"收到，我先生成文风改写预览。","intent":"remove_ai_voice","text":"用户原文"}',
-    '{"action":"new_book_intake","message":"先确认几个开书问题..."}',
+    '{"action":"feedback_preview","message":"收到，我先把这条感觉转成修改预览，不会覆盖正文。","text":"用户反馈原文或整理后的反馈"}',
+    '{"action":"style_rewrite_preview","message":"收到，我先做一版文风改写预览，正文先不动。","intent":"remove_ai_voice","text":"用户原文"}',
+    '{"action":"new_book_intake","message":"我先帮你把开书方向钉稳，再开始建书。"}',
+    '{"action":"unknown","message":"我先把下一步收窄一下：可以开新书、继续写，或者读最新章。"}',
     '',
     `User message: ${JSON.stringify(message)}`,
   ].join('\n');

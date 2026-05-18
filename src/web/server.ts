@@ -26,6 +26,7 @@ import {
   type PrivateShelf,
 } from '../commands/private.ts';
 import { bindStyleProfile, createStyleProfileFromText, saveStyleProfile, type StyleProfile } from '../commands/style.ts';
+import { getModelDoctor, type ModelDoctorResult } from '../commands/model.ts';
 import { createOpenAiCompatibleClientFromProject, type LlmClient } from '../core/llm.ts';
 import type { EnvLike } from '../core/modelConfig.ts';
 
@@ -52,6 +53,13 @@ interface WebRoom {
 interface WebRuntime {
   session: ReturnType<typeof createWebAgentSession>;
   jobs: ReturnType<typeof createJobStore>;
+}
+
+interface WebModelDoctorResult {
+  scope:
+    | { kind: 'private_root'; label: string; path: string }
+    | { kind: 'current_book'; label: string; bookId: string; path: string };
+  doctor: ModelDoctorResult;
 }
 
 export interface AuthorWebServer {
@@ -109,6 +117,9 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
       if (routePath === '/api/jobs' && request.method === 'GET') {
         const runtime = runtimeForRoute(roomRoute, () => singleRuntime ??= createRuntimeForRoot(options.root), roomRuntimes);
         return json({ jobs: runtime.jobs.list() });
+      }
+      if (routePath === '/api/model/doctor' && request.method === 'GET') {
+        return json(await getWebModelDoctor(root, env));
       }
       if (routePath === '/api/style/bind' && request.method === 'POST') {
         const body = await request.json() as { profileId?: unknown };
@@ -294,6 +305,31 @@ async function resolveAgentMessage(
 async function webListBooks(options: CreateWebServerOptions): Promise<PrivateShelf> {
   if (options.privateApi?.listBooks) return await options.privateApi.listBooks(options.root);
   return await listPrivateBooks(options.root);
+}
+
+async function getWebModelDoctor(root: string, env: EnvLike): Promise<WebModelDoctorResult> {
+  const shelf = await listPrivateBooks(root);
+  const current = shelf.current ? shelf.books.find((book) => book.id === shelf.current) : null;
+  if (current) {
+    return {
+      scope: {
+        kind: 'current_book',
+        label: current.title,
+        bookId: current.id,
+        path: current.path,
+      },
+      doctor: await getModelDoctor(join(root, current.path), env),
+    };
+  }
+
+  return {
+    scope: {
+      kind: 'private_root',
+      label: '个人根目录',
+      path: '.',
+    },
+    doctor: await getModelDoctor(root, env),
+  };
 }
 
 async function runCommandJob(

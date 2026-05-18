@@ -9,8 +9,24 @@ test('new book request starts intake instead of creating immediately', () => {
 
   assert.equal(result.kind, 'reply');
   assert.equal(result.action, 'new_book_intake');
-  assert.match(result.message, /先确认几个开书问题/);
+  assert.match(result.message, /方向钉稳/);
   assert.equal(session.pendingNewBook?.stage, 'intake');
+});
+
+test('assistant unknown reply sounds like a writing partner', () => {
+  const session = createWebAgentSession();
+
+  const empty = handleAgentMessage(session, '');
+  const vague = handleAgentMessage(session, '我现在有点卡住');
+
+  assert.equal(empty.kind, 'reply');
+  assert.equal(empty.action, 'unknown');
+  assert.match(empty.message, /我在/);
+  assert.match(empty.message, /继续写/);
+  assert.equal(vague.kind, 'reply');
+  assert.equal(vague.action, 'unknown');
+  assert.match(vague.message, /先把下一步收窄/);
+  assert.match(vague.message, /开新书|继续写|读最新章/);
 });
 
 test('direct-start new book request produces confirmed creation action', () => {

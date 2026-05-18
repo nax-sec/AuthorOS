@@ -61,7 +61,17 @@ export interface QualityRecovery {
   failedPhase: string;
   message: string;
   suggestion: string;
+  actions: QualityRecoveryAction[];
   failure?: JobFailureExplanation;
+}
+
+export type QualityRecoveryActionType = 'send' | 'model_config' | 'read_latest' | 'resume';
+
+export interface QualityRecoveryAction {
+  type: QualityRecoveryActionType;
+  label: string;
+  message?: string;
+  primary?: boolean;
 }
 
 export interface QualitySignal {
@@ -183,6 +193,7 @@ function deriveRecovery(jobs: readonly WebJob[]): QualityRecovery | null {
     failedPhase: lastPhase?.type ?? failed.action,
     message: failed.failure?.title ?? failed.error ?? '任务失败',
     suggestion: failed.failure?.next ?? recoverySuggestion(failed.action),
+    actions: recoveryActions(failed.action, failed.failure),
     failure: failed.failure,
   };
 }
@@ -211,6 +222,41 @@ function recoverySuggestion(action: string): string {
   if (action === 'feedback_apply') return '确认待应用修改仍存在后，再发送“确认应用修改”。';
   if (action === 'read_chapter') return '确认已有正文后，再读取最新章。';
   return '查看失败原因后，重新执行上一步。';
+}
+
+function recoveryActions(action: string, failure?: JobFailureExplanation): QualityRecoveryAction[] {
+  const actions: QualityRecoveryAction[] = [];
+  const retryMessage = recoveryRetryMessage(action);
+  if (retryMessage) {
+    actions.push({ type: 'send', label: '一键重试', message: retryMessage, primary: true });
+  }
+  if (shouldShowModelConfigAction(failure)) actions.push({ type: 'model_config', label: '检查模型配置' });
+  actions.push({ type: 'read_latest', label: '读最新章' });
+  actions.push({ type: 'resume', label: '回到当前书' });
+  return actions;
+}
+
+function recoveryRetryMessage(action: string): string {
+  const messages: Record<string, string> = {
+    continue_book: '继续写',
+    read_chapter: '读最新章',
+    feedback_apply: '确认应用修改',
+    style_rewrite_preview: '帮这一章去 AI 味',
+    style_rewrite_apply: '应用文风修改',
+    download_current_chapter: '下载这一章',
+    download_all_chapters: '下载全部章节',
+    status: '检查状态',
+  };
+  return messages[action] ?? '';
+}
+
+function shouldShowModelConfigAction(failure?: JobFailureExplanation): boolean {
+  if (!failure) return true;
+  return failure.kind === 'model_config'
+    || failure.kind === 'network'
+    || failure.kind === 'model_timeout'
+    || failure.kind === 'model_length'
+    || failure.kind === 'unknown';
 }
 
 function deriveSignals(input: {

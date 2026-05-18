@@ -6,63 +6,102 @@
   <meta name="legacy-app-name" content="AuthorOS Private Web">
   <title>AuthorOS Personal Cockpit</title>
   <style>
-    :root { color-scheme: light; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; }
+    :root {
+      color-scheme: light;
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      --bg: #f4f6f8;
+      --panel: #ffffff;
+      --panel-soft: #f8faf9;
+      --ink: #182230;
+      --muted: #667085;
+      --line: #d8dee8;
+      --line-soft: #e7ebf0;
+      --accent: #2457d6;
+      --accent-soft: #edf3ff;
+      --teal: #0f766e;
+      --teal-soft: #eaf8f5;
+      --amber: #a15c07;
+      --amber-soft: #fff6e6;
+      --danger: #b42318;
+      --danger-soft: #fff0ef;
+    }
     * { box-sizing: border-box; }
-    body { margin: 0; background: #f5f7fb; color: #1d2430; }
-    header { display: grid; grid-template-columns: minmax(180px, auto) minmax(0, 1fr); align-items: center; gap: 16px; padding: 18px 24px; border-bottom: 1px solid #d9dee7; background: #ffffff; }
-    h1 { margin: 0; font-size: 22px; line-height: 1.2; }
-    h2 { margin: 0 0 12px; font-size: 16px; }
-    h3 { margin: 0 0 8px; font-size: 14px; }
+    body { margin: 0; background: var(--bg); color: var(--ink); }
+    header { position: sticky; top: 0; z-index: 10; display: grid; grid-template-columns: minmax(220px, 340px) minmax(0, 1fr); align-items: center; gap: 20px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: rgba(255, 255, 255, .94); backdrop-filter: blur(12px); }
+    h1 { margin: 0; font-size: 24px; line-height: 1.1; }
+    h2 { margin: 0; font-size: 16px; line-height: 1.25; }
+    h3 { margin: 0; font-size: 14px; line-height: 1.25; }
     button, textarea, input { font: inherit; }
-    button { border: 1px solid #1f5eff; background: #1f5eff; color: #fff; border-radius: 7px; padding: 8px 12px; cursor: pointer; }
+    button { border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 7px; padding: 8px 12px; cursor: pointer; font-weight: 700; }
     button:disabled { cursor: not-allowed; opacity: .55; }
-    button.secondary { background: #fff; color: #1d2430; border-color: #b9c2d0; }
-    input { width: 100%; border: 1px solid #b9c2d0; border-radius: 7px; padding: 8px 10px; background: #fff; color: inherit; }
-    textarea { width: 100%; min-height: 92px; resize: vertical; border: 1px solid #b9c2d0; border-radius: 8px; padding: 10px; background: #fff; color: inherit; }
-    .muted { color: #667085; font-size: 13px; }
-    .header-title { display: grid; gap: 4px; }
-    .resident-shell { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px 14px; min-width: 0; }
-    .resident-heading { font-size: 12px; font-weight: 700; color: #344054; }
-    .resident-item { display: grid; gap: 2px; min-width: 112px; }
-    .resident-label { color: #667085; font-size: 11px; }
-    .resident-value { overflow: hidden; color: #1d2430; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-    .cockpit { display: grid; grid-template-columns: 240px minmax(0, 1fr) 300px; gap: 16px; max-width: 1440px; margin: 0 auto; padding: 16px 24px 24px; }
-    .panel { min-width: 0; border: 1px solid #d9dee7; border-radius: 8px; background: #fff; padding: 16px; }
+    button.secondary { background: #fff; color: var(--ink); border-color: #b8c3d2; }
+    input { width: 100%; border: 1px solid #b8c3d2; border-radius: 7px; padding: 8px 10px; background: #fff; color: inherit; }
+    textarea { width: 100%; min-height: 92px; resize: vertical; border: 1px solid #b8c3d2; border-radius: 8px; padding: 10px; background: #fff; color: inherit; }
+    .muted { color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .header-title { display: grid; gap: 4px; min-width: 0; }
+    .eyebrow { color: var(--teal); font-size: 12px; font-weight: 800; }
+    .resident-shell { display: grid; grid-template-columns: auto repeat(3, minmax(112px, 1fr)) auto; align-items: center; gap: 10px; min-width: 0; }
+    .resident-heading { color: var(--muted); font-size: 12px; font-weight: 800; }
+    .resident-item { display: grid; gap: 2px; min-width: 0; padding: 8px 10px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--panel-soft); }
+    .resident-label { color: var(--muted); font-size: 11px; }
+    .resident-value { overflow: hidden; color: var(--ink); font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    .cockpit { display: grid; grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) minmax(300px, 360px); gap: 18px; max-width: 1500px; margin: 0 auto; padding: 18px 24px 28px; }
+    .desk-sidebar, .desk-rail { align-self: start; position: sticky; top: 86px; max-height: calc(100vh - 104px); overflow: auto; }
+    .panel { min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 16px; }
+    .panel.tight { padding: 14px; }
+    .panel-subtitle { color: var(--muted); font-size: 12px; font-weight: 700; }
+    .section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
     .stack { display: grid; gap: 12px; }
     .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-    .book { display: grid; gap: 4px; padding: 10px; border: 1px solid #e5e9f0; border-radius: 7px; background: #fafbfc; }
-    .book.current { border-color: #1f5eff; background: #eef4ff; }
-    .book-title { font-weight: 600; }
-    .next-action { display: grid; gap: 8px; }
+    .book { display: grid; gap: 4px; padding: 10px; border: 1px solid var(--line-soft); border-radius: 7px; background: var(--panel-soft); }
+    .book.current { border-color: #9bb9ff; background: var(--accent-soft); }
+    .book-title { font-weight: 800; }
+    .next-action { display: grid; gap: 8px; padding: 12px; border: 1px solid #b8d6d0; border-radius: 8px; background: var(--teal-soft); }
     .workspace { display: grid; gap: 16px; }
-    .current-book { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .current-book { display: grid; gap: 14px; border-color: #cbd8f5; background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%); }
+    .current-book .book-title { font-size: 20px; }
+    .context-copy { display: grid; gap: 8px; }
+    .context-actions { justify-content: flex-start; }
     .quality-loop { display: grid; gap: 12px; }
-    .next-chapter-card, .preview-card { display: grid; gap: 8px; padding: 12px; border: 1px solid #d9dee7; border-radius: 7px; background: #fafbfc; }
+    .next-chapter-card, .preview-card { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line-soft); border-radius: 7px; background: var(--panel-soft); }
+    .chapter-panel { padding: 0; overflow: hidden; }
+    .chapter-head { padding: 14px 16px; border-bottom: 1px solid var(--line-soft); background: #fff; }
     .style-profile { display: grid; gap: 8px; }
-    .style-extract { display: grid; gap: 8px; padding-top: 8px; border-top: 1px solid #e5e9f0; }
+    .style-extract { display: grid; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line-soft); }
     .style-actions { display: grid; gap: 8px; }
-    .profile-option { display: grid; gap: 6px; padding: 10px; border: 1px solid #e5e9f0; border-radius: 7px; background: #fafbfc; }
+    .profile-option { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--line-soft); border-radius: 7px; background: var(--panel-soft); }
     .stage-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-    .stage-pill { display: inline-flex; align-items: center; border: 1px solid #d9dee7; border-radius: 999px; padding: 5px 9px; background: #fff; color: #344054; font-size: 12px; font-weight: 600; }
+    .stage-pill { display: inline-flex; align-items: center; min-height: 28px; border: 1px solid var(--line); border-radius: 999px; padding: 5px 9px; background: #fff; color: #344054; font-size: 12px; font-weight: 700; }
     .stage-pill.done { border-color: #98d7aa; background: #edf8f0; color: #176b37; }
-    .stage-pill.next { border-color: #91b5ff; background: #eef4ff; color: #1f4fbf; }
-    .stage-pill.missing { border-color: #f2b3b3; background: #fff1f1; color: #9a2a2a; }
-    .stage-pill.optional { border-color: #d9dee7; background: #f5f7fb; color: #667085; }
-    .signal-danger { color: #9a2a2a; font-weight: 700; }
-    .signal-warning { color: #946200; font-weight: 700; }
-    .signal-ok { color: #176b37; font-weight: 700; }
-    .chapter { min-height: 280px; max-height: 58vh; overflow: auto; white-space: pre-wrap; line-height: 1.7; }
-    .chat-log { min-height: 260px; max-height: 44vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; white-space: pre-wrap; }
-    .msg { padding: 10px 12px; border: 1px solid #d9dee7; border-radius: 8px; background: #fff; }
-    .me { align-self: flex-end; max-width: 86%; background: #eaf2ff; }
+    .stage-pill.next { border-color: #91b5ff; background: var(--accent-soft); color: #1f4fbf; }
+    .stage-pill.missing { border-color: #f2b3b3; background: var(--danger-soft); color: var(--danger); }
+    .stage-pill.optional { border-color: var(--line); background: var(--bg); color: var(--muted); }
+    .signal-danger { color: var(--danger); font-weight: 800; }
+    .signal-warning { color: var(--amber); font-weight: 800; }
+    .signal-ok { color: #176b37; font-weight: 800; }
+    .chapter { min-height: 420px; max-height: 58vh; overflow: auto; white-space: pre-wrap; line-height: 1.78; padding: 18px; font-size: 15px; }
+    .assistant-panel { border-color: #cbd8f5; }
+    .assistant-input { display: grid; gap: 8px; }
+    .assistant-quick-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .quick-action { min-height: 34px; padding: 7px 9px; border-color: #b8c3d2; background: #fff; color: var(--ink); font-size: 12px; }
+    .chat-log { min-height: 220px; max-height: 38vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; white-space: pre-wrap; }
+    .msg { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; line-height: 1.5; }
+    .me { align-self: flex-end; max-width: 88%; background: var(--accent-soft); }
     .assistant { align-self: flex-start; max-width: 86%; }
-    .error { border-color: #f1b8b8; background: #fff1f1; }
-    .job { display: grid; gap: 4px; padding: 10px; border: 1px solid #e5e9f0; border-radius: 7px; background: #fafbfc; }
-    .job-top { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 600; }
-    @media (max-width: 1100px) {
+    .error { border-color: #f1b8b8; background: var(--danger-soft); }
+    .job { display: grid; gap: 4px; padding: 10px; border: 1px solid var(--line-soft); border-radius: 7px; background: var(--panel-soft); }
+    .job-top { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 800; }
+    .phase-note { display: grid; gap: 4px; margin-top: 4px; padding: 8px 9px; border-left: 3px solid var(--teal); border-radius: 6px; background: #fff; }
+    .phase-note-title { color: var(--ink); font-size: 12px; font-weight: 800; }
+    .phase-note-body { color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .recovery-actions button { min-height: 34px; }
+    @media (max-width: 1180px) {
       header { align-items: flex-start; grid-template-columns: 1fr; }
-      .resident-shell { justify-content: flex-start; }
+      .resident-shell { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .resident-heading { grid-column: 1 / -1; }
       .cockpit { grid-template-columns: 1fr; padding: 14px; }
+      .desk-sidebar, .desk-rail { position: static; max-height: none; overflow: visible; }
       .chapter, .chat-log { max-height: none; }
     }
   </style>
@@ -70,7 +109,8 @@
 <body>
   <header>
     <div class="header-title">
-      <h1>AuthorOS Personal Cockpit</h1>
+      <span class="eyebrow">个人写作桌面</span>
+      <h1>AuthorOS</h1>
       <span id="sessionStatus" class="muted" data-testid="session-status">正在检查会话...</span>
     </div>
     <section class="resident-shell" data-testid="resident-shell" aria-label="常驻会话">
@@ -90,36 +130,62 @@
       <button class="secondary" id="resumeSession" disabled>恢复现场</button>
     </section>
   </header>
-  <main class="cockpit">
-    <aside class="panel stack" aria-label="书架">
-      <section>
-        <h2>书架</h2>
-        <div id="books" class="stack muted">加载中...</div>
+  <main class="cockpit writing-desk" data-testid="writing-desk">
+    <aside class="desk-sidebar stack" data-testid="desk-sidebar" aria-label="创作导航">
+      <section class="panel stack">
+        <div class="section-head">
+          <div>
+            <span class="panel-subtitle">工作流</span>
+            <h2>创作导航</h2>
+          </div>
+        </div>
+        <section class="next-action">
+          <h3>下一步</h3>
+          <button id="nextAction" data-testid="next-action" disabled>加载中...</button>
+          <div id="nextActionHint" class="muted">我会根据当前书籍状态推荐动作。</div>
+        </section>
       </section>
-      <section class="next-action">
-        <h2>下一步</h2>
-        <button id="nextAction" data-testid="next-action" disabled>加载中...</button>
-        <div id="nextActionHint" class="muted">我会根据当前书籍状态推荐动作。</div>
+      <section class="panel stack" aria-label="书架">
+        <div class="section-head">
+          <div>
+            <span class="panel-subtitle">作品</span>
+            <h2>书架</h2>
+          </div>
+        </div>
+        <div id="books" class="stack muted">加载中...</div>
       </section>
     </aside>
 
-    <section class="workspace">
-      <div class="panel current-book">
-        <div>
-          <h2>工作区当前创作现场</h2>
+    <section class="workspace desk-main" data-testid="desk-main">
+      <section class="panel current-book book-context-card" data-testid="book-context-card">
+        <div class="context-copy">
+          <span class="panel-subtitle">今日写作台</span>
+          <h2>创作现场</h2>
           <div id="currentBookTitle" class="book-title">还没有当前书。</div>
           <div id="currentBookMeta" class="muted">开一本新书后，这里会显示创作状态。</div>
         </div>
-        <div class="row">
+        <div class="row context-actions">
           <button class="secondary" id="refresh">刷新</button>
           <button class="secondary" id="readLatest">读最新章</button>
           <button class="secondary" id="downloadChapter">下载当前章</button>
           <button class="secondary" id="downloadAll">下载全部章节</button>
         </div>
-      </div>
+      </section>
+      <section class="panel chapter-panel">
+        <div class="section-head chapter-head">
+          <div>
+            <span class="panel-subtitle">正文</span>
+            <h2>当前章节</h2>
+          </div>
+        </div>
+        <article class="chapter" id="chapter" data-testid="chapter-reader">还没有读取章节。</article>
+      </section>
       <section class="panel quality-loop" data-testid="quality-loop" aria-label="质量环路">
-        <div>
-          <h2>质量环路</h2>
+        <div class="section-head">
+          <div>
+            <span class="panel-subtitle">章节生产线</span>
+            <h2>质量环路</h2>
+          </div>
           <div id="qualitySignal" class="muted">加载质量环路...</div>
         </div>
         <div id="nextChapterCard" class="next-chapter-card" data-testid="next-chapter-card"></div>
@@ -128,13 +194,35 @@
         <div id="memoryReview" class="preview-card"></div>
         <div id="recoveryHint" class="preview-card"></div>
       </section>
-      <h2>当前章节</h2>
-      <article class="panel chapter" id="chapter" data-testid="chapter-reader">还没有读取章节。</article>
     </section>
 
-    <aside class="stack">
+    <aside class="desk-rail stack" data-testid="desk-rail">
+      <section class="panel assistant-panel stack" data-testid="assistant-panel" aria-label="作者助理">
+        <div class="section-head">
+          <div>
+            <span class="panel-subtitle">常驻搭档</span>
+            <h2>作者助理</h2>
+          </div>
+        </div>
+        <div id="chatLog" class="chat-log" data-testid="assistant-chat"></div>
+        <div class="assistant-quick-actions" data-testid="assistant-quick-actions" aria-label="作者助理快捷动作">
+          <button class="quick-action" type="button" data-message="帮我继续推进当前书">继续推进</button>
+          <button class="quick-action" type="button" data-message="读最新章">读最新章</button>
+          <button class="quick-action" type="button" data-message="帮这一章去 AI 味">去 AI 味</button>
+          <button class="quick-action" type="button" data-message="仿写文风处理这一章">仿写文风</button>
+        </div>
+        <div class="assistant-input">
+          <textarea id="message" placeholder="开一本新书、继续写、读最新章，或直接说哪里要改"></textarea>
+          <button id="send">发送</button>
+        </div>
+      </section>
       <section class="panel style-profile" data-testid="style-profile" aria-label="文风档案">
-        <h2>文风档案</h2>
+        <div class="section-head">
+          <div>
+            <span class="panel-subtitle">文风档案</span>
+            <h2>文风与资产</h2>
+          </div>
+        </div>
         <div id="styleProfileStatus" class="book-title">尚未绑定文风</div>
         <div id="styleGenerationStatus" class="muted">生成接入：检查中...</div>
         <div id="styleGenerationDetail" class="muted"></div>
@@ -153,13 +241,12 @@
         <div id="styleProfileActions" class="style-actions"></div>
       </section>
       <section class="panel stack">
-        <h2>作者助理</h2>
-        <div id="chatLog" class="chat-log" data-testid="assistant-chat"></div>
-        <textarea id="message" placeholder="开一本新书、继续写、读最新章，或直接说哪里要改"></textarea>
-        <button id="send">发送</button>
-      </section>
-      <section class="panel stack">
-        <h2>任务中心</h2>
+        <div class="section-head">
+          <div>
+            <span class="panel-subtitle">运行记录</span>
+            <h2>任务中心</h2>
+          </div>
+        </div>
         <div id="taskCenter" class="stack muted" data-testid="task-center">还没有任务。</div>
       </section>
     </aside>
@@ -197,6 +284,8 @@
     const roomPrefix = (location.pathname.match(/^\/room\/[^/]+/) || [''])[0];
     const tokenKey = `authoros_token:${roomPrefix || 'single'}`;
     const activeStyleHintPrefix = '下一章将使用文风';
+    const announcedProgressEvents = new Set();
+    const watchedJobActions = new Map();
     let token = sessionStorage.getItem(tokenKey) || '';
     let cockpit = null;
 
@@ -224,6 +313,18 @@
       div.textContent = text;
       chatLog.appendChild(div);
       chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    function renderAssistantWelcome() {
+      if (chatLog.children.length > 0) return;
+      addMessage([
+        '我在这儿，直接说你想推进哪一步。',
+        '可以开新书、继续写、读最新章，也可以把卡住的感觉丢给我，我会先收窄成一个可执行动作。',
+      ].join('\n'));
+    }
+
+    function quickActionMessage(button) {
+      return button.dataset.message || button.textContent.trim();
     }
 
     async function loginIfNeeded() {
@@ -592,7 +693,126 @@
       const suggestion = document.createElement('div');
       suggestion.className = 'muted';
       suggestion.textContent = failure.next;
+      const actions = renderRecoveryActions(recovery, failure);
       recoveryHint.append(title, message, detail, suggestion);
+      if (actions) recoveryHint.appendChild(actions);
+    }
+
+    function renderRecoveryActions(recovery, failure) {
+      const actions = recoveryActions(recovery, failure);
+      if (actions.length === 0) return null;
+      const row = document.createElement('div');
+      row.className = 'recovery-actions';
+      for (const action of actions) {
+        const button = document.createElement('button');
+        button.className = action.primary ? '' : 'secondary';
+        button.type = 'button';
+        button.textContent = action.label;
+        button.dataset.recoveryAction = action.type;
+        if (action.message) button.dataset.message = action.message;
+        button.addEventListener('click', () => handleRecoveryAction(button));
+        row.appendChild(button);
+      }
+      return row;
+    }
+
+    function recoveryActions(recovery, failure) {
+      const serverActions = Array.isArray(recovery && recovery.actions)
+        ? recovery.actions.map(normalizeRecoveryAction).filter(Boolean)
+        : [];
+      if (serverActions.length > 0) return serverActions;
+
+      const actions = [];
+      const retryMessage = retryMessageForAction(recovery && recovery.action);
+      if (retryMessage) actions.push({ label: '一键重试', type: 'send', message: retryMessage, primary: true });
+      if (shouldShowModelConfigAction(failure)) actions.push({ label: '检查模型配置', type: 'model_config' });
+      actions.push({ label: '读最新章', type: 'read_latest' });
+      actions.push({ label: '回到当前书', type: 'resume' });
+      return actions;
+    }
+
+    function normalizeRecoveryAction(action) {
+      if (!action || typeof action !== 'object') return null;
+      const allowed = ['send', 'model_config', 'read_latest', 'resume'];
+      if (!allowed.includes(action.type) || typeof action.label !== 'string') return null;
+      const normalized = { type: action.type, label: action.label };
+      if (typeof action.message === 'string' && action.message.trim()) normalized.message = action.message;
+      if (action.primary === true) normalized.primary = true;
+      return normalized;
+    }
+
+    function retryMessageForAction(action) {
+      const messages = {
+        continue_book: '继续写',
+        read_chapter: '读最新章',
+        feedback_apply: '确认应用修改',
+        style_rewrite_preview: '帮这一章去 AI 味',
+        style_rewrite_apply: '应用文风修改',
+        download_current_chapter: '下载这一章',
+        download_all_chapters: '下载全部章节',
+        status: '检查状态',
+      };
+      return messages[action] || '';
+    }
+
+    function shouldShowModelConfigAction(failure) {
+      if (!failure || !failure.kind) return true;
+      return ['model_config', 'network', 'model_timeout', 'model_length', 'unknown'].includes(failure.kind);
+    }
+
+    function handleRecoveryAction(button) {
+      const action = button.dataset.recoveryAction;
+      const message = button.dataset.message || '';
+      if (action === 'send' && message) {
+        sendMessage(message).catch(error => addMessage(`重试失败：${error.message}`, false, true));
+        return;
+      }
+      if (action === 'model_config') {
+        showModelConfigAdvice();
+        return;
+      }
+      if (action === 'read_latest') {
+        addMessage('我先帮你读最新章，确认当前正文状态。');
+        loadLatestChapter(true).catch(error => addMessage(`读取失败：${error.message}`, false, true));
+        return;
+      }
+      if (action === 'resume') {
+        resumeCurrentSession().catch(error => addMessage(`恢复失败：${error.message}`, false, true));
+      }
+    }
+
+    function showModelConfigAdvice() {
+      const model = cockpit && cockpit.model ? cockpit.model : {};
+      addMessage([
+        '正在检查模型配置...',
+        `模型：${model.model || '默认模型'}`,
+        `API key：${model.apiKeySet ? '已配置' : '未配置'}`,
+        `Base URL：${model.baseUrl || '默认'}`,
+      ].join('\n'));
+      api('/api/model/doctor')
+        .then(result => addMessage(formatModelDoctor(result)))
+        .catch(error => addMessage(`模型配置检查失败：${error.message}`, false, true));
+    }
+
+    function formatModelDoctor(result) {
+      const doctor = result && result.doctor ? result.doctor : {};
+      const scope = result && result.scope ? result.scope : {};
+      const blockers = Array.isArray(doctor.blockers) ? doctor.blockers.filter(Boolean) : [];
+      const scopeLabel = scope.kind === 'current_book'
+        ? `当前书：${scope.label || scope.bookId || '未命名'}`
+        : scope.label || '个人根目录';
+      return [
+        '模型配置检查结果',
+        `范围：${scopeLabel}`,
+        `状态：${doctor.ready ? '可以调用模型' : '还缺配置'}`,
+        `API key env：${doctor.apiKeyEnv || 'OPENAI_API_KEY'}（${doctor.apiKeySet ? '已设置' : '未设置'}）`,
+        `Base URL：${doctor.baseUrl || '默认'}`,
+        `模型：${doctor.model || '未设置'}`,
+        blockers.length > 0 ? `阻塞项：\n- ${blockers.join('\n- ')}` : '阻塞项：无',
+        doctor.ready
+          ? '下一步：可以直接一键重试。'
+          : '下一步：补齐上面的阻塞项后，再回到失败恢复里重试。',
+      ].join('\n');
     }
 
     function deriveBooklessRecovery(jobs) {
@@ -742,9 +962,72 @@
         const message = document.createElement('div');
         message.className = 'muted';
         message.textContent = last ? last.message : '等待事件。';
+        const phaseNote = renderPhaseNote(last, job.action);
         item.append(top, message);
+        if (phaseNote) item.appendChild(phaseNote);
         taskCenter.appendChild(item);
       }
+    }
+
+    function renderPhaseNote(event, action) {
+      const explanation = phaseExplanation(event && event.type, action);
+      if (!explanation) return null;
+      const note = document.createElement('div');
+      note.className = 'phase-note';
+      const title = document.createElement('div');
+      title.className = 'phase-note-title';
+      title.textContent = explanation.title;
+      const body = document.createElement('div');
+      body.className = 'phase-note-body';
+      body.textContent = [explanation.detail, explanation.next ? `下一步：${explanation.next}` : ''].filter(Boolean).join('\n');
+      note.append(title, body);
+      return note;
+    }
+
+    function phaseExplanation(phase, action) {
+      const explanations = {
+        received: {
+          title: '我已经接住这个任务',
+          detail: '我会先判断它属于开书、续写、读章还是改稿，再进入对应流程。',
+          next: '如果任务需要模型，会马上进入设定、规划或预览阶段。',
+        },
+        setup: {
+          title: '我正在建立这本书的底盘',
+          detail: '这一步会整理作品定位、世界观、人物关系和大纲。底盘稳，后面的章节才不容易散。',
+          next: action === 'create_book_and_continue' ? '设定完成后会继续规划并写第 1 章。' : '完成后你可以检查书的方向，再决定是否继续写。',
+        },
+        planning: {
+          title: '我正在把下一章拆成可写的节拍',
+          detail: '这一步会把剧情推进、冲突变化和结尾钩子先排清楚，再交给正文生成。',
+          next: '规划完成后会进入正文生成，完成时我会自动读出最新章。',
+        },
+        revision_preview: {
+          title: '我正在做一版可确认的修改预览',
+          detail: '正文现在不会被覆盖。我会先把你的反馈转成预览，等你确认后才应用。',
+          next: '看完预览后，可以说“确认应用修改”。',
+        },
+        applying: {
+          title: '我正在把已确认的修改写回正文',
+          detail: '这一步会读取待确认预览，并把确认过的版本应用到当前章。',
+          next: '完成后我会刷新章节，你可以直接读新版本。',
+        },
+        style_check: {
+          title: '我正在按绑定文风做一版改写预览',
+          detail: '这一步会处理仿写文风、去 AI 味或文风润色，但仍然先生成预览。',
+          next: '满意后再说“应用文风修改”。',
+        },
+        style_apply: {
+          title: '我正在把文风预览写回正文',
+          detail: '这一步会检查预览是否仍对应当前章，避免覆盖掉你后来改过的内容。',
+          next: '完成后可以读最新章，确认风格是否贴近。',
+        },
+        interrupted: {
+          title: '任务被中断了',
+          detail: '通常是服务重启或页面连接断开导致。已经生成的文件不会被我随便覆盖。',
+          next: '恢复现场后，可以按失败提示重试上一步。',
+        },
+      };
+      return explanations[phase] || null;
     }
 
     function announceJobCompletion(event) {
@@ -768,11 +1051,29 @@
       ].filter(Boolean).join('\n'), false, true);
     }
 
+    function announceJobProgress(jobId, event, action) {
+      if (!event || event.type === 'received' || event.type === 'completed' || event.type === 'failed') return;
+      const key = `${jobId}:${event.type}:${event.at || ''}`;
+      if (announcedProgressEvents.has(key)) return;
+      const explanation = phaseExplanation(event.type, action);
+      if (!explanation) return;
+      announcedProgressEvents.add(key);
+      addMessage([
+        '进行中',
+        explanation.title,
+        explanation.detail,
+        explanation.next ? `下一步：${explanation.next}` : '',
+      ].filter(Boolean).join('\n'));
+    }
+
     async function sendMessage(message) {
       addMessage(message, true);
       const result = await api('/api/chat', { method: 'POST', body: JSON.stringify({ message }) });
       addMessage(result.message || '已收到。');
-      if (result.jobId) watchJob(result.jobId);
+      if (result.jobId) {
+        watchedJobActions.set(result.jobId, result.action);
+        watchJob(result.jobId);
+      }
       await refreshJobs();
     }
 
@@ -816,12 +1117,19 @@
           } else {
             announceJobFailure(data);
           }
+        } else {
+          announceJobProgress(id, data, watchedJobActions.get(id));
         }
       };
       events.onerror = () => events.close();
     }
 
     document.querySelector('#send').addEventListener('click', send);
+    for (const button of document.querySelectorAll('[data-message]')) {
+      button.addEventListener('click', () => {
+        sendMessage(quickActionMessage(button)).catch(error => addMessage(`失败：${error.message}`, false, true));
+      });
+    }
     resumeSession.addEventListener('click', () => resumeCurrentSession().catch(error => addMessage(`恢复失败：${error.message}`, false, true)));
     messageInput.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) send();
@@ -836,7 +1144,11 @@
     document.querySelector('#extractStyleAndBind').addEventListener('click', () => extractStyleFromCockpit(true));
     document.querySelector('#extractStyleOnly').addEventListener('click', () => extractStyleFromCockpit(false));
     loginIfNeeded()
-      .then(ready => ready ? loadCockpit() : undefined)
+      .then(ready => {
+        if (!ready) return undefined;
+        renderAssistantWelcome();
+        return loadCockpit();
+      })
       .catch(error => {
         sessionStatus.textContent = `加载失败：${error.message}`;
         addMessage(`加载失败：${error.message}`, false, true);
