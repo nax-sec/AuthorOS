@@ -89,12 +89,12 @@ export function createJobStore(opts: CreateJobStoreOptions = {}): JobStore {
       jobs.set(job.id, job);
       push(job, 'received', message);
       notifyChange();
-      return job;
+      return cloneJob(job);
     },
     append(id, type, message, data) {
       const job = push(requireJob(id), type, message, data);
       notifyChange();
-      return job;
+      return cloneJob(job);
     },
     complete(id, result) {
       const job = requireJob(id);
@@ -102,7 +102,7 @@ export function createJobStore(opts: CreateJobStoreOptions = {}): JobStore {
       job.result = result;
       push(job, 'completed', '完成', result);
       notifyChange();
-      return job;
+      return cloneJob(job);
     },
     fail(id, message) {
       const job = requireJob(id);
@@ -110,7 +110,7 @@ export function createJobStore(opts: CreateJobStoreOptions = {}): JobStore {
       job.error = message;
       push(job, 'failed', message);
       notifyChange();
-      return job;
+      return cloneJob(job);
     },
     get(id) {
       const job = jobs.get(id);

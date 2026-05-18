@@ -95,3 +95,31 @@ test('job store calls onChange after mutations', () => {
     ['job-1:completed'],
   ]);
 });
+
+test('job store mutation methods return clones', () => {
+  const jobs = createJobStore({ now: () => new Date('2026-05-14T10:00:00Z') });
+  const fakeEvent = {
+    type: 'fake',
+    message: 'should not leak',
+    at: '2026-05-14T10:30:00.000Z',
+  };
+
+  const created = jobs.createJob('continue_book', '开始写下一章');
+  created.events.push(fakeEvent);
+
+  const appended = jobs.append(created.id, 'planning', '正在规划章节');
+  appended.events.push(fakeEvent);
+
+  const completed = jobs.complete(created.id, { chapter: 1 });
+  completed.events.push(fakeEvent);
+
+  const failed = jobs.fail(created.id, 'retry later');
+  failed.events.push(fakeEvent);
+
+  assert.deepEqual(jobs.get(created.id)?.events.map((event) => event.type), [
+    'received',
+    'planning',
+    'completed',
+    'failed',
+  ]);
+});
