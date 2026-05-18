@@ -84,3 +84,47 @@ test('cockpit overview detects pending feedback', async () => {
     assert.equal(overview.nextAction.kind, 'apply_feedback');
   });
 });
+
+test('cockpit overview resolves model status from the current book directory', async () => {
+  await withTempRoot(async (root) => {
+    await writeBook(root);
+    await mkdir(join(root, 'books/demo/.authoros'), { recursive: true });
+    await writeFile(join(root, 'books/demo/.authoros/model.json'), JSON.stringify({
+      provider: 'openai_compatible',
+      model: 'book-model',
+    }), 'utf8');
+
+    const overview = await getCockpitOverview(root, {
+      AUTHOROS_MODEL: 'root-model',
+    }, createJobStore());
+
+    assert.equal(overview.model.model, 'book-model');
+  });
+});
+
+test('cockpit overview continues at the first missing draft chapter', async () => {
+  await withTempRoot(async (root) => {
+    await writeBook(root);
+    await writeFile(join(root, 'books/demo/plans/0002.md'), 'plan two', 'utf8');
+    await writeFile(join(root, 'books/demo/plans/0003.md'), 'plan three', 'utf8');
+    await writeFile(join(root, 'books/demo/chapters/0003.md'), 'chapter three body', 'utf8');
+
+    const overview = await getCockpitOverview(root, {}, createJobStore());
+
+    assert.equal(overview.nextAction.kind, 'continue_book');
+    assert.equal(overview.nextAction.chapter, 2);
+  });
+});
+
+test('cockpit overview handles current book with no drafted chapters', async () => {
+  await withTempRoot(async (root) => {
+    await writeBook(root);
+    await rm(join(root, 'books/demo/chapters/0001.md'));
+
+    const overview = await getCockpitOverview(root, {}, createJobStore());
+
+    assert.equal(overview.current?.latestChapter, null);
+    assert.equal(overview.nextAction.kind, 'continue_book');
+    assert.equal(overview.nextAction.chapter, 1);
+  });
+});

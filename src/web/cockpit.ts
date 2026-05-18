@@ -27,8 +27,7 @@ export interface CockpitLatestChapter {
 export type CockpitNextAction =
   | { kind: 'new_book'; label: string; message: string }
   | { kind: 'apply_feedback'; label: string; message: string }
-  | { kind: 'continue_book'; label: string; message: string; chapter: number }
-  | { kind: 'read_latest'; label: string; message: string; chapter: number };
+  | { kind: 'continue_book'; label: string; message: string; chapter: number };
 
 export async function getCockpitOverview(
   root: string,
@@ -36,8 +35,8 @@ export async function getCockpitOverview(
   jobs: JobStore,
 ): Promise<CockpitOverview> {
   const shelf = await listPrivateBooks(root);
-  const model = await resolveProjectModelConfig(root, env);
   if (!shelf.current) {
+    const model = await resolveProjectModelConfig(root, env);
     return {
       books: shelf.books.map(bookSummary),
       current: null,
@@ -52,6 +51,7 @@ export async function getCockpitOverview(
   }
 
   const status = await getPrivateStatus(root);
+  const model = await resolveProjectModelConfig(join(root, status.book.path), env);
   const latestChapter = await tryLatestChapter(root);
   const pendingFeedback = await fileExists(join(root, status.book.path, '.authoros/private/pending-feedback.json'));
   return {
@@ -114,7 +114,7 @@ function deriveNextAction(
     };
   }
   if (latestChapter !== null) {
-    const next = Math.max(state.nextDraftChapter, latestChapter + 1);
+    const next = state.nextDraftChapter;
     return {
       kind: 'continue_book',
       label: `继续写第 ${next} 章`,
