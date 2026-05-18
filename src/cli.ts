@@ -36,7 +36,9 @@ import { createChapterDecision, renderDecideResult } from './commands/decide.ts'
 import {
   createMemoryUpdate,
   listMemoryDeltas,
+  mergeMemoryDelta,
   renderMemoryDeltas,
+  renderMergeMemoryDeltaResult,
   renderMemoryUpdateResult,
   showMemoryDelta,
 } from './commands/memory.ts';
@@ -750,6 +752,12 @@ async function runMemory(args: string[], cwd: string, io: Io, options: RunOption
       if (!name) throw new AuthorOsError('author memory deltas show requires a delta file name.');
       if (extra.length > 0) throw new AuthorOsError('author memory deltas show accepts exactly one delta file name.');
       io.stdout(await showMemoryDelta(cwd, name));
+      return 0;
+    }
+    if (action === 'merge') {
+      if (!name) throw new AuthorOsError('author memory deltas merge requires a delta file name.');
+      if (extra.length > 0) throw new AuthorOsError('author memory deltas merge accepts exactly one delta file name.');
+      io.stdout(renderMergeMemoryDeltaResult(await mergeMemoryDelta(cwd, name, { now: options.now })));
       return 0;
     }
     throw new AuthorOsError(`Unknown memory deltas action: ${action}`);
@@ -1837,13 +1845,14 @@ function memoryHelpText(): string {
     '  author memory update --chapter 1 --model --write',
     '  author memory deltas',
     '  author memory deltas show <name>',
+    '  author memory deltas merge <name>',
     '',
     'Outputs memory/chapter-NNNN.delta.md with proposed changes to:',
     '  canon / foreshadowing / plot_threads / character_state / style',
     'Use `author memory deltas` to list pending console/chapter delta proposals.',
     '',
-    'The delta file is a proposal; you merge changes into memory/* manually.',
-    'AuthorOS v1 intentionally does not auto-edit canon or YAMLs.',
+    '`author memory deltas merge <name>` semi-automatically writes parsed sections into memory files,',
+    'archives the original delta in memory/canon.md, and keeps YAML writes as valid comments.',
     '',
     'Options:',
     '  --chapter <N>      Required',

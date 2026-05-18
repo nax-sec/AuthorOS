@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../src/cli.ts';
-import { listMemoryDeltas, markMemoryDeltaReviewed } from '../src/commands/memory.ts';
+import { listMemoryDeltas, markMemoryDeltaReviewed, mergeMemoryDelta } from '../src/commands/memory.ts';
 
 async function withBook(body: (bookDir: string) => Promise<void>): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), 'authoros-memory-deltas-'));
@@ -107,5 +107,73 @@ test('marking a memory delta reviewed archives its content and removes it from p
     assert.equal(second.alreadyReviewed, true);
     assert.equal((canonAfterSecondMark.match(/### chapter-0001\.delta\.md/g) ?? []).length, 1);
     assert.equal((canonAfterSecondMark.match(/reviewed: chapter-0001\.delta\.md/g) ?? []).length, 1);
+  });
+});
+
+test('merging a memory delta splits sections into memory files and archives the source', async () => {
+  await withBook(async (bookDir) => {
+    await mkdir(join(bookDir, 'memory'), { recursive: true });
+    await writeFile(join(bookDir, 'memory/chapter-0001.delta.md'), [
+      '# 章节 1 记忆更新建议',
+      '',
+      '## canon (新增 / 变更)',
+      '- 能力代价已确认',
+      '',
+      '## foreshadowing (新增 / 推进 / 回收)',
+      '- H001.status -> advanced',
+      '',
+      '## plot_threads (状态推进)',
+      '- T001.current_stage -> 初次觉醒',
+      '',
+      '## character_state (变化)',
+      '- protagonist.ability_state -> 初次觉醒',
+      '',
+      '## style (规则增 / 禁)',
+      '- 避免章尾总结式抒情',
+      '',
+    ].join('\n'), 'utf8');
+
+    const result = await mergeMemoryDelta(bookDir, 'chapter-0001.delta.md', {
+      now: new Date('2026-05-19T10:00:00Z'),
+    });
+    const canon = await readFile(join(bookDir, 'memory/canon.md'), 'utf8');
+    const foreshadowing = await readFile(join(bookDir, 'memory/foreshadowing.yaml'), 'utf8');
+    const plotThreads = await readFile(join(bookDir, 'memory/plot_threads.yaml'), 'utf8');
+    const characterState = await readFile(join(bookDir, 'memory/character_state.yaml'), 'utf8');
+    const style = await readFile(join(bookDir, 'memory/style.md'), 'utf8');
+    const pending = await listMemoryDeltas(bookDir);
+
+    assert.equal(result.alreadyMerged, false);
+    assert.deepEqual(result.changedFiles, [
+      'memory/canon.md',
+      'memory/foreshadowing.yaml',
+      'memory/plot_threads.yaml',
+      'memory/character_state.yaml',
+      'memory/style.md',
+    ]);
+    assert.deepEqual(result.appliedSections, {
+      canon: ['能力代价已确认'],
+      foreshadowing: ['H001.status -> advanced'],
+      plot_threads: ['T001.current_stage -> 初次觉醒'],
+      character_state: ['protagonist.ability_state -> 初次觉醒'],
+      style: ['避免章尾总结式抒情'],
+    });
+    assert.match(canon, /## 已确认设定[\s\S]*- 能力代价已确认[\s\S]*## 待确认设定/);
+    assert.match(canon, /## 变更记录[\s\S]*- merged: chapter-0001\.delta\.md at 2026-05-19T10:00:00\.000Z/);
+    assert.match(canon, /### chapter-0001\.delta\.md[\s\S]*```markdown[\s\S]*## character_state \(变化\)/);
+    assert.match(foreshadowing, /# merged: chapter-0001\.delta\.md at 2026-05-19T10:00:00\.000Z/);
+    assert.match(foreshadowing, /# - H001\.status -> advanced/);
+    assert.match(plotThreads, /# - T001\.current_stage -> 初次觉醒/);
+    assert.match(characterState, /# - protagonist\.ability_state -> 初次觉醒/);
+    assert.match(style, /## 变更记录[\s\S]*- merged: chapter-0001\.delta\.md at 2026-05-19T10:00:00\.000Z[\s\S]*  - 避免章尾总结式抒情/);
+    assert.equal(pending.some((delta) => delta.name === 'chapter-0001.delta.md'), false);
+
+    const second = await mergeMemoryDelta(bookDir, 'chapter-0001.delta.md', {
+      now: new Date('2026-05-19T10:01:00Z'),
+    });
+    const canonAfterSecondMerge = await readFile(join(bookDir, 'memory/canon.md'), 'utf8');
+
+    assert.equal(second.alreadyMerged, true);
+    assert.equal((canonAfterSecondMerge.match(/- merged: chapter-0001\.delta\.md/g) ?? []).length, 1);
   });
 });

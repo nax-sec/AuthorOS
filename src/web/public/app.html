@@ -745,12 +745,16 @@
           view.className = 'secondary';
           view.textContent = '查看记忆更新';
           view.addEventListener('click', () => loadMemoryDelta(delta.name).catch(error => addMessage(`读取记忆更新失败：${error.message}`, false, true)));
+          const merge = document.createElement('button');
+          merge.type = 'button';
+          merge.textContent = '拆分合并';
+          merge.addEventListener('click', () => mergeMemoryDelta(delta.name).catch(error => addMessage(`拆分合并失败：${error.message}`, false, true)));
           const mark = document.createElement('button');
           mark.type = 'button';
           mark.className = 'secondary';
           mark.textContent = '归档到记忆';
           mark.addEventListener('click', () => markMemoryDeltaReviewed(delta.name).catch(error => addMessage(`归档记忆更新失败：${error.message}`, false, true)));
-          item.append(meta, view, mark);
+          item.append(meta, view, merge, mark);
           memoryReview.appendChild(item);
         }
       } else {
@@ -783,6 +787,15 @@
         memoryReview.appendChild(content);
       }
       content.textContent = result.content || '这个记忆更新为空。';
+    }
+
+    async function mergeMemoryDelta(name) {
+      const result = await api(`/api/memory/deltas/${encodeURIComponent(name)}/merge`, { method: 'POST' });
+      const files = result.changedFiles && result.changedFiles.length > 0 ? `写入 ${result.changedFiles.join('、')}` : '没有新增写入';
+      addMessage(result.alreadyMerged
+        ? `记忆更新已在之前拆分合并：${result.name || name}`
+        : `已拆分合并记忆更新：${result.name || name}，${files}`);
+      await loadCockpit();
     }
 
     async function markMemoryDeltaReviewed(name) {

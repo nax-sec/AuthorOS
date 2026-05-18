@@ -607,6 +607,58 @@ test('web server marks a pending memory delta as reviewed', async () => {
   });
 });
 
+test('web server merges a pending memory delta into memory files', async () => {
+  await withTempRoot(async (root) => {
+    await writeStyleReadyBook(root);
+    await writeFile(join(root, 'books/demo/memory/chapter-0001.delta.md'), [
+      '# delta',
+      '',
+      '## canon (新增 / 变更)',
+      '- 茶杯案确认进入第二阶段',
+      '',
+      '## foreshadowing (新增 / 推进 / 回收)',
+      '- H001.status -> advanced',
+      '',
+      '## plot_threads (状态推进)',
+      '- T001.current_stage -> 追查茶杯',
+      '',
+      '## character_state (变化)',
+      '- protagonist.known_information += 茶杯线索',
+      '',
+      '## style (规则增 / 禁)',
+      '- 保持案卷冷幽默',
+    ].join('\n'), 'utf8');
+    const server = createWebServer({ root, env: {} });
+
+    const response = await server.fetch(new Request('http://local/api/memory/deltas/chapter-0001.delta.md/merge', {
+      method: 'POST',
+    }));
+    const body = await response.json();
+    const cockpit = await server.fetch(new Request('http://local/api/cockpit'));
+    const cockpitBody = await cockpit.json();
+    const canon = await readFile(join(root, 'books/demo/memory/canon.md'), 'utf8');
+    const foreshadowing = await readFile(join(root, 'books/demo/memory/foreshadowing.yaml'), 'utf8');
+    const style = await readFile(join(root, 'books/demo/memory/style.md'), 'utf8');
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.name, 'chapter-0001.delta.md');
+    assert.equal(body.alreadyMerged, false);
+    assert.deepEqual(body.changedFiles, [
+      'memory/canon.md',
+      'memory/foreshadowing.yaml',
+      'memory/plot_threads.yaml',
+      'memory/character_state.yaml',
+      'memory/style.md',
+    ]);
+    assert.match(canon, /- 茶杯案确认进入第二阶段/);
+    assert.match(canon, /- merged: chapter-0001\.delta\.md/);
+    assert.match(foreshadowing, /# - H001\.status -> advanced/);
+    assert.match(style, /  - 保持案卷冷幽默/);
+    assert.equal(cockpitBody.quality.memoryDeltas.some((delta: { name: string }) => delta.name === 'chapter-0001.delta.md'), false);
+  });
+});
+
 test('web server exposes readable quality artifact content', async () => {
   await withTempRoot(async (root) => {
     await writeStyleReadyBook(root);

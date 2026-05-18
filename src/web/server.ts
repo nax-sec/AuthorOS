@@ -29,7 +29,7 @@ import { bindStyleProfile, createStyleProfileFromText, saveStyleProfile, type St
 import { getModelDoctor, type ModelDoctorResult } from '../commands/model.ts';
 import { createChapterReview } from '../commands/review.ts';
 import { createChapterDecision } from '../commands/decide.ts';
-import { createMemoryUpdate, markMemoryDeltaReviewed, showMemoryDelta } from '../commands/memory.ts';
+import { createMemoryUpdate, markMemoryDeltaReviewed, mergeMemoryDelta, showMemoryDelta } from '../commands/memory.ts';
 import { createOpenAiCompatibleClientFromProject, type LlmClient } from '../core/llm.ts';
 import type { EnvLike } from '../core/modelConfig.ts';
 
@@ -128,6 +128,12 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
       if (memoryDeltaReviewedMatch?.[1] && request.method === 'POST') {
         const book = await getCurrentPrivateBook(root);
         const result = await markMemoryDeltaReviewed(join(root, book.path), decodeURIComponent(memoryDeltaReviewedMatch[1]));
+        return json({ ok: true, ...result });
+      }
+      const memoryDeltaMergeMatch = routePath.match(/^\/api\/memory\/deltas\/([^/]+)\/merge$/);
+      if (memoryDeltaMergeMatch?.[1] && request.method === 'POST') {
+        const book = await getCurrentPrivateBook(root);
+        const result = await mergeMemoryDelta(join(root, book.path), decodeURIComponent(memoryDeltaMergeMatch[1]));
         return json({ ok: true, ...result });
       }
       const memoryDeltaMatch = routePath.match(/^\/api\/memory\/deltas\/([^/]+)$/);
