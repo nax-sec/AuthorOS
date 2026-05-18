@@ -244,11 +244,14 @@
         nextAction.disabled = true;
         nextActionHint.textContent = '刷新后再看看。';
       }
-      renderQuality(data.quality);
+      renderQuality(data.quality, data.jobs || []);
     }
 
-    function renderQuality(quality) {
-      const signal = quality && quality.signals && quality.signals.length > 0
+    function renderQuality(quality, jobs = []) {
+      const booklessRecovery = quality ? null : deriveBooklessRecovery(jobs);
+      const signal = booklessRecovery
+        ? { kind: 'danger', label: `上次任务失败：${booklessRecovery.failedPhase}` }
+        : quality && quality.signals && quality.signals.length > 0
         ? quality.signals[0]
         : { kind: 'ok', label: '没有当前书' };
       qualitySignal.className = `signal-${signal.kind || 'ok'}`;
@@ -270,7 +273,11 @@
         nextChapterCard.append(title, meta);
         pendingPreview.textContent = '没有待确认预览。';
         memoryReview.textContent = '没有记忆更新。';
-        recoveryHint.textContent = '没有失败恢复。';
+        if (booklessRecovery) {
+          renderRecovery(booklessRecovery);
+        } else {
+          recoveryHint.textContent = '没有失败恢复。';
+        }
         return;
       }
 
@@ -321,18 +328,59 @@
       }
 
       if (quality.recovery) {
-        const title = document.createElement('div');
-        title.className = 'book-title';
-        title.textContent = `失败恢复：${quality.recovery.failedPhase}`;
-        const message = document.createElement('div');
-        message.textContent = quality.recovery.message;
-        const suggestion = document.createElement('div');
-        suggestion.className = 'muted';
-        suggestion.textContent = quality.recovery.suggestion;
-        recoveryHint.append(title, message, suggestion);
+        renderRecovery(quality.recovery);
       } else {
         recoveryHint.textContent = '没有失败恢复。';
       }
+    }
+
+    function renderRecovery(recovery) {
+      const title = document.createElement('div');
+      title.className = 'book-title';
+      title.textContent = `失败恢复：${recovery.action} · ${recovery.failedPhase}`;
+      const message = document.createElement('div');
+      message.textContent = recovery.message;
+      const suggestion = document.createElement('div');
+      suggestion.className = 'muted';
+      suggestion.textContent = recovery.suggestion;
+      recoveryHint.append(title, message, suggestion);
+    }
+
+    function deriveBooklessRecovery(jobs) {
+      const failed = (jobs || [])
+        .filter(job => job.status === 'failed')
+        .sort(compareJobsNewestFirst)[0];
+      if (!failed) return null;
+      const lastPhase = [...(failed.events || [])].reverse().find(event => event.type !== 'failed');
+
+      return {
+        action: failed.action,
+        failedPhase: lastPhase ? lastPhase.type : failed.action,
+        message: failed.error || '任务失败',
+        suggestion: recoverySuggestion(failed.action),
+      };
+    }
+
+    function compareJobsNewestFirst(a, b) {
+      const byCreatedAt = String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+      if (byCreatedAt !== 0) return byCreatedAt;
+
+      const aSequence = jobSequence(a.id);
+      const bSequence = jobSequence(b.id);
+      if (aSequence !== undefined && bSequence !== undefined) return bSequence - aSequence;
+
+      return String(b.id || '').localeCompare(String(a.id || ''));
+    }
+
+    function jobSequence(id) {
+      const match = String(id || '').match(/^job-(\d+)$/);
+      return match ? Number(match[1]) : undefined;
+    }
+
+    function recoverySuggestion(action) {
+      if (action === 'read_chapter') return '确认已有正文后，再读取最新章。';
+      if (action === 'continue_book') return '检查模型配置后，可以再次发送“继续写”。';
+      return '查看失败原因后，重新执行上一步。';
     }
 
     function renderStagePill(stage) {

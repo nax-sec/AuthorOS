@@ -18,6 +18,9 @@ test('private web app exposes personal cockpit regions', async () => {
   assert.match(html, /质量环路/);
   assert.match(html, /loadCockpit/);
   assert.match(html, /renderQuality/);
+  assert.match(html, /renderQuality\(data\.quality, data\.jobs \|\| \[\]\)/);
+  assert.match(html, /deriveBooklessRecovery/);
+  assert.match(html, /确认已有正文后，再读取最新章。/);
   assert.match(html, /renderStagePill/);
   assert.match(html, /stageStatusLabel/);
   assert.match(html, /已完成/);
