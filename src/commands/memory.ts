@@ -50,6 +50,7 @@ export interface MarkMemoryDeltaReviewedResult {
 
 const memoryAgent = 'memory-curator';
 const memoryDirectory = 'memory';
+const reviewedMemoryDeltaHeading = '## 已审阅记忆增量';
 
 export async function createMemoryUpdate(projectDir: string, options: MemoryUpdateOptions): Promise<MemoryUpdateResult> {
   const chapter = validateChapter(options.chapter);
@@ -197,8 +198,13 @@ export async function markMemoryDeltaReviewed(
 
   await mkdir(join(projectDir, memoryDirectory), { recursive: true });
   const base = canon.endsWith('\n') ? canon : `${canon}\n`;
-  const heading = base.includes('## 已审阅记忆增量') ? '' : '\n## 已审阅记忆增量\n\n';
-  await writeFile(canonPath, `${base}${heading}${marker}\n`, 'utf8');
+  let nextCanon = base;
+  if (!nextCanon.includes(reviewedMemoryDeltaHeading)) {
+    nextCanon = `${nextCanon}${nextCanon.endsWith('\n\n') ? '' : '\n'}${reviewedMemoryDeltaHeading}\n\n`;
+  } else if (!nextCanon.endsWith('\n\n')) {
+    nextCanon = `${nextCanon}\n`;
+  }
+  await writeFile(canonPath, `${nextCanon}${renderReviewedMemoryDelta(safeName, deltaContent, markedAt)}`, 'utf8');
 
   return {
     name: safeName,
@@ -207,6 +213,27 @@ export async function markMemoryDeltaReviewed(
     markedAt,
     alreadyReviewed: false,
   };
+}
+
+function renderReviewedMemoryDelta(safeName: string, deltaContent: string, markedAt: string): string {
+  const trimmed = deltaContent.trimEnd();
+  const fence = markdownFenceFor(trimmed);
+  return [
+    `### ${safeName}`,
+    '',
+    `- reviewed: ${safeName} at ${markedAt}`,
+    '',
+    `${fence}markdown`,
+    trimmed,
+    fence,
+    '',
+  ].join('\n');
+}
+
+function markdownFenceFor(content: string): string {
+  const backtickRuns = content.match(/`{3,}/g) ?? [];
+  const longestRun = backtickRuns.reduce((longest, run) => Math.max(longest, run.length), 0);
+  return '`'.repeat(Math.max(3, longestRun + 1));
 }
 
 async function generateMemoryDeltaWithModel(

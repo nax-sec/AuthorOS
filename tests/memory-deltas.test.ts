@@ -75,10 +75,14 @@ test('memory deltas show reports missing delta names clearly', async () => {
   });
 });
 
-test('marking a memory delta reviewed records a merge marker and removes it from pending list', async () => {
+test('marking a memory delta reviewed archives its content and removes it from pending list', async () => {
   await withBook(async (bookDir) => {
     await mkdir(join(bookDir, 'memory'), { recursive: true });
-    await writeFile(join(bookDir, 'memory/chapter-0001.delta.md'), '# Chapter 1 Delta\n', 'utf8');
+    await writeFile(
+      join(bookDir, 'memory/chapter-0001.delta.md'),
+      '# Chapter 1 Delta\n\n- canon: 能力代价已确认\n',
+      'utf8',
+    );
 
     const result = await markMemoryDeltaReviewed(bookDir, 'chapter-0001.delta.md', {
       now: new Date('2026-05-19T09:30:00Z'),
@@ -88,8 +92,11 @@ test('marking a memory delta reviewed records a merge marker and removes it from
 
     assert.equal(result.name, 'chapter-0001.delta.md');
     assert.equal(result.alreadyReviewed, false);
+    assert.match(canon, /## 已审阅记忆增量/);
+    assert.match(canon, /### chapter-0001\.delta\.md/);
     assert.match(canon, /reviewed: chapter-0001\.delta\.md/);
     assert.match(canon, /2026-05-19T09:30:00\.000Z/);
+    assert.match(canon, /```markdown\n# Chapter 1 Delta\n\n- canon: 能力代价已确认\n```/);
     assert.equal(pending.some((delta) => delta.name === 'chapter-0001.delta.md'), false);
 
     const second = await markMemoryDeltaReviewed(bookDir, 'chapter-0001.delta.md', {
@@ -98,6 +105,7 @@ test('marking a memory delta reviewed records a merge marker and removes it from
     const canonAfterSecondMark = await readFile(join(bookDir, 'memory/canon.md'), 'utf8');
 
     assert.equal(second.alreadyReviewed, true);
-    assert.equal((canonAfterSecondMark.match(/chapter-0001\.delta\.md/g) ?? []).length, 1);
+    assert.equal((canonAfterSecondMark.match(/### chapter-0001\.delta\.md/g) ?? []).length, 1);
+    assert.equal((canonAfterSecondMark.match(/reviewed: chapter-0001\.delta\.md/g) ?? []).length, 1);
   });
 });

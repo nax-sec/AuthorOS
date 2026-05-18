@@ -748,8 +748,8 @@
           const mark = document.createElement('button');
           mark.type = 'button';
           mark.className = 'secondary';
-          mark.textContent = '标记已合并';
-          mark.addEventListener('click', () => markMemoryDeltaReviewed(delta.name).catch(error => addMessage(`标记记忆更新失败：${error.message}`, false, true)));
+          mark.textContent = '归档到记忆';
+          mark.addEventListener('click', () => markMemoryDeltaReviewed(delta.name).catch(error => addMessage(`归档记忆更新失败：${error.message}`, false, true)));
           item.append(meta, view, mark);
           memoryReview.appendChild(item);
         }
@@ -788,8 +788,8 @@
     async function markMemoryDeltaReviewed(name) {
       const result = await api(`/api/memory/deltas/${encodeURIComponent(name)}/reviewed`, { method: 'POST' });
       addMessage(result.alreadyReviewed
-        ? `记忆更新已在之前标记为合并：${result.name || name}`
-        : `已标记记忆更新为合并：${result.name || name}`);
+        ? `记忆更新已在之前归档：${result.name || name}`
+        : `已归档记忆更新：${result.name || name}`);
       await loadCockpit();
     }
 

@@ -600,7 +600,9 @@ test('web server marks a pending memory delta as reviewed', async () => {
     assert.equal(body.ok, true);
     assert.equal(body.name, 'chapter-0001.delta.md');
     assert.equal(body.alreadyReviewed, false);
+    assert.match(canon, /### chapter-0001\.delta\.md/);
     assert.match(canon, /reviewed: chapter-0001\.delta\.md/);
+    assert.match(canon, /```markdown\n# delta\n\n- 已合并内容\n```/);
     assert.equal(cockpitBody.quality.memoryDeltas.some((delta: { name: string }) => delta.name === 'chapter-0001.delta.md'), false);
   });
 });
