@@ -12,6 +12,7 @@ export interface CockpitOverview {
     book: PrivateBook;
     state: ProjectStateResult;
     latestChapter: CockpitLatestChapter | null;
+    draftedChapters: CockpitDraftedChapter[];
     pendingFeedback: boolean;
   } | null;
   jobs: WebJob[];
@@ -77,6 +78,12 @@ export interface CockpitLatestChapter {
   excerpt: string;
 }
 
+export interface CockpitDraftedChapter {
+  chapter: number;
+  chapterId: string;
+  label: string;
+}
+
 export type CockpitNextAction =
   | { kind: 'new_book'; label: string; message: string }
   | { kind: 'apply_feedback'; label: string; message: string }
@@ -129,6 +136,7 @@ export async function getCockpitOverview(
       book: status.book,
       state: status.state,
       latestChapter,
+      draftedChapters: draftedChapters(status.state),
       pendingFeedback,
     },
     jobs: jobList,
@@ -148,6 +156,16 @@ function bookSummary(book: PrivateBook): CockpitOverview['books'][number] {
     path: book.path,
     last_active_at: book.last_active_at,
   };
+}
+
+function draftedChapters(state: ProjectStateResult): CockpitDraftedChapter[] {
+  return state.chapters
+    .filter((chapter) => chapter.draft)
+    .map((chapter) => ({
+      chapter: chapter.chapter,
+      chapterId: chapter.chapterId,
+      label: `第 ${chapter.chapter} 章`,
+    }));
 }
 
 function deriveSessionOverview(book: PrivateBook | null, jobs: readonly WebJob[]): CockpitSessionOverview {

@@ -22,6 +22,7 @@ test('private web app exposes personal cockpit regions', async () => {
   assert.match(html, /data-testid="next-chapter-card"/);
   assert.match(html, /data-testid="pending-preview"/);
   assert.match(html, /data-testid="chapter-reader"/);
+  assert.match(html, /data-testid="chapter-list"/);
   assert.match(html, /data-testid="assistant-chat"/);
   assert.match(html, /styleRewritePreview/);
   assert.match(html, /文风改写预览/);
@@ -66,7 +67,11 @@ test('private web app exposes personal cockpit regions', async () => {
   assert.match(html, /可选/);
   assert.match(html, /watchJob/);
   assert.match(html, /loadLatestChapter/);
+  assert.match(html, /renderChapterWorkbench/);
+  assert.match(html, /loadChapter/);
+  assert.match(html, /data-chapter/);
   assert.match(html, /api\('\/api\/cockpit'\)/);
+  assert.match(html, /api\(`\/api\/chapters\/\$\{chapterNumber\}`\)/);
   assert.match(html, /api\('\/api\/jobs'\)/);
   assert.match(html, /EventSource/);
   assert.match(html, /completed/);

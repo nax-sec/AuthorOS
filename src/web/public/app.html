@@ -66,6 +66,10 @@
     .next-chapter-card, .preview-card { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line-soft); border-radius: 7px; background: var(--panel-soft); }
     .chapter-panel { padding: 0; overflow: hidden; }
     .chapter-head { padding: 14px 16px; border-bottom: 1px solid var(--line-soft); background: #fff; }
+    .chapter-workbench { display: grid; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line-soft); background: var(--panel-soft); }
+    .chapter-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chapter-list button { min-height: 32px; padding: 6px 10px; }
+    .chapter-list button.active { border-color: var(--accent); background: var(--accent); color: #fff; }
     .style-profile { display: grid; gap: 8px; }
     .style-extract { display: grid; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line-soft); }
     .style-actions { display: grid; gap: 8px; }
@@ -178,6 +182,10 @@
             <h2>当前章节</h2>
           </div>
         </div>
+        <div class="chapter-workbench">
+          <div class="muted">章节工作台</div>
+          <div id="chapterList" class="chapter-list" data-testid="chapter-list">还没有已起草章节。</div>
+        </div>
         <article class="chapter" id="chapter" data-testid="chapter-reader">还没有读取章节。</article>
       </section>
       <section class="panel quality-loop" data-testid="quality-loop" aria-label="质量环路">
@@ -255,6 +263,7 @@
     const chatLog = document.querySelector('#chatLog');
     const taskCenter = document.querySelector('#taskCenter');
     const chapter = document.querySelector('#chapter');
+    const chapterList = document.querySelector('#chapterList');
     const books = document.querySelector('#books');
     const sessionStatus = document.querySelector('#sessionStatus');
     const residentService = document.querySelector('#residentService');
@@ -288,6 +297,7 @@
     const watchedJobActions = new Map();
     let token = sessionStorage.getItem(tokenKey) || '';
     let cockpit = null;
+    let activeChapter = null;
 
     function headers() {
       return { 'content-type': 'application/json', authorization: `Bearer ${token}` };
@@ -397,6 +407,7 @@
         currentBookTitle.textContent = '还没有当前书。';
         currentBookMeta.textContent = '开一本新书后，这里会显示创作状态。';
       }
+      renderChapterWorkbench(data.current);
 
       if (data.nextAction && data.nextAction.message) {
         nextAction.textContent = data.nextAction.label;
@@ -413,6 +424,25 @@
       }
       renderQuality(data.quality, data.jobs || []);
       renderStyle(data.style);
+    }
+
+    function renderChapterWorkbench(current) {
+      chapterList.innerHTML = '';
+      const drafted = current && Array.isArray(current.draftedChapters) ? current.draftedChapters : [];
+      if (drafted.length === 0) {
+        chapterList.textContent = current ? '还没有已起草章节。' : '开书后会显示章节。';
+        activeChapter = null;
+        return;
+      }
+      for (const item of drafted) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `secondary${activeChapter === item.chapter ? ' active' : ''}`;
+        button.textContent = item.label || `第 ${item.chapter} 章`;
+        button.setAttribute('data-chapter', String(item.chapter));
+        button.addEventListener('click', () => loadChapter(item.chapter, true));
+        chapterList.appendChild(button);
+      }
     }
 
     function renderResidentShell(session) {
@@ -1092,8 +1122,21 @@
       try {
         const latest = await api('/api/chapters/latest');
         chapter.textContent = latest.content || latest.excerpt || '最新章节为空。';
+        activeChapter = latest.chapter || null;
+        renderChapterWorkbench(cockpit && cockpit.current);
       } catch (error) {
         if (showErrors) chapter.textContent = `读取失败：${error.message}`;
+      }
+    }
+
+    async function loadChapter(chapterNumber, showErrors = true) {
+      try {
+        const selected = await api(`/api/chapters/${chapterNumber}`);
+        chapter.textContent = selected.content || selected.excerpt || `第 ${chapterNumber} 章为空。`;
+        activeChapter = selected.chapter || chapterNumber;
+        renderChapterWorkbench(cockpit && cockpit.current);
+      } catch (error) {
+        if (showErrors) chapter.textContent = `读取第 ${chapterNumber} 章失败：${error.message}`;
       }
     }
 

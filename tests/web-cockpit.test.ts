@@ -85,6 +85,8 @@ test('cockpit overview handles an empty bookshelf', async () => {
 test('cockpit overview reports current book latest chapter and model status', async () => {
   await withTempRoot(async (root) => {
     await writeBook(root);
+    await writeFile(join(root, 'books/demo/plans/0002.md'), 'plan two', 'utf8');
+    await writeFile(join(root, 'books/demo/chapters/0002.md'), 'chapter two body', 'utf8');
     const jobs = createJobStore({ now: () => new Date('2026-05-14T02:00:00Z') });
     const completed = jobs.createJob('continue_book', '开始写下一章');
     jobs.complete(completed.id, { chapter: 1 });
@@ -96,13 +98,17 @@ test('cockpit overview reports current book latest chapter and model status', as
     }, jobs);
 
     assert.equal(overview.current?.book.title, 'Demo Book');
-    assert.equal(overview.current?.latestChapter?.chapter, 1);
-    assert.equal(overview.current?.latestChapter?.excerpt, 'chapter one body');
+    assert.equal(overview.current?.latestChapter?.chapter, 2);
+    assert.equal(overview.current?.latestChapter?.excerpt, 'chapter two body');
+    assert.deepEqual(overview.current?.draftedChapters, [
+      { chapter: 1, chapterId: '0001', label: '第 1 章' },
+      { chapter: 2, chapterId: '0002', label: '第 2 章' },
+    ]);
     assert.equal(overview.model.apiKeySet, true);
     assert.equal(overview.model.model, 'gpt-test');
     assert.equal(overview.jobs[0].id, running.id);
     assert.equal(overview.nextAction.kind, 'continue_book');
-    assert.equal(overview.quality?.nextChapter.chapter, 2);
+    assert.equal(overview.quality?.nextChapter.chapter, 3);
     assert.equal((overview.quality?.signals[0].label.length ?? 0) > 0, true);
     assert.equal(overview.session.currentBook.label, 'Demo Book');
     assert.equal(overview.session.currentTask?.jobId, running.id);
