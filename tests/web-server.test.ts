@@ -1,9 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createWebServer } from '../src/web/server.ts';
+import { saveWebJobHistory } from '../src/web/job-persistence.ts';
+import type { WebJob } from '../src/web/jobs.ts';
 import { run } from '../src/cli.ts';
 
 async function withTempRoot(body: (root: string) => Promise<void>): Promise<void> {
@@ -13,6 +15,12 @@ async function withTempRoot(body: (root: string) => Promise<void>): Promise<void
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+}
+
+async function writeInvalidJobHistory(root: string): Promise<void> {
+  const dir = join(root, '.authoros', 'web');
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, 'jobs.json'), '{ invalid json', 'utf8');
 }
 
 test('web server blocks API requests when token is configured', async () => {
@@ -292,5 +300,68 @@ test('web server keeps room job history isolated', async () => {
 
     assert.equal((await room1.json()).jobs.length, 1);
     assert.equal((await room2.json()).jobs.length, 0);
+  });
+});
+
+test('web server marks persisted running jobs as interrupted after restart', async () => {
+  await withTempRoot(async (root) => {
+    const runningJob: WebJob = {
+      id: 'job-1',
+      action: 'continue_book',
+      status: 'running',
+      createdAt: '2026-05-18T00:00:00.000Z',
+      updatedAt: '2026-05-18T00:00:00.000Z',
+      events: [{
+        type: 'received',
+        message: '继续写',
+        at: '2026-05-18T00:00:00.000Z',
+      }],
+    };
+    saveWebJobHistory(root, [runningJob]);
+
+    const server = createWebServer({ root, agentMode: 'rule', env: {} });
+    const response = await server.fetch(new Request('http://local/api/jobs'));
+    const body = await response.json();
+    const job = body.jobs[0];
+    const lastEvent = job.events.at(-1);
+
+    assert.equal(response.status, 200);
+    assert.equal(job.status, 'failed');
+    assert.match(job.error, /interrupted|已中断/);
+    assert.match(lastEvent.type, /failed|interrupted/);
+  });
+});
+
+test('web server checks room auth before loading room job history', async () => {
+  await withTempRoot(async (root) => {
+    await writeInvalidJobHistory(join(root, 'rooms', 'room1'));
+    const server = createWebServer({
+      root,
+      env: { AUTHOROS_WEB_ROOMS: '1,2' },
+      agentMode: 'rule',
+    });
+
+    const response = await server.fetch(new Request('http://local/room/room1/api/jobs', {
+      headers: { authorization: 'Bearer wrong' },
+    }));
+
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), { error: 'access token required' });
+  });
+});
+
+test('web server does not load unscoped root job history for room-only routes', async () => {
+  await withTempRoot(async (root) => {
+    await writeInvalidJobHistory(root);
+    const server = createWebServer({
+      root,
+      env: { AUTHOROS_WEB_ROOMS: '1,2' },
+      agentMode: 'rule',
+    });
+
+    const response = await server.fetch(new Request('http://local/api/session'));
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { tokenRequired: true, rooms: true });
   });
 });

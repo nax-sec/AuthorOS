@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createWebAgentSession, handleAgentMessage, type WebAgentCommand } from './agent.ts';
-import { createJobStore } from './jobs.ts';
+import { createJobStore, type WebJob } from './jobs.ts';
 import { loadWebJobHistory, saveWebJobHistory } from './job-persistence.ts';
 import { isAuthorized } from './auth.ts';
 import { buildChaptersZip, readChapterDownload, type DownloadResult } from './downloads.ts';
@@ -57,7 +57,7 @@ const appHtmlUrl = new URL('./public/app.html', import.meta.url);
 export function createWebServer(options: CreateWebServerOptions): AuthorWebServer {
   const env = options.env ?? process.env;
   const rooms = parseRooms(options.root, env.AUTHOROS_WEB_ROOMS);
-  const singleRuntime = createRuntimeForRoot(options.root);
+  let singleRuntime: WebRuntime | undefined;
   const roomRuntimes = new Map<string, WebRuntime>();
 
   async function fetchHandler(request: Request): Promise<Response> {
@@ -86,7 +86,6 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
       const routePath = roomRoute?.path ?? url.pathname;
       const root = roomRoute?.room.root ?? options.root;
       const token = roomRoute?.room.token ?? options.token;
-      const runtime = roomRoute?.room ? runtimeForRoom(roomRuntimes, roomRoute.room) : singleRuntime;
       if ((routePath.startsWith('/api/') || routePath.startsWith('/download/')) && !isAuthorized(request, token)) {
         return json({ error: 'access token required' }, 401);
       }
@@ -97,9 +96,11 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
         return json(await getPrivateStatus(root));
       }
       if (routePath === '/api/jobs' && request.method === 'GET') {
+        const runtime = roomRoute?.room ? runtimeForRoom(roomRuntimes, roomRoute.room) : (singleRuntime ??= createRuntimeForRoot(options.root));
         return json({ jobs: runtime.jobs.list() });
       }
       if (routePath === '/api/chat' && request.method === 'POST') {
+        const runtime = roomRoute?.room ? runtimeForRoom(roomRuntimes, roomRoute.room) : (singleRuntime ??= createRuntimeForRoot(options.root));
         const body = await request.json() as { message?: string };
         const result = await resolveAgentMessage({ ...options, root }, runtime.session, body.message ?? '', env);
         if (result.kind === 'reply') return json(result);
@@ -109,6 +110,7 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
       }
       const jobEventsMatch = routePath.match(/^\/api\/jobs\/([^/]+)\/events$/);
       if (jobEventsMatch?.[1] && request.method === 'GET') {
+        const runtime = roomRoute?.room ? runtimeForRoom(roomRuntimes, roomRoute.room) : (singleRuntime ??= createRuntimeForRoot(options.root));
         return sseStream(runtime.jobs, jobEventsMatch[1], request.signal);
       }
       const chapterMatch = routePath.match(/^\/api\/chapters\/([^/]+)$/);
@@ -183,13 +185,35 @@ function resolveRoomRoute(pathname: string, rooms: WebRoom[]): { room: WebRoom; 
 }
 
 function createRuntimeForRoot(root: string): WebRuntime {
+  const recovered = recoverInterruptedJobs(loadWebJobHistory(root));
+  if (recovered.changed) saveWebJobHistory(root, recovered.jobs);
   return {
     session: createWebAgentSession(),
     jobs: createJobStore({
-      initialJobs: loadWebJobHistory(root),
+      initialJobs: recovered.jobs,
       onChange: (jobs) => saveWebJobHistory(root, jobs),
     }),
   };
+}
+
+function recoverInterruptedJobs(jobs: WebJob[]): { jobs: WebJob[]; changed: boolean } {
+  const at = new Date().toISOString();
+  let changed = false;
+  const recovered = jobs.map((job) => {
+    if (job.status !== 'running') return job;
+    changed = true;
+    return {
+      ...job,
+      status: 'failed' as const,
+      updatedAt: at,
+      error: 'interrupted: service restarted',
+      events: [
+        ...job.events,
+        { type: 'interrupted', message: '服务重启，任务已中断。', at },
+      ],
+    };
+  });
+  return { jobs: recovered, changed };
 }
 
 function runtimeForRoom(runtimes: Map<string, WebRuntime>, room: WebRoom): WebRuntime {
