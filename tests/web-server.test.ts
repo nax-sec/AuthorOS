@@ -562,6 +562,26 @@ test('web server runs quality loop review, decision, and memory jobs', async () 
   });
 });
 
+test('web server exposes pending memory delta content for cockpit review', async () => {
+  await withTempRoot(async (root) => {
+    await writeStyleReadyBook(root);
+    await writeFile(join(root, 'books/demo/memory/chapter-0001.delta.md'), [
+      '# 章节 1 记忆更新建议',
+      '',
+      '## canon (新增 / 变更)',
+      '- 茶杯案进入第二阶段',
+    ].join('\n'), 'utf8');
+    const server = createWebServer({ root, env: {} });
+
+    const response = await server.fetch(new Request('http://local/api/memory/deltas/chapter-0001.delta.md'));
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.name, 'chapter-0001.delta.md');
+    assert.match(body.content, /茶杯案进入第二阶段/);
+  });
+});
+
 test('web server explains failed model jobs with readable failure details', async () => {
   await withTempRoot(async (root) => {
     await writeStyleReadyBook(root);

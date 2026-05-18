@@ -82,6 +82,7 @@
     .stage-pill.optional { border-color: var(--line); background: var(--bg); color: var(--muted); }
     .quality-actions-row { display: flex; flex-wrap: wrap; gap: 8px; }
     .quality-actions-row button { min-height: 34px; }
+    .memory-delta-content { max-height: 260px; overflow: auto; margin: 0; padding: 10px; border: 1px solid var(--line-soft); border-radius: 7px; background: #fff; white-space: pre-wrap; font: inherit; line-height: 1.55; }
     .signal-danger { color: var(--danger); font-weight: 800; }
     .signal-warning { color: var(--amber); font-weight: 800; }
     .signal-ok { color: #176b37; font-weight: 800; }
@@ -202,7 +203,7 @@
         <div id="qualityStages" class="stage-grid"></div>
         <div id="qualityActions" class="preview-card quality-actions" data-testid="quality-actions"></div>
         <div id="pendingPreview" class="preview-card" data-testid="pending-preview"></div>
-        <div id="memoryReview" class="preview-card"></div>
+        <div id="memoryReview" class="preview-card" data-testid="memory-review"></div>
         <div id="recoveryHint" class="preview-card"></div>
       </section>
     </section>
@@ -703,8 +704,16 @@
         memoryReview.appendChild(title);
         for (const delta of quality.memoryDeltas) {
           const item = document.createElement('div');
-          item.className = 'muted';
-          item.textContent = `${delta.name} · ${delta.description}`;
+          item.className = 'row';
+          const meta = document.createElement('span');
+          meta.className = 'muted';
+          meta.textContent = `${delta.name} · ${delta.description}`;
+          const view = document.createElement('button');
+          view.type = 'button';
+          view.className = 'secondary';
+          view.textContent = '查看记忆更新';
+          view.addEventListener('click', () => loadMemoryDelta(delta.name).catch(error => addMessage(`读取记忆更新失败：${error.message}`, false, true)));
+          item.append(meta, view);
           memoryReview.appendChild(item);
         }
       } else {
@@ -716,6 +725,27 @@
       } else {
         recoveryHint.textContent = '没有失败恢复。';
       }
+    }
+
+    async function loadMemoryDelta(name) {
+      const result = await api(`/api/memory/deltas/${encodeURIComponent(name)}`);
+      let title = memoryReview.querySelector('[data-memory-delta-title]');
+      if (!title) {
+        title = document.createElement('div');
+        title.className = 'book-title';
+        title.dataset.memoryDeltaTitle = 'true';
+        memoryReview.appendChild(title);
+      }
+      title.textContent = `正在审阅：${result.name || name}`;
+
+      let content = memoryReview.querySelector('#memoryDeltaContent');
+      if (!content) {
+        content = document.createElement('pre');
+        content.id = 'memoryDeltaContent';
+        content.className = 'memory-delta-content';
+        memoryReview.appendChild(content);
+      }
+      content.textContent = result.content || '这个记忆更新为空。';
     }
 
     function renderQualityActions(actions) {
