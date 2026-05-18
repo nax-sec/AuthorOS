@@ -71,6 +71,19 @@ export interface QualityStyleRewritePreview {
   path: string;
 }
 
+export interface QualityPreviewComparison {
+  kind: 'feedback' | 'style_rewrite';
+  chapter: number;
+  intentLabel: string;
+  rationale: string;
+  createdAt: string;
+  originalCharCount: number | null;
+  revisedCharCount: number | null;
+  current: { label: string; content: string };
+  preview: { label: string; content: string };
+  actions: { applyMessage: string; discardMessage: string; readMessage: string };
+}
+
 export interface QualityRecovery {
   jobId: string;
   action: string;
@@ -125,6 +138,7 @@ export interface QualityOverview {
   productionLine: QualityProductionLineItem[];
   pendingPreview: QualityPendingPreview | null;
   styleRewritePreview: QualityStyleRewritePreview | null;
+  previewComparison: QualityPreviewComparison | null;
   memoryDeltas: PendingMemoryDelta[];
   recovery: QualityRecovery | null;
   signals: QualitySignal[];
@@ -151,6 +165,7 @@ export async function getQualityOverview(
 ): Promise<QualityOverview> {
   const pendingPreview = await readPendingFeedback(projectDir);
   const styleRewritePreview = await readPendingStyleRewrite(projectDir);
+  const previewComparison = await getCurrentPreviewComparison(projectDir);
   const memoryDeltas = await listMemoryDeltas(projectDir);
   const chapters = state.chapters.map((chapter) => renderChapter(chapter, state, memoryDeltas));
   const nextChapter = deriveNextChapter(state, memoryDeltas);
@@ -171,12 +186,50 @@ export async function getQualityOverview(
     productionLine,
     pendingPreview,
     styleRewritePreview,
+    previewComparison,
     memoryDeltas,
     recovery,
     signals: deriveSignals({ pendingPreview, styleRewritePreview, memoryDeltas, recovery, style }),
     actions,
     artifacts,
   };
+}
+
+export async function getCurrentPreviewComparison(projectDir: string): Promise<QualityPreviewComparison | null> {
+  const feedback = await readPendingFeedback(projectDir);
+  const style = await readPendingStyleRewrite(projectDir);
+  const pending = style ?? feedback;
+  if (!pending) return null;
+  const chapterId = String(pending.chapter).padStart(4, '0');
+  const current = await readFile(join(projectDir, 'chapters', `${chapterId}.md`), 'utf8');
+  const previewContent = pending.kind === 'style_rewrite'
+    ? pending.previewContent
+    : pending.previewContent ?? pending.text;
+  return {
+    kind: pending.kind === 'style_rewrite' ? 'style_rewrite' : 'feedback',
+    chapter: pending.chapter,
+    intentLabel: pending.kind === 'style_rewrite' ? styleIntentLabel(pending.intent) : pending.instruction,
+    rationale: pending.rationale ?? pending.text,
+    createdAt: pending.createdAt,
+    originalCharCount: pending.originalCharCount ?? null,
+    revisedCharCount: pending.revisedCharCount ?? null,
+    current: { label: `第 ${pending.chapter} 章当前正文`, content: current.trim() },
+    preview: { label: `第 ${pending.chapter} 章预览正文`, content: previewContent.trim() },
+    actions: {
+      applyMessage: pending.kind === 'style_rewrite' ? '应用文风修改' : '确认应用修改',
+      discardMessage: '重新生成预览',
+      readMessage: '读最新章',
+    },
+  };
+}
+
+function styleIntentLabel(intent: QualityStyleRewriteIntent): string {
+  const labels: Record<QualityStyleRewriteIntent, string> = {
+    imitate_style: '仿写文风',
+    remove_ai_voice: '去 AI 味',
+    style_polish: '文风润色',
+  };
+  return labels[intent];
 }
 
 function deriveProductionLine(input: {

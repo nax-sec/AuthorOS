@@ -198,6 +198,32 @@ test('quality overview reports pending feedback preview without applying it', as
   });
 });
 
+test('quality overview derives current versus pending feedback preview comparison', async () => {
+  await withTempBook(async (bookDir) => {
+    await writeFile(join(bookDir, 'plans/0001.md'), 'plan one', 'utf8');
+    await writeFile(join(bookDir, 'chapters/0001.md'), '当前正文', 'utf8');
+    await mkdir(join(bookDir, '.authoros/private'), { recursive: true });
+    await writeFile(join(bookDir, '.authoros/private/pending-feedback.json'), JSON.stringify({
+      chapter: 1,
+      text: '去掉解释',
+      instruction: '按反馈修改',
+      preview_content: '预览正文',
+      rationale: '减少解释',
+      created_at: '2026-05-19T09:10:00.000Z',
+      original_char_count: 4,
+      revised_char_count: 4,
+    }), 'utf8');
+    const state = await getProjectState(bookDir);
+
+    const overview = await getQualityOverview(bookDir, state, createJobStore());
+
+    assert.equal(overview.previewComparison?.kind, 'feedback');
+    assert.equal(overview.previewComparison?.current.content, '当前正文');
+    assert.equal(overview.previewComparison?.preview.content, '预览正文');
+    assert.equal(overview.previewComparison?.actions.applyMessage, '确认应用修改');
+  });
+});
+
 test('quality overview reports pending style rewrite preview metadata', async () => {
   await withTempBook(async (bookDir) => {
     await writeFile(join(bookDir, 'plans/0001.md'), 'plan one', 'utf8');

@@ -90,6 +90,8 @@
     .pipeline-row-head { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
     .pipeline-flags { display: flex; flex-wrap: wrap; gap: 6px; }
     .pipeline-flag { display: inline-flex; align-items: center; min-height: 24px; border: 1px solid #f0c57d; border-radius: 999px; padding: 3px 8px; background: var(--amber-soft); color: var(--amber); font-size: 12px; font-weight: 700; }
+    .comparison-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .comparison-pane { display: grid; gap: 8px; min-width: 0; }
     .quality-actions-row { display: flex; flex-wrap: wrap; gap: 8px; }
     .quality-actions-row button { min-height: 34px; }
     .memory-delta-content { max-height: 260px; overflow: auto; margin: 0; padding: 10px; border: 1px solid var(--line-soft); border-radius: 7px; background: #fff; white-space: pre-wrap; font: inherit; line-height: 1.55; }
@@ -118,6 +120,7 @@
       .resident-shell { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .resident-heading { grid-column: 1 / -1; }
       .cockpit { grid-template-columns: 1fr; padding: 14px; }
+      .comparison-grid { grid-template-columns: 1fr; }
       .desk-sidebar, .desk-rail { position: static; max-height: none; overflow: visible; }
       .chapter, .chat-log { max-height: none; }
     }
@@ -229,6 +232,7 @@
           <div id="qualityStages" class="stage-grid"></div>
           <div id="qualityActions" class="preview-card quality-actions" data-testid="quality-actions"></div>
           <div id="qualityArtifacts" class="preview-card" data-testid="quality-artifacts"></div>
+          <div id="previewComparison" class="preview-card" data-testid="preview-comparison"></div>
           <div id="pendingPreview" class="preview-card" data-testid="pending-preview"></div>
           <div id="memoryReview" class="preview-card" data-testid="memory-review"></div>
           <div id="recoveryHint" class="preview-card"></div>
@@ -343,6 +347,7 @@
     const qualityStages = document.querySelector('#qualityStages');
     const qualityActions = document.querySelector('#qualityActions');
     const qualityArtifacts = document.querySelector('#qualityArtifacts');
+    const previewComparison = document.querySelector('#previewComparison');
     const pendingPreview = document.querySelector('#pendingPreview');
     const memoryReview = document.querySelector('#memoryReview');
     const recoveryHint = document.querySelector('#recoveryHint');
@@ -808,6 +813,7 @@
       qualityStages.innerHTML = '';
       qualityActions.innerHTML = '';
       qualityArtifacts.innerHTML = '';
+      previewComparison.innerHTML = '';
       pendingPreview.innerHTML = '';
       memoryReview.innerHTML = '';
       recoveryHint.innerHTML = '';
@@ -823,6 +829,7 @@
         chapterProductionLine.textContent = '没有章节生产线。';
         qualityActions.textContent = '没有可执行质量动作。';
         qualityArtifacts.textContent = '没有质量产物。';
+        previewComparison.textContent = '没有待对比预览。';
         pendingPreview.textContent = '没有待确认预览。';
         memoryReview.textContent = '没有记忆更新。';
         if (booklessRecovery) {
@@ -853,6 +860,7 @@
       renderQualityActions(quality.actions || []);
       renderQualityArtifacts(quality.artifacts || []);
       renderProductionLine(quality.productionLine || []);
+      renderPreviewComparison(quality.previewComparison);
 
       if (quality.pendingPreview) {
         const previewTitle = document.createElement('div');
@@ -1007,6 +1015,71 @@
         }
         chapterProductionLine.appendChild(row);
       }
+    }
+
+    function renderPreviewComparison(comparison) {
+      previewComparison.innerHTML = '';
+      const title = document.createElement('div');
+      title.className = 'book-title';
+      title.textContent = '预览对比';
+      previewComparison.appendChild(title);
+      if (!comparison) {
+        const empty = document.createElement('div');
+        empty.className = 'muted';
+        empty.textContent = '暂无待确认预览。';
+        previewComparison.appendChild(empty);
+        return;
+      }
+
+      const meta = document.createElement('div');
+      meta.className = 'muted';
+      const counts = [
+        typeof comparison.originalCharCount === 'number' ? `原文 ${comparison.originalCharCount} 字` : '',
+        typeof comparison.revisedCharCount === 'number' ? `预览 ${comparison.revisedCharCount} 字` : '',
+      ].filter(Boolean).join(' · ');
+      meta.textContent = [
+        `第 ${comparison.chapter} 章`,
+        comparison.intentLabel,
+        comparison.createdAt,
+        counts,
+      ].filter(Boolean).join(' · ');
+
+      const grid = document.createElement('div');
+      grid.className = 'comparison-grid';
+      grid.append(
+        renderComparisonPane(comparison.current.label, comparison.current.content),
+        renderComparisonPane(comparison.preview.label, comparison.preview.content),
+      );
+
+      const rationale = document.createElement('div');
+      rationale.className = 'muted';
+      rationale.textContent = comparison.rationale || '这次预览没有附加说明。';
+
+      const actions = document.createElement('div');
+      actions.className = 'row';
+      const apply = document.createElement('button');
+      apply.textContent = '应用预览';
+      apply.addEventListener('click', () => sendMessage(comparison.actions.applyMessage).catch(error => addMessage(`失败：${error.message}`, false, true)));
+      const read = document.createElement('button');
+      read.type = 'button';
+      read.className = 'secondary';
+      read.textContent = '读当前章';
+      read.addEventListener('click', () => sendMessage(comparison.actions.readMessage).catch(error => addMessage(`失败：${error.message}`, false, true)));
+      actions.append(apply, read);
+
+      previewComparison.append(meta, grid, rationale, actions);
+    }
+
+    function renderComparisonPane(label, content) {
+      const pane = document.createElement('article');
+      pane.className = 'comparison-pane';
+      const heading = document.createElement('h3');
+      heading.textContent = label || '正文';
+      const body = document.createElement('pre');
+      body.className = 'memory-delta-content';
+      body.textContent = content || '这里没有正文内容。';
+      pane.append(heading, body);
+      return pane;
     }
 
     async function loadMemoryDelta(name) {

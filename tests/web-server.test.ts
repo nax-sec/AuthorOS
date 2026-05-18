@@ -976,6 +976,46 @@ test('web server saves current book model config and local api key without retur
   });
 });
 
+test('web server returns current preview comparison', async () => {
+  await withTempRoot(async (root) => {
+    await mkdir(join(root, 'books/demo/chapters'), { recursive: true });
+    await mkdir(join(root, 'books/demo/plans'), { recursive: true });
+    await mkdir(join(root, 'books/demo/.authoros/private'), { recursive: true });
+    await writeFile(join(root, 'bookshelf.json'), JSON.stringify({
+      version: 1,
+      current: 'demo',
+      books: [{
+        id: 'demo',
+        title: 'Demo Book',
+        concept: 'preview comparison',
+        path: 'books/demo',
+        created_at: '2026-05-19T00:00:00.000Z',
+        last_active_at: '2026-05-19T00:00:00.000Z',
+      }],
+    }, null, 2), 'utf8');
+    await writeFile(join(root, 'books/demo/plans/0001.md'), 'plan one', 'utf8');
+    await writeFile(join(root, 'books/demo/chapters/0001.md'), '当前正文', 'utf8');
+    await writeFile(join(root, 'books/demo/.authoros/private/pending-feedback.json'), JSON.stringify({
+      chapter: 1,
+      text: '去掉解释',
+      instruction: '按反馈修改',
+      preview_content: '预览正文',
+      rationale: '减少解释',
+      created_at: '2026-05-19T09:10:00.000Z',
+      original_char_count: 4,
+      revised_char_count: 4,
+    }), 'utf8');
+    const server = createWebServer({ root });
+
+    const response = await server.fetch(new Request('http://local/api/previews/current'));
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.comparison.current.content, '当前正文');
+    assert.equal(body.comparison.preview.content, '预览正文');
+  });
+});
+
 test('web server keeps room cockpit overview isolated', async () => {
   await withTempRoot(async (root) => {
     const server = createWebServer({

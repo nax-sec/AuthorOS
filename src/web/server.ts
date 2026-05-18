@@ -9,6 +9,7 @@ import { withJobCompletion, type CompletedCommandType } from './job-completion.t
 import { explainJobFailure } from './job-failure.ts';
 import { isAuthorized } from './auth.ts';
 import { getCockpitOverview } from './cockpit.ts';
+import { getCurrentPreviewComparison } from './quality.ts';
 import { buildChaptersZip, readChapterDownload, type DownloadResult } from './downloads.ts';
 import { handleAgentMessageWithLlm, type WebAgentMode } from './agent-llm.ts';
 import {
@@ -139,6 +140,11 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
       if (routePath === '/api/jobs' && request.method === 'GET') {
         const runtime = runtimeForRoute(roomRoute, () => singleRuntime ??= createRuntimeForRoot(options.root), roomRuntimes);
         return json({ jobs: runtime.jobs.list() });
+      }
+      if (routePath === '/api/previews/current' && request.method === 'GET') {
+        const target = await getWebModelTarget(root);
+        if (target.scope.kind !== 'current_book') return json({ comparison: null });
+        return json({ comparison: await getCurrentPreviewComparison(target.projectDir) });
       }
       if (routePath === '/api/model/doctor' && request.method === 'GET') {
         return json(await getWebModelDoctor(root, env));
