@@ -85,6 +85,11 @@
     .stage-pill.next { border-color: #91b5ff; background: var(--accent-soft); color: #1f4fbf; }
     .stage-pill.missing { border-color: #f2b3b3; background: var(--danger-soft); color: var(--danger); }
     .stage-pill.optional { border-color: var(--line); background: var(--bg); color: var(--muted); }
+    .production-line { display: grid; gap: 10px; }
+    .pipeline-row { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--line-soft); border-radius: 7px; background: #fff; }
+    .pipeline-row-head { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+    .pipeline-flags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pipeline-flag { display: inline-flex; align-items: center; min-height: 24px; border: 1px solid #f0c57d; border-radius: 999px; padding: 3px 8px; background: var(--amber-soft); color: var(--amber); font-size: 12px; font-weight: 700; }
     .quality-actions-row { display: flex; flex-wrap: wrap; gap: 8px; }
     .quality-actions-row button { min-height: 34px; }
     .memory-delta-content { max-height: 260px; overflow: auto; margin: 0; padding: 10px; border: 1px solid var(--line-soft); border-radius: 7px; background: #fff; white-space: pre-wrap; font: inherit; line-height: 1.55; }
@@ -216,10 +221,11 @@
             <div>
               <span class="panel-subtitle">章节生产线</span>
               <h2>质量环路</h2>
-            </div>
-            <div id="qualitySignal" class="muted">加载质量环路...</div>
           </div>
+          <div id="qualitySignal" class="muted">加载质量环路...</div>
+        </div>
           <div id="nextChapterCard" class="next-chapter-card" data-testid="next-chapter-card"></div>
+          <div id="chapterProductionLine" class="preview-card production-line" data-testid="chapter-production-line"></div>
           <div id="qualityStages" class="stage-grid"></div>
           <div id="qualityActions" class="preview-card quality-actions" data-testid="quality-actions"></div>
           <div id="qualityArtifacts" class="preview-card" data-testid="quality-artifacts"></div>
@@ -333,6 +339,7 @@
     const currentBookMeta = document.querySelector('#currentBookMeta');
     const qualitySignal = document.querySelector('#qualitySignal');
     const nextChapterCard = document.querySelector('#nextChapterCard');
+    const chapterProductionLine = document.querySelector('#chapterProductionLine');
     const qualityStages = document.querySelector('#qualityStages');
     const qualityActions = document.querySelector('#qualityActions');
     const qualityArtifacts = document.querySelector('#qualityArtifacts');
@@ -797,6 +804,7 @@
       qualitySignal.textContent = signal.label || '质量环路暂无阻塞';
 
       nextChapterCard.innerHTML = '';
+      chapterProductionLine.innerHTML = '';
       qualityStages.innerHTML = '';
       qualityActions.innerHTML = '';
       qualityArtifacts.innerHTML = '';
@@ -812,6 +820,7 @@
         meta.className = 'muted';
         meta.textContent = '开一本新书后，这里会显示下一章生产线。';
         nextChapterCard.append(title, meta);
+        chapterProductionLine.textContent = '没有章节生产线。';
         qualityActions.textContent = '没有可执行质量动作。';
         qualityArtifacts.textContent = '没有质量产物。';
         pendingPreview.textContent = '没有待确认预览。';
@@ -843,6 +852,7 @@
 
       renderQualityActions(quality.actions || []);
       renderQualityArtifacts(quality.artifacts || []);
+      renderProductionLine(quality.productionLine || []);
 
       if (quality.pendingPreview) {
         const previewTitle = document.createElement('div');
@@ -939,6 +949,63 @@
         renderRecovery(quality.recovery);
       } else {
         recoveryHint.textContent = '没有失败恢复。';
+      }
+    }
+
+    function renderProductionLine(items) {
+      chapterProductionLine.innerHTML = '';
+      const title = document.createElement('div');
+      title.className = 'book-title';
+      title.textContent = '章节生产线';
+      chapterProductionLine.appendChild(title);
+      if (!items.length) {
+        const empty = document.createElement('div');
+        empty.className = 'muted';
+        empty.textContent = '还没有章节进入生产线。';
+        chapterProductionLine.appendChild(empty);
+        return;
+      }
+      for (const item of items) {
+        const row = document.createElement('article');
+        row.className = 'pipeline-row';
+        const head = document.createElement('div');
+        head.className = 'pipeline-row-head';
+        const label = document.createElement('strong');
+        label.textContent = item.label || `第 ${item.chapter} 章`;
+        const next = document.createElement('span');
+        next.className = 'muted';
+        next.textContent = item.nextStage ? `下一步：${item.nextStage.label}` : '生产线完成';
+        head.append(label, next);
+
+        const stages = document.createElement('div');
+        stages.className = 'stage-grid';
+        for (const stage of item.stages || []) {
+          stages.appendChild(renderStagePill(stage));
+        }
+
+        const detail = document.createElement('div');
+        detail.className = 'muted';
+        const flagLabels = (item.flags || []).map((flag) => flag.label).filter(Boolean);
+        detail.textContent = item.blocker || (flagLabels.length > 0 ? flagLabels.join(' / ') : '可继续推进');
+
+        const flags = document.createElement('div');
+        flags.className = 'pipeline-flags';
+        for (const flag of item.flags || []) {
+          const pill = document.createElement('span');
+          pill.className = 'pipeline-flag';
+          pill.textContent = flag.label;
+          flags.appendChild(pill);
+        }
+
+        row.append(head, stages, detail);
+        if (flags.children.length > 0) row.appendChild(flags);
+        if (item.primaryAction) {
+          const button = document.createElement('button');
+          button.textContent = item.primaryAction.label;
+          button.addEventListener('click', () => sendMessage(item.primaryAction.message).catch(error => addMessage(`失败：${error.message}`, false, true)));
+          row.appendChild(button);
+        }
+        chapterProductionLine.appendChild(row);
       }
     }
 

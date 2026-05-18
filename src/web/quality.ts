@@ -20,6 +20,17 @@ export interface QualityChapter {
   stages: QualityStage[];
 }
 
+export interface QualityProductionLineItem {
+  chapter: number;
+  chapterId: string;
+  label: string;
+  stages: QualityStage[];
+  nextStage: QualityStage;
+  blocker: string | null;
+  primaryAction: QualityAction | null;
+  flags: Array<{ kind: 'pending_feedback' | 'pending_style' | 'memory_delta'; label: string }>;
+}
+
 export interface QualityNextChapterCard {
   chapter: number;
   state: 'needs_plan' | 'ready_to_draft' | 'ready_to_review';
@@ -111,6 +122,7 @@ export interface QualityStyleStatus {
 export interface QualityOverview {
   nextChapter: QualityNextChapterCard;
   chapters: QualityChapter[];
+  productionLine: QualityProductionLineItem[];
   pendingPreview: QualityPendingPreview | null;
   styleRewritePreview: QualityStyleRewritePreview | null;
   memoryDeltas: PendingMemoryDelta[];
@@ -145,10 +157,18 @@ export async function getQualityOverview(
   const recovery = deriveRecovery(jobs.list());
   const actions = deriveQualityActions(state, memoryDeltas);
   const artifacts = deriveQualityArtifacts(state);
+  const productionLine = deriveProductionLine({
+    chapters,
+    actions,
+    pendingPreview,
+    styleRewritePreview,
+    memoryDeltas,
+  });
 
   return {
     nextChapter,
     chapters,
+    productionLine,
     pendingPreview,
     styleRewritePreview,
     memoryDeltas,
@@ -157,6 +177,63 @@ export async function getQualityOverview(
     actions,
     artifacts,
   };
+}
+
+function deriveProductionLine(input: {
+  chapters: QualityChapter[];
+  actions: readonly QualityAction[];
+  pendingPreview: QualityPendingPreview | null;
+  styleRewritePreview: QualityStyleRewritePreview | null;
+  memoryDeltas: readonly PendingMemoryDelta[];
+}): QualityProductionLineItem[] {
+  return input.chapters.map((chapter) => {
+    const primaryAction = input.actions.find((action) => action.chapter === chapter.chapter) ?? null;
+    const actionStageKey = primaryAction ? stageKeyForAction(primaryAction.type) : null;
+    const actionStage = actionStageKey ? chapter.stages.find((item) => item.key === actionStageKey) : undefined;
+    const next = chapter.stages.find((item) => item.status === 'next');
+    const missing = chapter.stages.find((item) => item.status === 'missing');
+    const nextStage = actionStage ?? next ?? missing ?? chapter.stages.at(-1)!;
+    const flags: QualityProductionLineItem['flags'] = [];
+    if (input.pendingPreview?.chapter === chapter.chapter) {
+      flags.push({ kind: 'pending_feedback', label: '修改预览待确认' });
+    }
+    if (input.styleRewritePreview?.chapter === chapter.chapter) {
+      flags.push({ kind: 'pending_style', label: '文风预览待确认' });
+    }
+    if (input.memoryDeltas.some((delta) => delta.name === `chapter-${chapter.chapterId}.delta.md`)) {
+      flags.push({ kind: 'memory_delta', label: '记忆更新待合并' });
+    }
+    return {
+      chapter: chapter.chapter,
+      chapterId: chapter.chapterId,
+      label: `第 ${chapter.chapter} 章`,
+      stages: chapter.stages,
+      nextStage,
+      blocker: primaryAction ? null : productionBlocker(nextStage),
+      primaryAction,
+      flags,
+    };
+  });
+}
+
+function stageKeyForAction(type: QualityActionType): QualityStage['key'] {
+  if (type === 'internal_review') return 'internalReview';
+  if (type === 'reader_sim_review') return 'readerSimReview';
+  if (type === 'chapter_decision') return 'decision';
+  return 'memoryDelta';
+}
+
+function productionBlocker(stage: QualityStage): string | null {
+  if (stage.status === 'done') return null;
+  const blockers: Partial<Record<QualityStage['key'], string>> = {
+    plan: '缺少章节计划',
+    draft: '缺少章节正文',
+    internalReview: '等待内评',
+    readerSimReview: '等待读者模拟',
+    decision: '等待创作决策',
+    memoryDelta: '等待记忆更新',
+  };
+  return blockers[stage.key] ?? `${stage.label}待补齐`;
 }
 
 function renderChapter(

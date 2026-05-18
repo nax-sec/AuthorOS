@@ -41,6 +41,23 @@ test('quality overview derives next chapter card and stage states', async () => 
   });
 });
 
+test('quality overview derives scan-friendly chapter production line', async () => {
+  await withTempBook(async (bookDir) => {
+    await writeFile(join(bookDir, 'plans/0001.md'), 'plan one', 'utf8');
+    await writeFile(join(bookDir, 'chapters/0001.md'), 'draft one', 'utf8');
+    await writeFile(join(bookDir, 'reviews/0001.internal.md'), 'internal review', 'utf8');
+    await writeFile(join(bookDir, 'memory/chapter-0001.delta.md'), '# delta', 'utf8');
+    const state = await getProjectState(bookDir);
+
+    const overview = await getQualityOverview(bookDir, state, createJobStore());
+
+    assert.equal(overview.productionLine[0].chapter, 1);
+    assert.equal(overview.productionLine[0].nextStage.key, 'readerSimReview');
+    assert.equal(overview.productionLine[0].primaryAction?.type, 'reader_sim_review');
+    assert.equal(overview.productionLine[0].flags.some((flag) => flag.kind === 'memory_delta'), true);
+  });
+});
+
 test('quality overview exposes executable actions for review closure', async () => {
   await withTempBook(async (bookDir) => {
     await writeFile(join(bookDir, 'plans/0001.md'), 'plan one', 'utf8');
