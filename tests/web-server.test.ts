@@ -347,6 +347,20 @@ test('web command help is available from the CLI', async () => {
 
 test('web server exposes job history', async () => {
   await withTempRoot(async (root) => {
+    await mkdir(join(root, 'books/demo/chapters'), { recursive: true });
+    await writeFile(join(root, 'bookshelf.json'), JSON.stringify({
+      version: 1,
+      current: 'demo',
+      books: [{
+        id: 'demo',
+        title: 'Demo Book',
+        concept: 'job history test',
+        path: 'books/demo',
+        created_at: '2026-05-18T00:00:00.000Z',
+        last_active_at: '2026-05-18T00:00:00.000Z',
+      }],
+    }, null, 2), 'utf8');
+    await writeFile(join(root, 'books/demo/chapters/0001.md'), 'chapter one body', 'utf8');
     const server = createWebServer({
       root,
       agentMode: 'rule',
@@ -366,6 +380,8 @@ test('web server exposes job history', async () => {
     assert.equal(jobs.status, 200);
     assert.equal(body.jobs.length, 1);
     assert.equal(body.jobs[0].action, 'read_chapter');
+    assert.equal(body.jobs[0].result.completion.title, '已读取第 1 章。');
+    assert.match(body.jobs[0].result.completion.next, /继续写/);
   });
 });
 

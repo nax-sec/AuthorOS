@@ -725,6 +725,17 @@
       }
     }
 
+    function announceJobCompletion(event) {
+      const completion = event && event.data && event.data.completion ? event.data.completion : null;
+      if (!completion) return;
+      addMessage([
+        '任务完成',
+        completion.title,
+        completion.detail,
+        completion.next ? `下一步建议：${completion.next}` : '',
+      ].filter(Boolean).join('\n'));
+    }
+
     async function sendMessage(message) {
       addMessage(message, true);
       const result = await api('/api/chat', { method: 'POST', body: JSON.stringify({ message }) });
@@ -767,7 +778,10 @@
         if (data.type === 'completed' || data.type === 'failed') {
           events.close();
           loadCockpit().catch(error => addMessage(`刷新失败：${error.message}`, false, true));
-          if (data.type === 'completed') loadLatestChapter(false).catch(() => {});
+          if (data.type === 'completed') {
+            announceJobCompletion(data);
+            loadLatestChapter(false).catch(() => {});
+          }
         }
       };
       events.onerror = () => events.close();

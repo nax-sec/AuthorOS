@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { createWebAgentSession, handleAgentMessage, type WebAgentCommand } from './agent.ts';
 import { createJobStore, type WebJob } from './jobs.ts';
 import { loadWebJobHistory, saveWebJobHistory } from './job-persistence.ts';
+import { withJobCompletion, type CompletedCommandType } from './job-completion.ts';
 import { isAuthorized } from './auth.ts';
 import { getCockpitOverview } from './cockpit.ts';
 import { buildChaptersZip, readChapterDownload, type DownloadResult } from './downloads.ts';
@@ -307,7 +308,7 @@ async function runCommandJob(
       jobs.append(jobId, 'setup', '正在生成作品定位、世界观、人物和大纲');
       const llm = await createClient(root, env);
       const result = await createPrivateBook({ root, concept: command.concept, title: command.title, llm });
-      jobs.complete(jobId, { book: result.book });
+      completeCommandJob(jobs, jobId, command.type, { book: result.book });
       return;
     }
     if (command.type === 'new_book_and_continue') {
@@ -317,28 +318,28 @@ async function runCommandJob(
       jobs.append(jobId, 'planning', '作品已建好，正在规划第 1 章。');
       const writeLlm = await createClientForCurrentBook(root, env);
       const result = await continuePrivateBook(root, { llm: writeLlm });
-      jobs.complete(jobId, { book: setup.book, chapter: result.write.chapter });
+      completeCommandJob(jobs, jobId, command.type, { book: setup.book, chapter: result.write.chapter });
       return;
     }
     if (command.type === 'continue') {
       jobs.append(jobId, 'planning', '正在规划下一章');
       const llm = await createClientForCurrentBook(root, env);
       const result = await continuePrivateBook(root, { llm });
-      jobs.complete(jobId, { book: result.book, chapter: result.write.chapter });
+      completeCommandJob(jobs, jobId, command.type, { book: result.book, chapter: result.write.chapter });
       return;
     }
     if (command.type === 'feedback') {
       jobs.append(jobId, 'revision_preview', '正在生成修改预览');
       const llm = writingLlm ?? await createClientForCurrentBook(root, env);
       const result = await previewPrivateFeedback(root, { chapter: command.chapter, text: command.text, llm });
-      jobs.complete(jobId, { book: result.book, chapter: result.chapter, pending: result.pendingPath });
+      completeCommandJob(jobs, jobId, command.type, { book: result.book, chapter: result.chapter, pending: result.pendingPath });
       return;
     }
     if (command.type === 'apply') {
       jobs.append(jobId, 'applying', '正在应用待确认修改');
       const llm = writingLlm ?? await createClientForCurrentBook(root, env);
       const result = await applyPrivateFeedback(root, { llm });
-      jobs.complete(jobId, { book: result.book, chapter: result.chapter });
+      completeCommandJob(jobs, jobId, command.type, { book: result.book, chapter: result.chapter });
       return;
     }
     if (command.type === 'style_rewrite') {
@@ -350,27 +351,36 @@ async function runCommandJob(
         text: command.text,
         llm,
       });
-      jobs.complete(jobId, { book: result.book, chapter: result.chapter, pending: result.pendingPath, profile: result.profile.id });
+      completeCommandJob(jobs, jobId, command.type, { book: result.book, chapter: result.chapter, pending: result.pendingPath, profile: result.profile.id });
       return;
     }
     if (command.type === 'style_apply') {
       jobs.append(jobId, 'style_apply', '正在应用文风改写预览');
       const result = await applyPrivateStyleRewrite(root);
-      jobs.complete(jobId, { book: result.book, chapter: result.chapter, profile: result.profileId });
+      completeCommandJob(jobs, jobId, command.type, { book: result.book, chapter: result.chapter, profile: result.profileId });
       return;
     }
     if (command.type === 'read') {
       const result = await readPrivateChapter(root, { chapter: command.chapter });
-      jobs.complete(jobId, result);
+      completeCommandJob(jobs, jobId, command.type, result);
       return;
     }
     if (command.type === 'download_chapter' || command.type === 'download_all' || command.type === 'status') {
-      jobs.complete(jobId, { ok: true });
+      completeCommandJob(jobs, jobId, command.type, { ok: true });
       return;
     }
   } catch (error) {
     jobs.fail(jobId, error instanceof Error ? error.message : String(error));
   }
+}
+
+function completeCommandJob(
+  jobs: ReturnType<typeof createJobStore>,
+  jobId: string,
+  command: CompletedCommandType,
+  result: Record<string, unknown>,
+): void {
+  jobs.complete(jobId, withJobCompletion(command, result));
 }
 
 function summarizeStyleProfile(profile: StyleProfile): {
