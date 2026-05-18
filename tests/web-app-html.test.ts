@@ -38,6 +38,10 @@ test('private web app exposes personal cockpit regions', async () => {
   assert.match(html, /提炼并绑定/);
   assert.match(html, /仅提炼/);
   assert.match(html, /api\('\/api\/style\/extract'/);
+  assert.match(html, /规则预览/);
+  assert.match(html, /formatStyleSummary/);
+  assert.match(html, /styleHint/);
+  assert.match(html, /下一章将使用文风/);
   assert.match(html, /deriveBooklessRecovery/);
   assert.match(html, /确认已有正文后，再读取最新章。/);
   assert.match(html, /jobActionLabel/);

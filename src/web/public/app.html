@@ -167,6 +167,7 @@
     const messageInput = document.querySelector('#message');
     const roomPrefix = (location.pathname.match(/^\/room\/[^/]+/) || [''])[0];
     const tokenKey = `authoros_token:${roomPrefix || 'single'}`;
+    const activeStyleHintPrefix = '下一章将使用文风';
     let token = sessionStorage.getItem(tokenKey) || '';
     let cockpit = null;
 
@@ -270,7 +271,9 @@
         nextAction.textContent = data.nextAction.label;
         nextAction.dataset.message = data.nextAction.message;
         nextAction.disabled = false;
-        nextActionHint.textContent = data.nextAction.kind === 'new_book' ? '告诉助理你想写什么。' : data.nextAction.message;
+        const hint = data.nextAction.kind === 'new_book' ? '告诉助理你想写什么。' : data.nextAction.message;
+        const styleHint = nextActionStyleHint(data.nextAction);
+        nextActionHint.textContent = styleHint ? `${hint} · ${styleHint}` : hint;
       } else {
         nextAction.textContent = '暂无建议';
         nextAction.dataset.message = '';
@@ -297,8 +300,28 @@
         ? detailSource.rules.antiAiVoice.find(Boolean)
         : '';
       const detail = detailSource && (detailSource.description || antiAiVoice);
-      styleProfileDetail.textContent = detail || (profiles.length > 0 ? '可以从已有档案中绑定当前书。' : '还没有可用文风档案。');
+      const rulesPreview = styleRulesPreview(detailSource);
+      const fallback = profiles.length > 0 ? '可以从已有档案中绑定当前书。' : '还没有可用文风档案。';
+      styleProfileDetail.textContent = [
+        detail || fallback,
+        rulesPreview ? `规则预览：${rulesPreview}` : '',
+      ].filter(Boolean).join('\n');
       renderStyleActions(profiles, current, generation);
+    }
+
+    function styleRulesPreview(profile) {
+      if (!profile || !profile.rules) return '';
+      const rules = [];
+      if (Array.isArray(profile.rules.antiAiVoice)) rules.push(...profile.rules.antiAiVoice);
+      if (Array.isArray(profile.rules.avoid)) rules.push(...profile.rules.avoid);
+      return rules.filter(Boolean).slice(0, 2).join('；');
+    }
+
+    function nextActionStyleHint(action) {
+      if (!action || !action.styleHint) return '';
+      return action.styleHint.includes(activeStyleHintPrefix)
+        ? action.styleHint
+        : `${activeStyleHintPrefix}：${action.styleHint}`;
     }
 
     function renderStyleGeneration(generation) {
@@ -379,13 +402,26 @@
         });
         styleProfileName.value = '';
         styleReferenceText.value = '';
-        styleExtractHint.textContent = result.binding ? '已提炼并绑定。' : '已提炼。';
-        addMessage(result.binding ? '文风已提炼并绑定到当前书。' : '文风已提炼，开书后可绑定。');
+        const summary = formatStyleSummary(result.summary);
+        styleExtractHint.textContent = summary || (result.binding ? '已提炼并绑定。' : '已提炼。');
+        addMessage([
+          result.binding ? '文风已提炼并绑定到当前书。' : '文风已提炼，开书后可绑定。',
+          summary,
+        ].filter(Boolean).join('\n'));
         await loadCockpit();
       } catch (error) {
         styleExtractHint.textContent = `提炼失败：${error.message}`;
         addMessage(`提炼文风失败：${error.message}`, false, true);
       }
+    }
+
+    function formatStyleSummary(summary) {
+      if (!summary) return '';
+      const rules = Array.isArray(summary.rulesPreview) ? summary.rulesPreview.filter(Boolean).slice(0, 2).join('；') : '';
+      return [
+        `${summary.name || '新文风'}：${summary.description || '已生成文风档案。'}`,
+        rules ? `规则预览：${rules}` : '',
+      ].filter(Boolean).join('\n');
     }
 
     function renderQuality(quality, jobs = []) {

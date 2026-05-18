@@ -462,6 +462,10 @@ test('web server extracts a style profile from pasted prose and binds it to the 
     assert.equal(response.status, 200);
     assert.equal(body.ok, true);
     assert.equal(body.profile.name, '雨夜提炼');
+    assert.equal(body.summary.name, '雨夜提炼');
+    assert.match(body.summary.description, /paragraphs/);
+    assert.equal(body.summary.rulesPreview.length > 0, true);
+    assert.match(body.summary.rulesPreview.join('\n'), /Do not copy|Preserve|Avoid/);
     assert.equal(body.binding.profileId, body.profile.id);
     await stat(join(root, '.authoros/styles/profiles', `${body.profile.id}.json`));
     const binding = JSON.parse(await readFile(join(root, 'books/demo/.authoros/private/style-binding.json'), 'utf8'));

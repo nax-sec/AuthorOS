@@ -168,6 +168,8 @@ test('cockpit overview reports active style generation when binding has a matchi
     assert.equal(overview.style.generation?.matchedBinding, true);
     assert.equal(overview.style.generation?.profileId, 'rain-night-12345678');
     assert.equal(overview.style.generation?.label, '已接入章节生成');
+    assert.equal(overview.nextAction.kind, 'continue_book');
+    assert.equal(overview.nextAction.styleHint, '下一章将使用文风：雨夜冷调');
   });
 });
 

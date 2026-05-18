@@ -23,7 +23,7 @@ import {
   switchPrivateBook,
   type PrivateShelf,
 } from '../commands/private.ts';
-import { bindStyleProfile, createStyleProfileFromText, saveStyleProfile } from '../commands/style.ts';
+import { bindStyleProfile, createStyleProfileFromText, saveStyleProfile, type StyleProfile } from '../commands/style.ts';
 import { createOpenAiCompatibleClientFromProject, type LlmClient } from '../core/llm.ts';
 import type { EnvLike } from '../core/modelConfig.ts';
 
@@ -138,7 +138,7 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
             if (!(error instanceof Error && /No current private book/.test(error.message))) throw error;
           }
         }
-        return json({ ok: true, profile, path, binding });
+        return json({ ok: true, profile, summary: summarizeStyleProfile(profile), path, binding });
       }
       if (routePath === '/api/chat' && request.method === 'POST') {
         const runtime = runtimeForRoute(roomRoute, () => singleRuntime ??= createRuntimeForRoot(options.root), roomRuntimes);
@@ -371,6 +371,23 @@ async function runCommandJob(
   } catch (error) {
     jobs.fail(jobId, error instanceof Error ? error.message : String(error));
   }
+}
+
+function summarizeStyleProfile(profile: StyleProfile): {
+  id: string;
+  name: string;
+  description: string;
+  rulesPreview: string[];
+} {
+  return {
+    id: profile.id,
+    name: profile.name,
+    description: profile.description,
+    rulesPreview: [
+      ...profile.rules.antiAiVoice,
+      ...profile.rules.avoid,
+    ].slice(0, 3),
+  };
 }
 
 async function createClient(root: string, env: EnvLike): Promise<LlmClient> {

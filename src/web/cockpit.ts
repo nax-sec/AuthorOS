@@ -62,7 +62,7 @@ export interface CockpitLatestChapter {
 export type CockpitNextAction =
   | { kind: 'new_book'; label: string; message: string }
   | { kind: 'apply_feedback'; label: string; message: string }
-  | { kind: 'continue_book'; label: string; message: string; chapter: number };
+  | { kind: 'continue_book'; label: string; message: string; chapter: number; styleHint?: string };
 
 export async function getCockpitOverview(
   root: string,
@@ -113,7 +113,7 @@ export async function getCockpitOverview(
     },
     jobs: jobs.list(),
     model: modelSummary(model),
-    nextAction: deriveNextAction(status.state, latestChapter?.chapter ?? null, pendingFeedback),
+    nextAction: deriveNextAction(status.state, latestChapter?.chapter ?? null, pendingFeedback, style),
     quality,
     style,
   };
@@ -156,6 +156,7 @@ function deriveNextAction(
   state: ProjectStateResult,
   latestChapter: number | null,
   pendingFeedback: boolean,
+  style?: CockpitStyleOverview,
 ): CockpitNextAction {
   if (pendingFeedback) {
     return {
@@ -164,6 +165,9 @@ function deriveNextAction(
       message: '确认应用修改',
     };
   }
+  const styleHint = style?.generation?.active && style.currentProfile
+    ? `下一章将使用文风：${style.currentProfile.name}`
+    : undefined;
   if (latestChapter !== null) {
     const next = state.nextDraftChapter;
     return {
@@ -171,6 +175,7 @@ function deriveNextAction(
       label: `继续写第 ${next} 章`,
       message: '继续写',
       chapter: next,
+      styleHint,
     };
   }
   return {
@@ -178,6 +183,7 @@ function deriveNextAction(
     label: '写第 1 章',
     message: '继续写',
     chapter: 1,
+    styleHint,
   };
 }
 
