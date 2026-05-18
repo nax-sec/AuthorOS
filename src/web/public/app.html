@@ -713,7 +713,12 @@
           view.className = 'secondary';
           view.textContent = '查看记忆更新';
           view.addEventListener('click', () => loadMemoryDelta(delta.name).catch(error => addMessage(`读取记忆更新失败：${error.message}`, false, true)));
-          item.append(meta, view);
+          const mark = document.createElement('button');
+          mark.type = 'button';
+          mark.className = 'secondary';
+          mark.textContent = '标记已合并';
+          mark.addEventListener('click', () => markMemoryDeltaReviewed(delta.name).catch(error => addMessage(`标记记忆更新失败：${error.message}`, false, true)));
+          item.append(meta, view, mark);
           memoryReview.appendChild(item);
         }
       } else {
@@ -746,6 +751,14 @@
         memoryReview.appendChild(content);
       }
       content.textContent = result.content || '这个记忆更新为空。';
+    }
+
+    async function markMemoryDeltaReviewed(name) {
+      const result = await api(`/api/memory/deltas/${encodeURIComponent(name)}/reviewed`, { method: 'POST' });
+      addMessage(result.alreadyReviewed
+        ? `记忆更新已在之前标记为合并：${result.name || name}`
+        : `已标记记忆更新为合并：${result.name || name}`);
+      await loadCockpit();
     }
 
     function renderQualityActions(actions) {

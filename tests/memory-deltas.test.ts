@@ -1,9 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../src/cli.ts';
+import { listMemoryDeltas, markMemoryDeltaReviewed } from '../src/commands/memory.ts';
 
 async function withBook(body: (bookDir: string) => Promise<void>): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), 'authoros-memory-deltas-'));
@@ -71,5 +72,32 @@ test('memory deltas show reports missing delta names clearly', async () => {
 
     assert.equal(exit, 1);
     assert.match(io.err.join(''), /memory delta not found: console-missing\.delta\.md/);
+  });
+});
+
+test('marking a memory delta reviewed records a merge marker and removes it from pending list', async () => {
+  await withBook(async (bookDir) => {
+    await mkdir(join(bookDir, 'memory'), { recursive: true });
+    await writeFile(join(bookDir, 'memory/chapter-0001.delta.md'), '# Chapter 1 Delta\n', 'utf8');
+
+    const result = await markMemoryDeltaReviewed(bookDir, 'chapter-0001.delta.md', {
+      now: new Date('2026-05-19T09:30:00Z'),
+    });
+    const pending = await listMemoryDeltas(bookDir);
+    const canon = await readFile(join(bookDir, 'memory/canon.md'), 'utf8');
+
+    assert.equal(result.name, 'chapter-0001.delta.md');
+    assert.equal(result.alreadyReviewed, false);
+    assert.match(canon, /reviewed: chapter-0001\.delta\.md/);
+    assert.match(canon, /2026-05-19T09:30:00\.000Z/);
+    assert.equal(pending.some((delta) => delta.name === 'chapter-0001.delta.md'), false);
+
+    const second = await markMemoryDeltaReviewed(bookDir, 'chapter-0001.delta.md', {
+      now: new Date('2026-05-19T09:31:00Z'),
+    });
+    const canonAfterSecondMark = await readFile(join(bookDir, 'memory/canon.md'), 'utf8');
+
+    assert.equal(second.alreadyReviewed, true);
+    assert.equal((canonAfterSecondMark.match(/chapter-0001\.delta\.md/g) ?? []).length, 1);
   });
 });

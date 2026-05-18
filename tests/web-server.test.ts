@@ -582,6 +582,29 @@ test('web server exposes pending memory delta content for cockpit review', async
   });
 });
 
+test('web server marks a pending memory delta as reviewed', async () => {
+  await withTempRoot(async (root) => {
+    await writeStyleReadyBook(root);
+    await writeFile(join(root, 'books/demo/memory/chapter-0001.delta.md'), '# delta\n\n- 已合并内容', 'utf8');
+    const server = createWebServer({ root, env: {} });
+
+    const response = await server.fetch(new Request('http://local/api/memory/deltas/chapter-0001.delta.md/reviewed', {
+      method: 'POST',
+    }));
+    const body = await response.json();
+    const cockpit = await server.fetch(new Request('http://local/api/cockpit'));
+    const cockpitBody = await cockpit.json();
+    const canon = await readFile(join(root, 'books/demo/memory/canon.md'), 'utf8');
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.name, 'chapter-0001.delta.md');
+    assert.equal(body.alreadyReviewed, false);
+    assert.match(canon, /reviewed: chapter-0001\.delta\.md/);
+    assert.equal(cockpitBody.quality.memoryDeltas.some((delta: { name: string }) => delta.name === 'chapter-0001.delta.md'), false);
+  });
+});
+
 test('web server explains failed model jobs with readable failure details', async () => {
   await withTempRoot(async (root) => {
     await writeStyleReadyBook(root);

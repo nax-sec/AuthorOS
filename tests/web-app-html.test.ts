@@ -40,9 +40,12 @@ test('private web app exposes personal cockpit regions', async () => {
   assert.match(html, /生成决策/);
   assert.match(html, /生成记忆更新/);
   assert.match(html, /查看记忆更新/);
+  assert.match(html, /标记已合并/);
   assert.match(html, /loadMemoryDelta/);
+  assert.match(html, /markMemoryDeltaReviewed/);
   assert.match(html, /memoryDeltaContent/);
   assert.match(html, /api\(`\/api\/memory\/deltas\/\$\{encodeURIComponent\(name\)\}`\)/);
+  assert.match(html, /api\(`\/api\/memory\/deltas\/\$\{encodeURIComponent\(name\)\}\/reviewed`/);
   assert.match(html, /renderStyle/);
   assert.match(html, /renderQuality\(data\.quality, data\.jobs \|\| \[\]\)/);
   assert.match(html, /文风档案/);

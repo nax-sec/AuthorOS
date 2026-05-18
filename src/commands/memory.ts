@@ -36,6 +36,18 @@ export interface PendingMemoryDelta {
   description: string;
 }
 
+export interface MarkMemoryDeltaReviewedOptions {
+  now?: Date;
+}
+
+export interface MarkMemoryDeltaReviewedResult {
+  name: string;
+  path: string;
+  marker: string;
+  markedAt: string;
+  alreadyReviewed: boolean;
+}
+
 const memoryAgent = 'memory-curator';
 const memoryDirectory = 'memory';
 
@@ -102,6 +114,7 @@ export async function listMemoryDeltas(projectDir: string): Promise<PendingMemor
 
   for (const name of entries.sort()) {
     if (/^console-[^/\\]+\.delta\.md$/.test(name)) {
+      if (canon.includes(name)) continue;
       pending.push({
         name,
         kind: 'console',
@@ -154,6 +167,46 @@ export async function showMemoryDelta(projectDir: string, name: string): Promise
     throw new AuthorOsError(`memory delta not found: ${name}`);
   }
   return content.endsWith('\n') ? content : `${content}\n`;
+}
+
+export async function markMemoryDeltaReviewed(
+  projectDir: string,
+  name: string,
+  options: MarkMemoryDeltaReviewedOptions = {},
+): Promise<MarkMemoryDeltaReviewedResult> {
+  const safeName = sanitizeDeltaName(name);
+  const deltaPath = join(projectDir, memoryDirectory, safeName);
+  const deltaContent = await readOptional(deltaPath);
+  if (deltaContent === null) {
+    throw new AuthorOsError(`memory delta not found: ${name}`);
+  }
+
+  const canonPath = join(projectDir, memoryDirectory, 'canon.md');
+  const canon = await readOptional(canonPath) ?? '# 正史设定\n';
+  const markedAt = (options.now ?? new Date()).toISOString();
+  const marker = `- reviewed: ${safeName} at ${markedAt}`;
+  if (canon.includes(safeName)) {
+    return {
+      name: safeName,
+      path: 'memory/canon.md',
+      marker,
+      markedAt,
+      alreadyReviewed: true,
+    };
+  }
+
+  await mkdir(join(projectDir, memoryDirectory), { recursive: true });
+  const base = canon.endsWith('\n') ? canon : `${canon}\n`;
+  const heading = base.includes('## 已审阅记忆增量') ? '' : '\n## 已审阅记忆增量\n\n';
+  await writeFile(canonPath, `${base}${heading}${marker}\n`, 'utf8');
+
+  return {
+    name: safeName,
+    path: 'memory/canon.md',
+    marker,
+    markedAt,
+    alreadyReviewed: false,
+  };
 }
 
 async function generateMemoryDeltaWithModel(

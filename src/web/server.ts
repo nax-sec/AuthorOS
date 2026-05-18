@@ -29,7 +29,7 @@ import { bindStyleProfile, createStyleProfileFromText, saveStyleProfile, type St
 import { getModelDoctor, type ModelDoctorResult } from '../commands/model.ts';
 import { createChapterReview } from '../commands/review.ts';
 import { createChapterDecision } from '../commands/decide.ts';
-import { createMemoryUpdate, showMemoryDelta } from '../commands/memory.ts';
+import { createMemoryUpdate, markMemoryDeltaReviewed, showMemoryDelta } from '../commands/memory.ts';
 import { createOpenAiCompatibleClientFromProject, type LlmClient } from '../core/llm.ts';
 import type { EnvLike } from '../core/modelConfig.ts';
 
@@ -123,6 +123,12 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
       }
       if (routePath === '/api/model/doctor' && request.method === 'GET') {
         return json(await getWebModelDoctor(root, env));
+      }
+      const memoryDeltaReviewedMatch = routePath.match(/^\/api\/memory\/deltas\/([^/]+)\/reviewed$/);
+      if (memoryDeltaReviewedMatch?.[1] && request.method === 'POST') {
+        const book = await getCurrentPrivateBook(root);
+        const result = await markMemoryDeltaReviewed(join(root, book.path), decodeURIComponent(memoryDeltaReviewedMatch[1]));
+        return json({ ok: true, ...result });
       }
       const memoryDeltaMatch = routePath.match(/^\/api\/memory\/deltas\/([^/]+)$/);
       if (memoryDeltaMatch?.[1] && request.method === 'GET') {
