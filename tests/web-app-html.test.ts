@@ -6,17 +6,27 @@ test('private web app exposes personal cockpit regions', async () => {
   const html = await readFile(new URL('../src/web/public/app.html', import.meta.url), 'utf8');
 
   assert.match(html, /AuthorOS Personal Cockpit/);
+  assert.match(html, /class="desk-shell"/);
+  assert.match(html, /data-testid="app-shell"/);
   assert.match(html, /data-testid="session-status"/);
   assert.match(html, /data-testid="resident-shell"/);
+  assert.match(html, /data-testid="persistent-session-dock"/);
   assert.match(html, /data-testid="writing-desk"/);
   assert.match(html, /data-testid="desk-sidebar"/);
   assert.match(html, /data-testid="desk-main"/);
   assert.match(html, /data-testid="desk-rail"/);
+  assert.match(html, /data-testid="focus-nav"/);
+  assert.match(html, /href="#chapterPanel"/);
+  assert.match(html, /href="#qualityWorkbench"/);
+  assert.match(html, /href="#previewWorkbench"/);
+  assert.match(html, /href="#memoryWorkbench"/);
   assert.match(html, /data-testid="book-context-card"/);
   assert.match(html, /data-testid="model-health-card"/);
   assert.match(html, /data-testid="daily-session-summary"/);
   assert.match(html, /data-testid="cockpit-center"/);
   assert.match(html, /data-testid="assistant-panel"/);
+  assert.match(html, /data-testid="assistant-dock"/);
+  assert.match(html, /data-testid="rail-utilities"/);
   assert.match(html, /data-testid="assistant-quick-actions"/);
   assert.match(html, /data-testid="rewrite-intent-panel"/);
   assert.match(html, /data-testid="next-action"/);

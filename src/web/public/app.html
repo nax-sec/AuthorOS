@@ -26,8 +26,10 @@
       --danger-soft: #fff0ef;
     }
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body { margin: 0; background: var(--bg); color: var(--ink); }
-    header { position: sticky; top: 0; z-index: 10; display: grid; grid-template-columns: minmax(220px, 340px) minmax(0, 1fr); align-items: center; gap: 20px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: rgba(255, 255, 255, .94); backdrop-filter: blur(12px); }
+    body.desk-shell { min-height: 100vh; overflow-x: hidden; }
+    .app-header { position: sticky; top: 0; z-index: 20; display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); align-items: center; gap: 16px; min-height: 72px; padding: 10px 18px; border-bottom: 1px solid var(--line); background: rgba(255, 255, 255, .96); backdrop-filter: blur(12px); }
     h1 { margin: 0; font-size: 24px; line-height: 1.1; }
     h2 { margin: 0; font-size: 16px; line-height: 1.25; }
     h3 { margin: 0; font-size: 14px; line-height: 1.25; }
@@ -40,13 +42,16 @@
     .muted { color: var(--muted); font-size: 13px; line-height: 1.45; }
     .header-title { display: grid; gap: 4px; min-width: 0; }
     .eyebrow { color: var(--teal); font-size: 12px; font-weight: 800; }
+    .persistent-session-dock { min-width: 0; }
     .resident-shell { display: grid; grid-template-columns: auto repeat(3, minmax(112px, 1fr)) auto; align-items: center; gap: 10px; min-width: 0; }
     .resident-heading { color: var(--muted); font-size: 12px; font-weight: 800; }
     .resident-item { display: grid; gap: 2px; min-width: 0; padding: 8px 10px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--panel-soft); }
     .resident-label { color: var(--muted); font-size: 11px; }
     .resident-value { overflow: hidden; color: var(--ink); font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-    .cockpit { display: grid; grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) minmax(300px, 360px); gap: 18px; max-width: 1500px; margin: 0 auto; padding: 18px 24px 28px; }
-    .desk-sidebar, .desk-rail { align-self: start; position: sticky; top: 86px; max-height: calc(100vh - 104px); overflow: auto; }
+    .cockpit { display: grid; grid-template-columns: 248px minmax(0, 1fr) 390px; gap: 14px; align-items: start; width: 100%; min-height: calc(100vh - 72px); padding: 14px 16px 22px; }
+    .desk-sidebar, .desk-rail { align-self: start; position: sticky; top: 86px; max-height: calc(100vh - 102px); overflow: auto; }
+    .desk-sidebar { padding-right: 2px; }
+    .desk-rail { display: grid; gap: 12px; padding-left: 2px; }
     .panel { min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 16px; }
     .panel.tight { padding: 14px; }
     .panel-subtitle { color: var(--muted); font-size: 12px; font-weight: 700; }
@@ -57,7 +62,11 @@
     .book.current { border-color: #9bb9ff; background: var(--accent-soft); }
     .book-title { font-weight: 800; }
     .next-action { display: grid; gap: 8px; padding: 12px; border: 1px solid #b8d6d0; border-radius: 8px; background: var(--teal-soft); }
-    .workspace, .cockpit-center { display: grid; gap: 16px; }
+    .workspace, .cockpit-center { display: grid; gap: 14px; }
+    .workspace-nav { position: sticky; top: 86px; z-index: 8; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255, 255, 255, .96); backdrop-filter: blur(10px); }
+    .workspace-nav a { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; border: 1px solid var(--line-soft); border-radius: 7px; background: var(--panel-soft); color: var(--ink); font-size: 13px; font-weight: 800; text-decoration: none; }
+    .workspace-nav a:hover { border-color: #9bb9ff; background: var(--accent-soft); color: var(--accent); }
+    .workbench-anchor { height: 1px; scroll-margin-top: 148px; }
     .current-book { display: grid; gap: 14px; border-color: #cbd8f5; background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%); }
     .current-book .book-title { font-size: 20px; }
     .context-copy { display: grid; gap: 8px; }
@@ -67,7 +76,7 @@
     .model-health-card.missing_key, .model-health-card.configured_without_key { border-color: #f0c57d; background: var(--amber-soft); }
     .quality-loop { display: grid; gap: 12px; }
     .next-chapter-card, .preview-card { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line-soft); border-radius: 7px; background: var(--panel-soft); }
-    .chapter-panel { padding: 0; overflow: hidden; }
+    .chapter-panel { padding: 0; overflow: hidden; scroll-margin-top: 148px; }
     .chapter-head { padding: 14px 16px; border-bottom: 1px solid var(--line-soft); background: #fff; }
     .chapter-workbench { display: grid; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line-soft); background: var(--panel-soft); }
     .chapter-list { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -107,12 +116,13 @@
     .signal-danger { color: var(--danger); font-weight: 800; }
     .signal-warning { color: var(--amber); font-weight: 800; }
     .signal-ok { color: #176b37; font-weight: 800; }
-    .chapter { min-height: 420px; max-height: 58vh; overflow: auto; white-space: pre-wrap; line-height: 1.78; padding: 18px; font-size: 15px; }
-    .assistant-panel { border-color: #cbd8f5; }
+    .chapter { min-height: 460px; max-height: 64vh; overflow: auto; white-space: pre-wrap; line-height: 1.78; padding: 18px; font-size: 15px; }
+    .assistant-dock { position: sticky; top: 0; z-index: 6; }
+    .assistant-panel { display: grid; grid-template-rows: auto minmax(160px, 1fr) auto auto auto; gap: 10px; max-height: calc(100vh - 104px); border-color: #cbd8f5; box-shadow: 0 12px 30px rgba(24, 34, 48, .08); }
     .assistant-input { display: grid; gap: 8px; }
     .assistant-quick-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     .quick-action { min-height: 34px; padding: 7px 9px; border-color: #b8c3d2; background: #fff; color: var(--ink); font-size: 12px; }
-    .chat-log { min-height: 220px; max-height: 38vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; white-space: pre-wrap; }
+    .chat-log { min-height: 180px; overflow: auto; display: flex; flex-direction: column; gap: 10px; white-space: pre-wrap; }
     .msg { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; line-height: 1.5; }
     .me { align-self: flex-end; max-width: 88%; background: var(--accent-soft); }
     .assistant { align-self: flex-start; max-width: 86%; }
@@ -124,40 +134,46 @@
     .phase-note-body { color: var(--muted); font-size: 12px; line-height: 1.45; }
     .recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .recovery-actions button { min-height: 34px; }
+    .rail-utilities { display: grid; gap: 12px; }
     @media (max-width: 1180px) {
       header { align-items: flex-start; grid-template-columns: 1fr; }
       .resident-shell { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .resident-heading { grid-column: 1 / -1; }
       .cockpit { grid-template-columns: 1fr; padding: 14px; }
+      .workspace-nav { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .comparison-grid { grid-template-columns: 1fr; }
       .commitment-grid { grid-template-columns: 1fr; }
       .desk-sidebar, .desk-rail { position: static; max-height: none; overflow: visible; }
+      .assistant-dock { position: static; }
+      .assistant-panel { max-height: none; }
       .chapter, .chat-log { max-height: none; }
     }
   </style>
 </head>
-<body>
-  <header>
+<body class="desk-shell" data-testid="app-shell">
+  <header class="app-header">
     <div class="header-title">
       <span class="eyebrow">个人写作桌面</span>
       <h1>AuthorOS</h1>
       <span id="sessionStatus" class="muted" data-testid="session-status">正在检查会话...</span>
     </div>
-    <section class="resident-shell" data-testid="resident-shell" aria-label="常驻会话">
-      <span class="resident-heading">常驻会话</span>
-      <div class="resident-item">
-        <span class="resident-label">服务</span>
-        <span id="residentService" class="resident-value">检查中...</span>
+    <section class="persistent-session-dock" data-testid="persistent-session-dock" aria-label="常驻会话壳">
+      <div class="resident-shell" data-testid="resident-shell" aria-label="常驻会话">
+        <span class="resident-heading">常驻会话</span>
+        <div class="resident-item">
+          <span class="resident-label">服务</span>
+          <span id="residentService" class="resident-value">检查中...</span>
+        </div>
+        <div class="resident-item">
+          <span class="resident-label">当前书</span>
+          <span id="residentBook" class="resident-value">暂无当前书</span>
+        </div>
+        <div class="resident-item">
+          <span class="resident-label">任务</span>
+          <span id="residentTask" class="resident-value">暂无任务</span>
+        </div>
+        <button class="secondary" id="resumeSession" disabled>恢复现场</button>
       </div>
-      <div class="resident-item">
-        <span class="resident-label">当前书</span>
-        <span id="residentBook" class="resident-value">暂无当前书</span>
-      </div>
-      <div class="resident-item">
-        <span class="resident-label">任务</span>
-        <span id="residentTask" class="resident-value">暂无任务</span>
-      </div>
-      <button class="secondary" id="resumeSession" disabled>恢复现场</button>
     </section>
   </header>
   <main class="cockpit writing-desk" data-testid="writing-desk">
@@ -216,6 +232,12 @@
             <button class="secondary" id="downloadAll">下载全部章节</button>
           </div>
         </section>
+        <nav class="workspace-nav" data-testid="focus-nav" aria-label="写作焦点">
+          <a href="#chapterPanel">正文</a>
+          <a href="#qualityWorkbench">生产线</a>
+          <a href="#previewWorkbench">预览</a>
+          <a href="#memoryWorkbench">记忆</a>
+        </nav>
         <section class="panel stack" data-testid="book-commitment-card" aria-label="书籍承诺">
           <div class="section-head">
             <div>
@@ -226,7 +248,7 @@
           </div>
           <div id="commitmentGrid" class="commitment-grid"></div>
         </section>
-        <section class="panel chapter-panel">
+        <section id="chapterPanel" class="panel chapter-panel">
           <div class="section-head chapter-head">
             <div>
               <span class="panel-subtitle">正文</span>
@@ -239,7 +261,7 @@
           </div>
           <article class="chapter" id="chapter" data-testid="chapter-reader">还没有读取章节。</article>
         </section>
-        <section class="panel quality-loop" data-testid="quality-loop" aria-label="质量环路">
+        <section id="qualityWorkbench" class="panel quality-loop" data-testid="quality-loop" aria-label="质量环路">
           <div class="section-head">
             <div>
               <span class="panel-subtitle">章节生产线</span>
@@ -252,8 +274,10 @@
           <div id="qualityStages" class="stage-grid"></div>
           <div id="qualityActions" class="preview-card quality-actions" data-testid="quality-actions"></div>
           <div id="qualityArtifacts" class="preview-card" data-testid="quality-artifacts"></div>
+          <div id="previewWorkbench" class="workbench-anchor" aria-hidden="true"></div>
           <div id="previewComparison" class="preview-card" data-testid="preview-comparison"></div>
           <div id="pendingPreview" class="preview-card" data-testid="pending-preview"></div>
+          <div id="memoryWorkbench" class="workbench-anchor" aria-hidden="true"></div>
           <div id="memoryReviewCards" class="preview-card memory-review-cards" data-testid="memory-review-cards"></div>
           <div id="memoryReview" class="preview-card" data-testid="memory-review"></div>
           <div id="recoveryHint" class="preview-card"></div>
@@ -262,36 +286,39 @@
     </section>
 
     <aside class="desk-rail stack" data-testid="desk-rail">
-      <section class="panel assistant-panel stack" data-testid="assistant-panel" aria-label="作者助理">
-        <div class="section-head">
-          <div>
-            <span class="panel-subtitle">常驻搭档</span>
-            <h2>作者助理</h2>
+      <div class="assistant-dock" data-testid="assistant-dock">
+        <section class="panel assistant-panel stack" data-testid="assistant-panel" aria-label="作者助理">
+          <div class="section-head">
+            <div>
+              <span class="panel-subtitle">常驻搭档</span>
+              <h2>作者助理</h2>
+            </div>
           </div>
-        </div>
-        <div id="chatLog" class="chat-log" data-testid="assistant-chat"></div>
-        <div class="assistant-quick-actions" data-testid="assistant-quick-actions" aria-label="作者助理快捷动作">
-          <button class="quick-action" type="button" data-message="帮我继续推进当前书">继续推进</button>
-          <button class="quick-action" type="button" data-message="读最新章">读最新章</button>
-          <button class="quick-action" type="button" data-message="帮这一章去 AI 味">去 AI 味</button>
-          <button class="quick-action" type="button" data-message="仿写文风处理这一章">仿写文风</button>
-        </div>
-        <div class="assistant-quick-actions" data-testid="rewrite-intent-panel" aria-label="改写意图">
-          <button class="quick-action" type="button" data-message="去 AI 味">去 AI 味</button>
-          <button class="quick-action" type="button" data-message="仿写文风">仿写文风</button>
-          <button class="quick-action" type="button" data-message="文风润色">文风润色</button>
-          <button class="quick-action" type="button" data-message="强化开头">强化开头</button>
-          <button class="quick-action" type="button" data-message="强化章尾钩子">强化章尾钩子</button>
-          <button class="quick-action" type="button" data-message="减少解释">减少解释</button>
-          <button class="quick-action" type="button" data-message="增加压迫感">增加压迫感</button>
-          <button class="quick-action" type="button" data-message="对白瘦身">对白瘦身</button>
-          <button class="quick-action" type="button" data-message="保留剧情换文风">保留剧情换文风</button>
-        </div>
-        <div class="assistant-input">
-          <textarea id="message" placeholder="开一本新书、继续写、读最新章，或直接说哪里要改"></textarea>
-          <button id="send">发送</button>
-        </div>
-      </section>
+          <div id="chatLog" class="chat-log" data-testid="assistant-chat"></div>
+          <div class="assistant-quick-actions" data-testid="assistant-quick-actions" aria-label="作者助理快捷动作">
+            <button class="quick-action" type="button" data-message="帮我继续推进当前书">继续推进</button>
+            <button class="quick-action" type="button" data-message="读最新章">读最新章</button>
+            <button class="quick-action" type="button" data-message="帮这一章去 AI 味">去 AI 味</button>
+            <button class="quick-action" type="button" data-message="仿写文风处理这一章">仿写文风</button>
+          </div>
+          <div class="assistant-quick-actions" data-testid="rewrite-intent-panel" aria-label="改写意图">
+            <button class="quick-action" type="button" data-message="去 AI 味">去 AI 味</button>
+            <button class="quick-action" type="button" data-message="仿写文风">仿写文风</button>
+            <button class="quick-action" type="button" data-message="文风润色">文风润色</button>
+            <button class="quick-action" type="button" data-message="强化开头">强化开头</button>
+            <button class="quick-action" type="button" data-message="强化章尾钩子">强化章尾钩子</button>
+            <button class="quick-action" type="button" data-message="减少解释">减少解释</button>
+            <button class="quick-action" type="button" data-message="增加压迫感">增加压迫感</button>
+            <button class="quick-action" type="button" data-message="对白瘦身">对白瘦身</button>
+            <button class="quick-action" type="button" data-message="保留剧情换文风">保留剧情换文风</button>
+          </div>
+          <div class="assistant-input">
+            <textarea id="message" placeholder="开一本新书、继续写、读最新章，或直接说哪里要改"></textarea>
+            <button id="send">发送</button>
+          </div>
+        </section>
+      </div>
+      <div class="rail-utilities" data-testid="rail-utilities">
       <section class="panel model-config" data-testid="model-config" aria-label="模型配置">
         <div class="section-head">
           <div>
@@ -358,6 +385,7 @@
         </div>
         <div id="taskCenter" class="stack muted" data-testid="task-center">还没有任务。</div>
       </section>
+      </div>
     </aside>
   </main>
   <script>
