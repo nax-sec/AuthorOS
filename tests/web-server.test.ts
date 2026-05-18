@@ -23,6 +23,21 @@ async function writeInvalidJobHistory(root: string): Promise<void> {
   await writeFile(join(dir, 'jobs.json'), '{ invalid json', 'utf8');
 }
 
+async function waitForJob(
+  server: ReturnType<typeof createWebServer>,
+  url: string,
+  headers?: HeadersInit,
+): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const response = await server.fetch(new Request(url, { headers }));
+    const body = await response.json();
+    const job = body.jobs?.[0];
+    if (job?.status === 'completed' || job?.status === 'failed') return;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error(`job did not finish: ${url}`);
+}
+
 test('web server blocks API requests when token is configured', async () => {
   const server = createWebServer({ root: 'D:\\tmp\\missing', token: 'secret' });
 
@@ -101,6 +116,7 @@ test('web server can use llm agent mode for vague messages', async () => {
     assert.equal(response.status, 200);
     assert.equal(body.action, 'feedback_preview');
     assert.equal(body.command.type, 'feedback');
+    if (body.jobId) await waitForJob(server, 'http://local/api/jobs');
   });
 });
 
@@ -131,6 +147,7 @@ test('web server hybrid mode calls receptionist before rule routing', async () =
     assert.equal(called, true);
     assert.equal(body.action, 'new_book_intake');
     assert.equal(body.message, '我先接待，再决定是否建书。');
+    if (body.jobId) await waitForJob(server, 'http://local/api/jobs');
   });
 });
 
@@ -151,6 +168,7 @@ test('web server hybrid chat falls back to rules when receptionist client is una
     assert.equal(response.status, 200);
     assert.equal(body.action, 'continue_book');
     assert.equal(body.command.type, 'continue');
+    await waitForJob(server, 'http://local/api/jobs');
   });
 });
 
@@ -171,6 +189,7 @@ test('web server hybrid chat falls back to rules when receptionist model is unav
     assert.equal(response.status, 200);
     assert.equal(body.action, 'continue_book');
     assert.equal(body.command.type, 'continue');
+    await waitForJob(server, 'http://local/api/jobs');
   });
 });
 
@@ -250,6 +269,7 @@ test('web server exposes job history', async () => {
       body: JSON.stringify({ message: '读最新章' }),
     }));
     assert.equal(chat.status, 200);
+    await waitForJob(server, 'http://local/api/jobs');
 
     const jobs = await server.fetch(new Request('http://local/api/jobs'));
     const body = await jobs.json();
@@ -267,6 +287,7 @@ test('web server persists job history across server instances', async () => {
       method: 'POST',
       body: JSON.stringify({ message: '继续写' }),
     }));
+    await waitForJob(first, 'http://local/api/jobs');
 
     const second = createWebServer({ root, agentMode: 'rule', env: {} });
     const response = await second.fetch(new Request('http://local/api/jobs'));
@@ -290,6 +311,7 @@ test('web server keeps room job history isolated', async () => {
       headers: { authorization: 'Bearer 1' },
       body: JSON.stringify({ message: '读最新章' }),
     }));
+    await waitForJob(server, 'http://local/room/room1/api/jobs', { authorization: 'Bearer 1' });
 
     const room1 = await server.fetch(new Request('http://local/room/room1/api/jobs', {
       headers: { authorization: 'Bearer 1' },

@@ -96,11 +96,11 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
         return json(await getPrivateStatus(root));
       }
       if (routePath === '/api/jobs' && request.method === 'GET') {
-        const runtime = roomRoute?.room ? runtimeForRoom(roomRuntimes, roomRoute.room) : (singleRuntime ??= createRuntimeForRoot(options.root));
+        const runtime = runtimeForRoute(roomRoute, () => singleRuntime ??= createRuntimeForRoot(options.root), roomRuntimes);
         return json({ jobs: runtime.jobs.list() });
       }
       if (routePath === '/api/chat' && request.method === 'POST') {
-        const runtime = roomRoute?.room ? runtimeForRoom(roomRuntimes, roomRoute.room) : (singleRuntime ??= createRuntimeForRoot(options.root));
+        const runtime = runtimeForRoute(roomRoute, () => singleRuntime ??= createRuntimeForRoot(options.root), roomRuntimes);
         const body = await request.json() as { message?: string };
         const result = await resolveAgentMessage({ ...options, root }, runtime.session, body.message ?? '', env);
         if (result.kind === 'reply') return json(result);
@@ -110,7 +110,7 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
       }
       const jobEventsMatch = routePath.match(/^\/api\/jobs\/([^/]+)\/events$/);
       if (jobEventsMatch?.[1] && request.method === 'GET') {
-        const runtime = roomRoute?.room ? runtimeForRoom(roomRuntimes, roomRoute.room) : (singleRuntime ??= createRuntimeForRoot(options.root));
+        const runtime = runtimeForRoute(roomRoute, () => singleRuntime ??= createRuntimeForRoot(options.root), roomRuntimes);
         return sseStream(runtime.jobs, jobEventsMatch[1], request.signal);
       }
       const chapterMatch = routePath.match(/^\/api\/chapters\/([^/]+)$/);
@@ -214,6 +214,14 @@ function recoverInterruptedJobs(jobs: WebJob[]): { jobs: WebJob[]; changed: bool
     };
   });
   return { jobs: recovered, changed };
+}
+
+function runtimeForRoute(
+  route: { room: WebRoom } | undefined,
+  single: () => WebRuntime,
+  runtimes: Map<string, WebRuntime>,
+): WebRuntime {
+  return route?.room ? runtimeForRoom(runtimes, route.room) : single();
 }
 
 function runtimeForRoom(runtimes: Map<string, WebRuntime>, room: WebRoom): WebRuntime {
