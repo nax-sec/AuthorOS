@@ -27,7 +27,7 @@ export async function createOpenAiCompatibleClientFromProject(
   const config = await resolveProjectModelConfig(projectDir, env);
   return createOpenAiCompatibleClient({
     apiKeyEnv: config.apiKeyEnv,
-    apiKey: env[config.apiKeyEnv],
+    apiKey: config.apiKey,
     baseUrl: config.baseUrl,
     model: config.model,
   }, fetcher);

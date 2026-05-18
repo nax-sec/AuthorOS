@@ -4,6 +4,8 @@ import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../src/cli.ts';
+import { getModelConfig } from '../src/commands/model.ts';
+import { projectModelSecretPath, setProjectModelApiKey, setProjectModelConfig } from '../src/core/modelConfig.ts';
 
 async function withInitedProject(body: (cwd: string) => Promise<void>): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), 'authoros-v2-model-test-'));
@@ -123,5 +125,25 @@ test('model config resolves env fallbacks when project config is empty', async (
     assert.match(output, /api key env: OPENAI_API_KEY \(set\)/);
     assert.match(output, /baseUrl: https:\/\/example\.com\/v1/);
     assert.match(output, /model: env-model/);
+  });
+});
+
+test('model config resolves a locally saved api key without storing it in model.json', async () => {
+  await withInitedProject(async (cwd) => {
+    await setProjectModelConfig(cwd, {
+      apiKeyEnv: 'AUTHOROS_API_KEY',
+      baseUrl: 'https://example.com/v1',
+      model: 'local-model',
+    });
+    await setProjectModelApiKey(cwd, 'sk-local-test-key');
+
+    const view = await getModelConfig(cwd, {});
+    const stored = JSON.parse(await readFile(join(cwd, '.authoros/model.json'), 'utf8'));
+    const secret = JSON.parse(await readFile(join(cwd, projectModelSecretPath()), 'utf8'));
+
+    assert.equal(view.apiKeySet, true);
+    assert.equal(view.apiKeySource, 'local');
+    assert.equal(stored.apiKey, undefined);
+    assert.equal(secret.apiKey, 'sk-local-test-key');
   });
 });

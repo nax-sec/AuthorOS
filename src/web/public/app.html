@@ -71,6 +71,8 @@
     .chapter-list button { min-height: 32px; padding: 6px 10px; }
     .chapter-list button.active { border-color: var(--accent); background: var(--accent); color: #fff; }
     .style-profile { display: grid; gap: 8px; }
+    .model-config { display: grid; gap: 8px; }
+    .model-config-grid { display: grid; gap: 8px; }
     .style-extract { display: grid; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line-soft); }
     .style-actions { display: grid; gap: 8px; }
     .profile-option { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--line-soft); border-radius: 7px; background: var(--panel-soft); }
@@ -229,6 +231,28 @@
           <button id="send">发送</button>
         </div>
       </section>
+      <section class="panel model-config" data-testid="model-config" aria-label="模型配置">
+        <div class="section-head">
+          <div>
+            <span class="panel-subtitle">模型</span>
+            <h2>模型配置</h2>
+          </div>
+        </div>
+        <div id="modelConfigStatus" class="book-title">正在检查模型配置</div>
+        <div id="modelConfigScope" class="muted"></div>
+        <div class="model-config-grid">
+          <input id="modelName" placeholder="模型名，例如 gpt-4.1 或 deepseek-chat">
+          <input id="modelBaseUrl" placeholder="Base URL，例如 https://api.openai.com/v1">
+          <input id="modelApiKeyEnv" placeholder="API Key 环境变量名，例如 OPENAI_API_KEY">
+          <input id="modelApiKey" type="password" autocomplete="off" placeholder="粘贴 API Key，留空则不修改">
+        </div>
+        <div class="row">
+          <button id="saveModelConfig">保存模型配置</button>
+          <button class="secondary" id="checkModelConfig">检查</button>
+          <button class="secondary" id="resetModelConfig">重置</button>
+        </div>
+        <div id="modelConfigHint" class="muted">Key 会保存在本机配置文件中，页面不会回显明文。</div>
+      </section>
       <section class="panel style-profile" data-testid="style-profile" aria-label="文风档案">
         <div class="section-head">
           <div>
@@ -296,6 +320,13 @@
     const styleProfileName = document.querySelector('#styleProfileName');
     const styleReferenceText = document.querySelector('#styleReferenceText');
     const styleExtractHint = document.querySelector('#styleExtractHint');
+    const modelConfigStatus = document.querySelector('#modelConfigStatus');
+    const modelConfigScope = document.querySelector('#modelConfigScope');
+    const modelConfigHint = document.querySelector('#modelConfigHint');
+    const modelName = document.querySelector('#modelName');
+    const modelBaseUrl = document.querySelector('#modelBaseUrl');
+    const modelApiKeyEnv = document.querySelector('#modelApiKeyEnv');
+    const modelApiKey = document.querySelector('#modelApiKey');
     const messageInput = document.querySelector('#message');
     const roomPrefix = (location.pathname.match(/^\/room\/[^/]+/) || [''])[0];
     const tokenKey = `authoros_token:${roomPrefix || 'single'}`;
@@ -381,6 +412,9 @@
       cockpit = await api('/api/cockpit');
       renderCockpit(cockpit);
       renderJobs(cockpit.jobs || []);
+      await loadModelConfig(false).catch(error => {
+        modelConfigHint.textContent = `模型配置读取失败：${error.message}`;
+      });
       if (cockpit.current && cockpit.current.latestChapter) await loadLatestChapter(false);
     }
 
@@ -431,6 +465,83 @@
       }
       renderQuality(data.quality, data.jobs || []);
       renderStyle(data.style);
+    }
+
+    async function loadModelConfig(showMessage = false) {
+      const result = await api('/api/model/config');
+      renderModelConfig(result);
+      if (showMessage) addMessage(formatModelConfigSummary(result));
+    }
+
+    function renderModelConfig(result) {
+      const config = result && result.config ? result.config : {};
+      const scope = result && result.scope ? result.scope : {};
+      const source = modelApiKeySourceLabel(config.apiKeySource);
+      modelConfigStatus.textContent = config.apiKeySet
+        ? `API Key 已配置 · ${source}`
+        : 'API Key 未配置';
+      modelConfigScope.textContent = `作用域：${modelScopeLabel(scope)} · ${config.path || '.authoros/model.json'}`;
+      modelName.value = config.model || '';
+      modelBaseUrl.value = config.baseUrl || 'https://api.openai.com/v1';
+      modelApiKeyEnv.value = config.apiKeyEnv || 'OPENAI_API_KEY';
+      modelApiKey.value = '';
+      modelConfigHint.textContent = config.apiKeySet
+        ? 'Key 已保存在本机或环境变量中；为安全起见不会回显。'
+        : '可以直接粘贴 API Key 保存到本机，也可以只填写环境变量名。';
+    }
+
+    function modelScopeLabel(scope) {
+      return scope && scope.kind === 'current_book'
+        ? `当前书：${scope.label || scope.bookId || '未命名'}`
+        : scope && scope.label ? scope.label : '个人根目录';
+    }
+
+    function modelApiKeySourceLabel(source) {
+      if (source === 'env') return '环境变量';
+      if (source === 'local') return '本机保存';
+      return '未配置';
+    }
+
+    function formatModelConfigSummary(result) {
+      const config = result && result.config ? result.config : {};
+      const scope = result && result.scope ? result.scope : {};
+      return [
+        '模型配置',
+        `范围：${modelScopeLabel(scope)}`,
+        `模型：${config.model || '未设置'}`,
+        `Base URL：${config.baseUrl || '默认'}`,
+        `API Key：${config.apiKeySet ? `已配置（${modelApiKeySourceLabel(config.apiKeySource)}）` : '未配置'}`,
+      ].join('\n');
+    }
+
+    async function saveModelConfig() {
+      const payload = {
+        model: modelName.value.trim(),
+        baseUrl: modelBaseUrl.value.trim(),
+        apiKeyEnv: modelApiKeyEnv.value.trim(),
+      };
+      const key = modelApiKey.value.trim();
+      if (key) payload.apiKey = key;
+      const result = await api('/api/model/config', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      renderModelConfig(result);
+      await loadCockpit();
+      addMessage('模型配置已保存。Key 不会在页面回显。');
+    }
+
+    async function resetModelConfig() {
+      if (!confirm('重置当前作用域的模型配置和本机保存的 API Key？')) return;
+      const result = await api('/api/model/config/reset', { method: 'POST' });
+      renderModelConfig(result);
+      await loadCockpit();
+      addMessage('模型配置已重置。');
+    }
+
+    async function checkModelConfig() {
+      await loadModelConfig(false);
+      showModelConfigAdvice();
     }
 
     function renderChapterWorkbench(current) {
@@ -1151,7 +1262,7 @@
       addMessage([
         '正在检查模型配置...',
         `模型：${model.model || '默认模型'}`,
-        `API key：${model.apiKeySet ? '已配置' : '未配置'}`,
+        `API key：${model.apiKeySet ? `已配置（${modelApiKeySourceLabel(model.apiKeySource)}）` : '未配置'}`,
         `Base URL：${model.baseUrl || '默认'}`,
       ].join('\n'));
       api('/api/model/doctor')
@@ -1170,7 +1281,7 @@
         '模型配置检查结果',
         `范围：${scopeLabel}`,
         `状态：${doctor.ready ? '可以调用模型' : '还缺配置'}`,
-        `API key env：${doctor.apiKeyEnv || 'OPENAI_API_KEY'}（${doctor.apiKeySet ? '已设置' : '未设置'}）`,
+        `API key env：${doctor.apiKeyEnv || 'OPENAI_API_KEY'}（${doctor.apiKeySet ? '已设置' : '未设置'}，${modelApiKeySourceLabel(doctor.apiKeySource)}）`,
         `Base URL：${doctor.baseUrl || '默认'}`,
         `模型：${doctor.model || '未设置'}`,
         blockers.length > 0 ? `阻塞项：\n- ${blockers.join('\n- ')}` : '阻塞项：无',
@@ -1571,6 +1682,9 @@
     document.querySelector('#readLatest').addEventListener('click', () => loadLatestChapter(true));
     document.querySelector('#downloadChapter').addEventListener('click', () => location.href = `${roomPrefix}/download/chapter/latest?token=${encodeURIComponent(token)}`);
     document.querySelector('#downloadAll').addEventListener('click', () => location.href = `${roomPrefix}/download/chapters.zip?token=${encodeURIComponent(token)}`);
+    document.querySelector('#saveModelConfig').addEventListener('click', () => saveModelConfig().catch(error => addMessage(`保存模型配置失败：${error.message}`, false, true)));
+    document.querySelector('#resetModelConfig').addEventListener('click', () => resetModelConfig().catch(error => addMessage(`重置模型配置失败：${error.message}`, false, true)));
+    document.querySelector('#checkModelConfig').addEventListener('click', () => checkModelConfig().catch(error => addMessage(`检查模型配置失败：${error.message}`, false, true)));
     document.querySelector('#extractStyleAndBind').addEventListener('click', () => extractStyleFromCockpit(true));
     document.querySelector('#extractStyleOnly').addEventListener('click', () => extractStyleFromCockpit(false));
     loginIfNeeded()

@@ -16,7 +16,7 @@ export interface CockpitOverview {
     pendingFeedback: boolean;
   } | null;
   jobs: WebJob[];
-  model: Pick<ResolvedProjectModelConfig, 'apiKeyEnv' | 'apiKeySet' | 'baseUrl' | 'model'>;
+  model: Pick<ResolvedProjectModelConfig, 'apiKeyEnv' | 'apiKeySet' | 'apiKeySource' | 'baseUrl' | 'model'>;
   session: CockpitSessionOverview;
   nextAction: CockpitNextAction;
   quality: QualityOverview | null;
@@ -218,6 +218,7 @@ function modelSummary(model: ResolvedProjectModelConfig): CockpitOverview['model
   return {
     apiKeyEnv: model.apiKeyEnv,
     apiKeySet: model.apiKeySet,
+    apiKeySource: model.apiKeySource,
     baseUrl: model.baseUrl,
     model: model.model,
   };

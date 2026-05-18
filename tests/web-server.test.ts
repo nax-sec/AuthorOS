@@ -925,6 +925,57 @@ test('web server model doctor checks the current private book config when availa
   });
 });
 
+test('web server saves current book model config and local api key without returning the key', async () => {
+  await withTempRoot(async (root) => {
+    await mkdir(join(root, 'books/demo/.authoros'), { recursive: true });
+    await writeFile(join(root, 'bookshelf.json'), JSON.stringify({
+      version: 1,
+      current: 'demo',
+      books: [{
+        id: 'demo',
+        title: 'Demo Book',
+        concept: 'model config save',
+        path: 'books/demo',
+        created_at: '2026-05-18T00:00:00.000Z',
+        last_active_at: '2026-05-18T00:00:00.000Z',
+      }],
+    }), 'utf8');
+    const server = createWebServer({ root, env: {} });
+
+    const response = await server.fetch(new Request('http://local/api/model/config', {
+      method: 'POST',
+      body: JSON.stringify({
+        apiKeyEnv: 'WEB_KEY',
+        baseUrl: 'https://models.example/v1/',
+        model: 'web-model',
+        apiKey: 'sk-local-web-test-key',
+      }),
+    }));
+    const body = await response.json();
+    const stored = JSON.parse(await readFile(join(root, 'books/demo/.authoros/model.json'), 'utf8'));
+    const secret = JSON.parse(await readFile(join(root, 'books/demo/.authoros/model.secret.json'), 'utf8'));
+    const doctorResponse = await server.fetch(new Request('http://local/api/model/doctor'));
+    const doctorBody = await doctorResponse.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.scope.kind, 'current_book');
+    assert.equal(body.config.apiKeySet, true);
+    assert.equal(body.config.apiKeySource, 'local');
+    assert.equal(body.config.baseUrl, 'https://models.example/v1');
+    assert.equal(body.config.model, 'web-model');
+    assert.equal(JSON.stringify(body).includes('sk-local-web-test-key'), false);
+    assert.equal(stored.apiKey, undefined);
+    assert.equal(stored.apiKeyEnv, 'WEB_KEY');
+    assert.equal(stored.baseUrl, 'https://models.example/v1');
+    assert.equal(stored.model, 'web-model');
+    assert.equal(secret.apiKey, 'sk-local-web-test-key');
+    assert.equal(doctorBody.doctor.ready, true);
+    assert.equal(doctorBody.doctor.apiKeySet, true);
+    assert.equal(doctorBody.doctor.apiKeySource, 'local');
+  });
+});
+
 test('web server keeps room cockpit overview isolated', async () => {
   await withTempRoot(async (root) => {
     const server = createWebServer({

@@ -26,12 +26,24 @@ import {
   type PrivateShelf,
 } from '../commands/private.ts';
 import { bindStyleProfile, createStyleProfileFromText, saveStyleProfile, type StyleProfile } from '../commands/style.ts';
-import { getModelDoctor, type ModelDoctorResult } from '../commands/model.ts';
+import {
+  clearModelConfig,
+  getModelConfig,
+  getModelDoctor,
+  updateModelConfig,
+  type ModelConfigView,
+  type ModelDoctorResult,
+} from '../commands/model.ts';
 import { createChapterReview } from '../commands/review.ts';
 import { createChapterDecision } from '../commands/decide.ts';
 import { createMemoryUpdate, markMemoryDeltaReviewed, mergeMemoryDelta, previewMemoryDeltaMerge, showMemoryDelta } from '../commands/memory.ts';
 import { createOpenAiCompatibleClientFromProject, type LlmClient } from '../core/llm.ts';
-import type { EnvLike } from '../core/modelConfig.ts';
+import {
+  resetProjectModelApiKey,
+  setProjectModelApiKey,
+  type EnvLike,
+  type ProjectModelConfigPatch,
+} from '../core/modelConfig.ts';
 
 export interface PrivateWebApi {
   listBooks?: (root: string) => Promise<PrivateShelf>;
@@ -63,6 +75,13 @@ interface WebModelDoctorResult {
     | { kind: 'private_root'; label: string; path: string }
     | { kind: 'current_book'; label: string; bookId: string; path: string };
   doctor: ModelDoctorResult;
+}
+
+interface WebModelConfigResult {
+  scope:
+    | { kind: 'private_root'; label: string; path: string }
+    | { kind: 'current_book'; label: string; bookId: string; path: string };
+  config: ModelConfigView;
 }
 
 export interface AuthorWebServer {
@@ -123,6 +142,35 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
       }
       if (routePath === '/api/model/doctor' && request.method === 'GET') {
         return json(await getWebModelDoctor(root, env));
+      }
+      if (routePath === '/api/model/config' && request.method === 'GET') {
+        return json(await getWebModelConfig(root, env));
+      }
+      if (routePath === '/api/model/config' && request.method === 'POST') {
+        const body = await request.json() as {
+          apiKeyEnv?: unknown;
+          baseUrl?: unknown;
+          model?: unknown;
+          apiKey?: unknown;
+          clearApiKey?: unknown;
+        };
+        const target = await getWebModelTarget(root);
+        const patch = modelConfigPatchFromBody(body);
+        if (Object.keys(patch).length > 0) {
+          await updateModelConfig(target.projectDir, patch);
+        }
+        if (body.clearApiKey === true) {
+          await resetProjectModelApiKey(target.projectDir);
+        } else if (typeof body.apiKey === 'string' && body.apiKey.trim()) {
+          await setProjectModelApiKey(target.projectDir, body.apiKey);
+        }
+        return json({ ok: true, ...await getWebModelConfig(root, env) });
+      }
+      if (routePath === '/api/model/config/reset' && request.method === 'POST') {
+        const target = await getWebModelTarget(root);
+        await clearModelConfig(target.projectDir);
+        await resetProjectModelApiKey(target.projectDir);
+        return json({ ok: true, ...await getWebModelConfig(root, env) });
       }
       const memoryDeltaReviewedMatch = routePath.match(/^\/api\/memory\/deltas\/([^/]+)\/reviewed$/);
       if (memoryDeltaReviewedMatch?.[1] && request.method === 'POST') {
@@ -363,28 +411,59 @@ async function webListBooks(options: CreateWebServerOptions): Promise<PrivateShe
 }
 
 async function getWebModelDoctor(root: string, env: EnvLike): Promise<WebModelDoctorResult> {
+  const target = await getWebModelTarget(root);
+  return {
+    scope: target.scope,
+    doctor: await getModelDoctor(target.projectDir, env),
+  };
+}
+
+async function getWebModelConfig(root: string, env: EnvLike): Promise<WebModelConfigResult> {
+  const target = await getWebModelTarget(root);
+  return {
+    scope: target.scope,
+    config: await getModelConfig(target.projectDir, env),
+  };
+}
+
+async function getWebModelTarget(root: string): Promise<{
+  projectDir: string;
+  scope: WebModelConfigResult['scope'];
+}> {
   const shelf = await listPrivateBooks(root);
   const current = shelf.current ? shelf.books.find((book) => book.id === shelf.current) : null;
   if (current) {
     return {
+      projectDir: join(root, current.path),
       scope: {
         kind: 'current_book',
         label: current.title,
         bookId: current.id,
         path: current.path,
       },
-      doctor: await getModelDoctor(join(root, current.path), env),
     };
   }
 
   return {
+    projectDir: root,
     scope: {
       kind: 'private_root',
       label: '个人根目录',
       path: '.',
     },
-    doctor: await getModelDoctor(root, env),
   };
+}
+
+function modelConfigPatchFromBody(body: {
+  apiKeyEnv?: unknown;
+  baseUrl?: unknown;
+  model?: unknown;
+}): ProjectModelConfigPatch {
+  const patch: ProjectModelConfigPatch = {};
+  if (typeof body.apiKeyEnv === 'string' && body.apiKeyEnv.trim()) patch.apiKeyEnv = body.apiKeyEnv;
+  if (typeof body.baseUrl === 'string' && body.baseUrl.trim()) patch.baseUrl = body.baseUrl;
+  if (typeof body.model === 'string' && body.model.trim()) patch.model = body.model;
+  return patch;
 }
 
 async function runCommandJob(

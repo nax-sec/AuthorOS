@@ -19,8 +19,10 @@ export const defaultSmokeAgent = 'chief-writer';
 export interface ModelConfigView {
   configured: boolean;
   path: string;
+  secretPath: string;
   apiKeyEnv: string;
   apiKeySet: boolean;
+  apiKeySource: 'env' | 'local' | 'missing';
   baseUrl: string;
   model?: string;
 }
@@ -30,6 +32,7 @@ export interface ModelDoctorResult {
   configured: boolean;
   apiKeyEnv: string;
   apiKeySet: boolean;
+  apiKeySource: 'env' | 'local' | 'missing';
   baseUrl: string;
   model?: string;
   smokeAgent: string;
@@ -49,8 +52,10 @@ export async function getModelConfig(projectDir: string, env: EnvLike): Promise<
   return {
     configured: resolved.configured,
     path: resolved.path,
+    secretPath: resolved.secretPath,
     apiKeyEnv: resolved.apiKeyEnv,
     apiKeySet: resolved.apiKeySet,
+    apiKeySource: resolved.apiKeySource,
     baseUrl: resolved.baseUrl,
     model: resolved.model,
   };
@@ -83,6 +88,7 @@ export async function getModelDoctor(projectDir: string, env: EnvLike): Promise<
     configured: resolved.configured,
     apiKeyEnv: resolved.apiKeyEnv,
     apiKeySet: resolved.apiKeySet,
+    apiKeySource: resolved.apiKeySource,
     baseUrl: resolved.baseUrl,
     model: resolved.model,
     smokeAgent: defaultSmokeAgent,
@@ -143,6 +149,7 @@ export function renderModelConfig(view: ModelConfigView): string {
     `path: ${view.path}`,
     `configured: ${view.configured ? 'yes' : 'no (using defaults)'}`,
     `api key env: ${view.apiKeyEnv} (${view.apiKeySet ? 'set' : 'missing'})`,
+    `api key source: ${view.apiKeySource}`,
     `baseUrl: ${view.baseUrl}`,
     `model: ${view.model ?? '(missing)'}`,
     '',
@@ -170,6 +177,7 @@ export function renderModelDoctor(result: ModelDoctorResult): string {
     `ready: ${result.ready ? 'yes' : 'no'}`,
     `configured: ${result.configured ? 'yes' : 'no (using defaults)'}`,
     `api key env: ${result.apiKeyEnv} (${result.apiKeySet ? 'set' : 'missing'})`,
+    `api key source: ${result.apiKeySource}`,
     `baseUrl: ${result.baseUrl}`,
     `model: ${result.model ?? '(missing)'}`,
     `smoke: author model smoke   # pings ${result.smokeAgent}`,

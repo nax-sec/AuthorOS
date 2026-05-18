@@ -135,6 +135,11 @@ test('private web app exposes personal cockpit regions', async () => {
   assert.match(html, /retryMessageForAction/);
   assert.match(html, /showModelConfigAdvice/);
   assert.match(html, /api\('\/api\/model\/doctor'\)/);
+  assert.match(html, /data-testid="model-config"/);
+  assert.match(html, /模型配置/);
+  assert.match(html, /modelApiKey/);
+  assert.match(html, /saveModelConfig/);
+  assert.match(html, /api\('\/api\/model\/config'/);
   assert.match(html, /formatModelDoctor/);
   assert.match(html, /一键重试/);
   assert.match(html, /检查模型配置/);
