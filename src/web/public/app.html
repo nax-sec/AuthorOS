@@ -829,9 +829,15 @@
         groupTitle.className = 'muted';
         groupTitle.textContent = `${target.path} · ${target.section}`;
         const list = document.createElement('ul');
-        for (const item of target.items || []) {
+        const plans = Array.isArray(target.plans)
+          ? target.plans
+          : (target.items || []).map(item => ({ item, action: 'append', detail: '' }));
+        for (const plan of plans) {
           const li = document.createElement('li');
-          li.textContent = item;
+          const label = memoryMergeActionLabel(plan.action);
+          li.textContent = plan.detail
+            ? `${label} · ${plan.item} · ${plan.detail}`
+            : `${label} · ${plan.item}`;
           list.appendChild(li);
         }
         group.append(groupTitle, list);
@@ -844,6 +850,12 @@
       confirm.addEventListener('click', () => mergeMemoryDelta(preview.name || fallbackName).catch(error => addMessage(`拆分合并失败：${error.message}`, false, true)));
       panel.appendChild(confirm);
       memoryReview.appendChild(panel);
+    }
+
+    function memoryMergeActionLabel(action) {
+      if (action === 'structured') return '结构化更新';
+      if (action === 'comment') return '注释保底';
+      return '追加记录';
     }
 
     async function mergeMemoryDelta(name) {

@@ -61,6 +61,8 @@ test('private web app exposes personal cockpit regions', async () => {
   assert.match(html, /查看记忆更新/);
   assert.match(html, /预览拆分/);
   assert.match(html, /确认拆分合并/);
+  assert.match(html, /结构化更新/);
+  assert.match(html, /注释保底/);
   assert.match(html, /归档到记忆/);
   assert.match(html, /loadMemoryDelta/);
   assert.match(html, /previewMemoryDeltaMerge/);

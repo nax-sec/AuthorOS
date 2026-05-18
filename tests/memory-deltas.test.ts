@@ -219,6 +219,7 @@ test('previewing a memory delta merge reports planned writes without changing me
       '',
       '## foreshadowing (新增 / 推进 / 回收)',
       '- H001.status -> previewed',
+      '- H999.status -> missing preview hook',
       '',
       '## style (规则增 / 禁)',
       '- 预览风格条目',
@@ -242,9 +243,27 @@ test('previewing a memory delta merge reports planned writes without changing me
       'memory/style.md',
     ]);
     assert.deepEqual(preview.targetFiles, [
-      { path: 'memory/canon.md', section: 'canon', items: ['预览正史条目'] },
-      { path: 'memory/foreshadowing.yaml', section: 'foreshadowing', items: ['H001.status -> previewed'] },
-      { path: 'memory/style.md', section: 'style', items: ['预览风格条目'] },
+      {
+        path: 'memory/canon.md',
+        section: 'canon',
+        items: ['预览正史条目'],
+        plans: [{ item: '预览正史条目', action: 'append', detail: '追加到 memory/canon.md' }],
+      },
+      {
+        path: 'memory/foreshadowing.yaml',
+        section: 'foreshadowing',
+        items: ['H001.status -> previewed', 'H999.status -> missing preview hook'],
+        plans: [
+          { item: 'H001.status -> previewed', action: 'structured', detail: '更新 hooks[id=H001].status' },
+          { item: 'H999.status -> missing preview hook', action: 'comment', detail: '找不到可安全更新的 YAML 目标，改为注释保底' },
+        ],
+      },
+      {
+        path: 'memory/style.md',
+        section: 'style',
+        items: ['预览风格条目'],
+        plans: [{ item: '预览风格条目', action: 'append', detail: '追加到 memory/style.md' }],
+      },
     ]);
     assert.equal(afterCanon, beforeCanon);
     assert.equal(afterForeshadowing, beforeForeshadowing);

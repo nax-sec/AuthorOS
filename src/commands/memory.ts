@@ -64,10 +64,19 @@ export interface MergeMemoryDeltaResult {
   appliedSections: Record<MemoryDeltaSectionKey, string[]>;
 }
 
+export type MemoryDeltaMergeAction = 'append' | 'structured' | 'comment';
+
+export interface MemoryDeltaMergePlan {
+  item: string;
+  action: MemoryDeltaMergeAction;
+  detail: string;
+}
+
 export interface MemoryDeltaMergeTarget {
   path: string;
   section: MemoryDeltaSectionKey;
   items: string[];
+  plans: MemoryDeltaMergePlan[];
 }
 
 export interface PreviewMemoryDeltaMergeResult {
@@ -317,7 +326,11 @@ export async function previewMemoryDeltaMerge(projectDir: string, name: string):
   }
 
   const canon = await readOptional(join(memoryDir, 'canon.md')) ?? '# 正史设定\n\n## 变更记录\n';
-  return buildMemoryDeltaMergePreview(safeName, deltaContent, canon);
+  return buildMemoryDeltaMergePreview(safeName, deltaContent, canon, {
+    foreshadowing: await readOptional(join(memoryDir, 'foreshadowing.yaml')) ?? defaultYamlMemoryContent('foreshadowing.yaml'),
+    plot_threads: await readOptional(join(memoryDir, 'plot_threads.yaml')) ?? defaultYamlMemoryContent('plot_threads.yaml'),
+    character_state: await readOptional(join(memoryDir, 'character_state.yaml')) ?? defaultYamlMemoryContent('character_state.yaml'),
+  });
 }
 
 export function renderMergeMemoryDeltaResult(result: MergeMemoryDeltaResult): string {
@@ -335,10 +348,15 @@ export function renderMergeMemoryDeltaResult(result: MergeMemoryDeltaResult): st
   return lines.join('\n');
 }
 
-function buildMemoryDeltaMergePreview(safeName: string, deltaContent: string, canon: string): PreviewMemoryDeltaMergeResult {
+function buildMemoryDeltaMergePreview(
+  safeName: string,
+  deltaContent: string,
+  canon: string,
+  yamlContents: Partial<Record<MemoryDeltaSectionKey, string>> = {},
+): PreviewMemoryDeltaMergeResult {
   const appliedSections = parseMemoryDeltaSections(deltaContent);
   const alreadyMerged = canon.includes(`- merged: ${safeName} at`);
-  const targetFiles = memoryDeltaMergeTargets(appliedSections);
+  const targetFiles = memoryDeltaMergeTargets(appliedSections, yamlContents);
   return {
     name: safeName,
     alreadyMerged,
@@ -348,14 +366,38 @@ function buildMemoryDeltaMergePreview(safeName: string, deltaContent: string, ca
   };
 }
 
-function memoryDeltaMergeTargets(sections: Record<MemoryDeltaSectionKey, string[]>): MemoryDeltaMergeTarget[] {
+function memoryDeltaMergeTargets(
+  sections: Record<MemoryDeltaSectionKey, string[]>,
+  yamlContents: Partial<Record<MemoryDeltaSectionKey, string>>,
+): MemoryDeltaMergeTarget[] {
   return memoryDeltaSectionKeys()
     .filter((section) => sections[section].length > 0)
     .map((section) => ({
       path: memoryPathForSection(section),
       section,
       items: [...sections[section]],
+      plans: sections[section].map((item) => memoryDeltaMergePlan(section, item, yamlContents[section])),
     }));
+}
+
+function memoryDeltaMergePlan(section: MemoryDeltaSectionKey, item: string, yamlContent: string | undefined): MemoryDeltaMergePlan {
+  if (section === 'canon' || section === 'style') {
+    return {
+      item,
+      action: 'append',
+      detail: `追加到 ${memoryPathForSection(section)}`,
+    };
+  }
+
+  const detail = yamlContent ? structuredYamlDeltaDetail(yamlContent, memoryFileNameForSection(section), item) : null;
+  if (detail) {
+    return { item, action: 'structured', detail };
+  }
+  return {
+    item,
+    action: 'comment',
+    detail: '找不到可安全更新的 YAML 目标，改为注释保底',
+  };
 }
 
 function changedFilesForMergePlan(sections: Record<MemoryDeltaSectionKey, string[]>): string[] {
@@ -373,6 +415,13 @@ function memoryPathForSection(section: MemoryDeltaSectionKey): string {
   if (section === 'character_state') return 'memory/character_state.yaml';
   if (section === 'style') return 'memory/style.md';
   return 'memory/canon.md';
+}
+
+function memoryFileNameForSection(section: MemoryDeltaSectionKey): string {
+  if (section === 'foreshadowing') return 'foreshadowing.yaml';
+  if (section === 'plot_threads') return 'plot_threads.yaml';
+  if (section === 'character_state') return 'character_state.yaml';
+  return '';
 }
 
 function appendReviewedMemoryDeltaToCanon(canon: string, safeName: string, deltaContent: string, markedAt: string): string {
@@ -582,6 +631,31 @@ function applyStructuredYamlDelta(doc: Record<string, unknown>, file: string, it
   return false;
 }
 
+function structuredYamlDeltaDetail(content: string, file: string, item: string): string | null {
+  const parsed = parseYamlFieldAssignment(item);
+  if (!parsed) return null;
+  const doc = parseYamlObject(splitYamlMemoryContent(content).yaml, file);
+  if (!doc) return null;
+
+  const field = parsed.fieldPath.join('.');
+  if (file === 'foreshadowing.yaml') {
+    return hasYamlArrayItemPath(doc, 'hooks', parsed.target, parsed.fieldPath)
+      ? `更新 hooks[id=${parsed.target}].${field}`
+      : null;
+  }
+  if (file === 'plot_threads.yaml') {
+    return hasYamlArrayItemPath(doc, 'threads', parsed.target, parsed.fieldPath)
+      ? `更新 threads[id=${parsed.target}].${field}`
+      : null;
+  }
+  if (file === 'character_state.yaml') {
+    return hasYamlObjectPath(doc, [parsed.target, ...parsed.fieldPath])
+      ? `更新 ${parsed.target}.${field}`
+      : null;
+  }
+  return null;
+}
+
 function parseYamlFieldAssignment(item: string): { target: string; fieldPath: string[]; value: string } | null {
   const match = item.match(/^([A-Za-z0-9_-]+)\.([A-Za-z0-9_.-]+)\s*(?:->|=>|=)\s*(.+)$/);
   if (!match?.[1] || !match?.[2] || !match?.[3]) return null;
@@ -606,6 +680,28 @@ function updateYamlArrayItemById(
   const item = array.find((entry) => isPlainObject(entry) && String(entry.id ?? '') === id);
   if (!isPlainObject(item)) return false;
   return updateYamlObjectPath(item, fieldPath, value);
+}
+
+function hasYamlArrayItemPath(
+  doc: Record<string, unknown>,
+  arrayKey: string,
+  id: string,
+  fieldPath: readonly string[],
+): boolean {
+  const array = doc[arrayKey];
+  if (!Array.isArray(array)) return false;
+  const item = array.find((entry) => isPlainObject(entry) && String(entry.id ?? '') === id);
+  return isPlainObject(item) && hasYamlObjectPath(item, fieldPath);
+}
+
+function hasYamlObjectPath(doc: Record<string, unknown>, path: readonly string[]): boolean {
+  if (path.length === 0) return false;
+  let current: unknown = doc;
+  for (const part of path) {
+    if (!isPlainObject(current) || !Object.hasOwn(current, part)) return false;
+    current = current[part];
+  }
+  return true;
 }
 
 function updateYamlObjectPath(doc: Record<string, unknown>, path: readonly string[], value: string): boolean {
