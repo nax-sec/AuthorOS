@@ -9,6 +9,10 @@ export type WebAgentAction =
   | 'feedback_apply'
   | 'style_rewrite_preview'
   | 'style_rewrite_apply'
+  | 'internal_review'
+  | 'reader_sim_review'
+  | 'chapter_decision'
+  | 'memory_update'
   | 'download_current_chapter'
   | 'download_all_chapters'
   | 'status'
@@ -46,6 +50,9 @@ export type WebAgentCommand =
   | { type: 'apply' }
   | { type: 'style_rewrite'; chapter: 'latest'; intent: StyleRewriteIntent; text: string }
   | { type: 'style_apply' }
+  | { type: 'review'; chapter: number; mode: 'internal' | 'reader-sim' }
+  | { type: 'decide'; chapter: number }
+  | { type: 'memory_update'; chapter: number }
   | { type: 'download_chapter'; chapter: 'latest' }
   | { type: 'download_all' }
   | { type: 'status' };
@@ -66,6 +73,9 @@ export function handleAgentMessage(session: WebAgentSession, rawMessage: string)
   if (session.pendingNewBook) {
     return handlePendingNewBook(session, message);
   }
+
+  const qualityCommand = getQualityCommand(message);
+  if (qualityCommand) return qualityCommand;
 
   if (isStyleApply(message)) {
     return job('style_rewrite_apply', '收到，我开始应用这次文风修改。会先读取待确认预览，再覆盖当前章。', { type: 'style_apply' });
@@ -195,6 +205,45 @@ function isApply(message: string): boolean {
 
 function isStyleApply(message: string): boolean {
   return /确认应用文风修改|应用文风修改|应用这次文风/.test(message);
+}
+
+function getQualityCommand(message: string): WebAgentResult | null {
+  const chapter = parseChapterNumber(message);
+  if (!chapter) return null;
+  if (/内评|内部评审/.test(message)) {
+    return job('internal_review', `收到，我开始生成第 ${chapter} 章内评。`, {
+      type: 'review',
+      chapter,
+      mode: 'internal',
+    });
+  }
+  if (/读者模拟|模拟读者|reader/i.test(message)) {
+    return job('reader_sim_review', `收到，我开始生成第 ${chapter} 章读者模拟。`, {
+      type: 'review',
+      chapter,
+      mode: 'reader-sim',
+    });
+  }
+  if (/决策|创作决策/.test(message)) {
+    return job('chapter_decision', `收到，我开始生成第 ${chapter} 章创作决策。`, {
+      type: 'decide',
+      chapter,
+    });
+  }
+  if (/记忆更新|记忆增量|更新记忆/.test(message)) {
+    return job('memory_update', `收到，我开始生成第 ${chapter} 章记忆更新。`, {
+      type: 'memory_update',
+      chapter,
+    });
+  }
+  return null;
+}
+
+function parseChapterNumber(message: string): number | null {
+  const match = message.match(/第\s*(\d+)\s*章/);
+  if (!match) return null;
+  const chapter = Number(match[1]);
+  return Number.isInteger(chapter) && chapter > 0 ? chapter : null;
 }
 
 function getStyleRewriteIntent(message: string): StyleRewriteIntent | null {

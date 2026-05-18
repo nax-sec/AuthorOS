@@ -114,3 +114,22 @@ test('style apply phrases route to style apply command', () => {
     assert.equal(result.command.type, 'style_apply');
   }
 });
+
+test('quality loop phrases route to review closure commands', () => {
+  const cases = [
+    ['生成第 1 章内评', 'internal_review', 'review', 1, 'internal'],
+    ['生成第 2 章读者模拟', 'reader_sim_review', 'review', 2, 'reader-sim'],
+    ['生成第 3 章决策', 'chapter_decision', 'decide', 3, undefined],
+    ['生成第 4 章记忆更新', 'memory_update', 'memory_update', 4, undefined],
+  ] as const;
+
+  for (const [message, action, commandType, chapter, mode] of cases) {
+    const result = handleAgentMessage(createWebAgentSession(), message);
+
+    assert.equal(result.kind, 'job');
+    assert.equal(result.action, action);
+    assert.equal(result.command.type, commandType);
+    assert.equal(result.command.chapter, chapter);
+    if (mode) assert.equal(result.command.mode, mode);
+  }
+});

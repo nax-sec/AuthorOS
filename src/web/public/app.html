@@ -80,6 +80,8 @@
     .stage-pill.next { border-color: #91b5ff; background: var(--accent-soft); color: #1f4fbf; }
     .stage-pill.missing { border-color: #f2b3b3; background: var(--danger-soft); color: var(--danger); }
     .stage-pill.optional { border-color: var(--line); background: var(--bg); color: var(--muted); }
+    .quality-actions-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .quality-actions-row button { min-height: 34px; }
     .signal-danger { color: var(--danger); font-weight: 800; }
     .signal-warning { color: var(--amber); font-weight: 800; }
     .signal-ok { color: #176b37; font-weight: 800; }
@@ -198,6 +200,7 @@
         </div>
         <div id="nextChapterCard" class="next-chapter-card" data-testid="next-chapter-card"></div>
         <div id="qualityStages" class="stage-grid"></div>
+        <div id="qualityActions" class="preview-card quality-actions" data-testid="quality-actions"></div>
         <div id="pendingPreview" class="preview-card" data-testid="pending-preview"></div>
         <div id="memoryReview" class="preview-card"></div>
         <div id="recoveryHint" class="preview-card"></div>
@@ -277,6 +280,7 @@
     const qualitySignal = document.querySelector('#qualitySignal');
     const nextChapterCard = document.querySelector('#nextChapterCard');
     const qualityStages = document.querySelector('#qualityStages');
+    const qualityActions = document.querySelector('#qualityActions');
     const pendingPreview = document.querySelector('#pendingPreview');
     const memoryReview = document.querySelector('#memoryReview');
     const recoveryHint = document.querySelector('#recoveryHint');
@@ -617,6 +621,7 @@
 
       nextChapterCard.innerHTML = '';
       qualityStages.innerHTML = '';
+      qualityActions.innerHTML = '';
       pendingPreview.innerHTML = '';
       memoryReview.innerHTML = '';
       recoveryHint.innerHTML = '';
@@ -629,6 +634,7 @@
         meta.className = 'muted';
         meta.textContent = '开一本新书后，这里会显示下一章生产线。';
         nextChapterCard.append(title, meta);
+        qualityActions.textContent = '没有可执行质量动作。';
         pendingPreview.textContent = '没有待确认预览。';
         memoryReview.textContent = '没有记忆更新。';
         if (booklessRecovery) {
@@ -655,6 +661,8 @@
       } else {
         nextChapterCard.textContent = '没有当前书。';
       }
+
+      renderQualityActions(quality.actions || []);
 
       if (quality.pendingPreview) {
         const previewTitle = document.createElement('div');
@@ -708,6 +716,44 @@
       } else {
         recoveryHint.textContent = '没有失败恢复。';
       }
+    }
+
+    function renderQualityActions(actions) {
+      qualityActions.innerHTML = '';
+      const normalized = Array.isArray(actions) ? actions.map(normalizeQualityAction).filter(Boolean) : [];
+      if (normalized.length === 0) {
+        qualityActions.textContent = '没有可执行质量动作。';
+        return;
+      }
+      const title = document.createElement('div');
+      title.className = 'book-title';
+      title.textContent = '质量动作';
+      const row = document.createElement('div');
+      row.className = 'quality-actions-row';
+      for (const action of normalized) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = action.primary ? '' : 'secondary';
+        button.textContent = action.label;
+        button.dataset.message = action.message;
+        button.addEventListener('click', () => sendMessage(action.message).catch(error => addMessage(`失败：${error.message}`, false, true)));
+        row.appendChild(button);
+      }
+      qualityActions.append(title, row);
+    }
+
+    function normalizeQualityAction(action) {
+      if (!action || typeof action !== 'object') return null;
+      if (typeof action.message !== 'string' || !action.message.trim()) return null;
+      const label = typeof action.label === 'string' && action.label.trim()
+        ? action.label.trim()
+        : qualityActionLabel(action.type);
+      return {
+        type: action.type,
+        label,
+        message: action.message.trim(),
+        primary: action.primary === true,
+      };
     }
 
     function renderRecovery(recovery) {
@@ -778,6 +824,10 @@
         feedback_apply: '确认应用修改',
         style_rewrite_preview: '帮这一章去 AI 味',
         style_rewrite_apply: '应用文风修改',
+        internal_review: '生成第 1 章内评',
+        reader_sim_review: '生成第 1 章读者模拟',
+        chapter_decision: '生成第 1 章决策',
+        memory_update: '生成第 1 章记忆更新',
         download_current_chapter: '下载这一章',
         download_all_chapters: '下载全部章节',
         status: '检查状态',
@@ -909,6 +959,16 @@
       return labels[intent] || '文风改写';
     }
 
+    function qualityActionLabel(type) {
+      const labels = {
+        internal_review: '生成内评',
+        reader_sim_review: '生成读者模拟',
+        chapter_decision: '生成决策',
+        memory_update: '生成记忆更新',
+      };
+      return labels[type] || '执行质量动作';
+    }
+
     function jobActionLabel(action) {
       const labels = {
         read_chapter: '读取章节',
@@ -917,6 +977,10 @@
         feedback_apply: '应用修改',
         style_rewrite_preview: '生成文风改写预览',
         style_rewrite_apply: '应用文风修改',
+        internal_review: '生成内评',
+        reader_sim_review: '生成读者模拟',
+        chapter_decision: '生成创作决策',
+        memory_update: '生成记忆更新',
         new_book_confirmed: '创建新书',
         create_book_and_continue: '创建并续写',
         download_current_chapter: '下载当前章',
@@ -936,6 +1000,10 @@
         applying: '应用修改',
         style_check: '生成文风改写预览',
         style_apply: '应用文风修改',
+        internal_review: '生成内评',
+        reader_sim_review: '生成读者模拟',
+        chapter_decision: '生成创作决策',
+        memory_update: '生成记忆更新',
         interrupted: '任务中断',
       };
       return labels[phase] || phase;
@@ -1050,6 +1118,26 @@
           title: '我正在把文风预览写回正文',
           detail: '这一步会检查预览是否仍对应当前章，避免覆盖掉你后来改过的内容。',
           next: '完成后可以读最新章，确认风格是否贴近。',
+        },
+        internal_review: {
+          title: '我正在生成章节内评',
+          detail: '这一步会让世界、人物、剧情和风格顾问先看一遍，再由编辑汇总成可执行意见。',
+          next: '内评完成后，可以生成读者模拟或进入章节决策。',
+        },
+        reader_sim_review: {
+          title: '我正在生成读者模拟',
+          detail: '这一步会从模拟读者角度检查可读性、期待感和可能流失的位置。',
+          next: '读者模拟完成后，如果内评也齐了，就可以生成章节决策。',
+        },
+        chapter_decision: {
+          title: '我正在生成章节决策',
+          detail: '这一步会综合规划、内评、读者模拟和真实反馈，形成下一章可继承的取舍。',
+          next: '决策完成后，建议生成记忆更新。',
+        },
+        memory_update: {
+          title: '我正在生成记忆更新',
+          detail: '这一步会把本章确定下来的设定、伏笔、人物状态和风格规则提成增量。',
+          next: '完成后可以审阅记忆更新，再继续写下一章。',
         },
         interrupted: {
           title: '任务被中断了',

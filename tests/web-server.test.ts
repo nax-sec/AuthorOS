@@ -57,6 +57,75 @@ function fakeStyleRewriteLlm(): LlmClient {
   };
 }
 
+function fakeQualityLlm(): LlmClient {
+  return {
+    async generate(prompt) {
+      if (prompt.includes('READER_SIM_REVIEW')) {
+        return [
+          '## 模拟读者反应',
+          '- 节奏清楚，愿意继续读。',
+          '## 流失风险',
+          '- 暂无。',
+        ].join('\n');
+      }
+      if (prompt.includes('INTERNAL_REVIEW')) {
+        return [
+          '## 评审意见',
+          '- 本章方向可继续。',
+          '## 风险',
+          '- 暂无阻塞。',
+        ].join('\n');
+      }
+      if (prompt.includes('DECIDE')) {
+        return [
+          '## 决策摘要',
+          '继续沿用当前线索。',
+          '',
+          '## 决策依据',
+          '### 作者长期规划',
+          '保持主线。',
+          '### 内部评审',
+          '无阻塞。',
+          '### 模拟读者',
+          '可读。',
+          '### 真实读者反馈',
+          '未参与。本章暂无真实反馈,不进行模拟补权。',
+          '',
+          '## 采纳的反馈',
+          '- 强化线索。',
+          '## 不采纳及原因',
+          '- 无。',
+          '## 下一章策略',
+          '- 推进调查。',
+          '## 需要更新的记忆',
+          '- canon: 茶杯案继续推进',
+          '## 风险提醒',
+          '- 避免解释过多。',
+        ].join('\n');
+      }
+      if (prompt.includes('MEMORY_UPDATE')) {
+        return [
+          '## canon (新增 / 变更)',
+          '- 茶杯案继续推进',
+          '',
+          '## foreshadowing (新增 / 推进 / 回收)',
+          '- 无',
+          '',
+          '## plot_threads (状态推进)',
+          '- tea_case: active',
+          '',
+          '## character_state (变化)',
+          '- 陆漪: 更警觉',
+          '',
+          '## style (规则增 / 禁)',
+          '- 保持案卷冷幽默',
+        ].join('\n');
+      }
+      throw new Error(`unexpected prompt: ${prompt.slice(0, 80)}`);
+    },
+  };
+}
+
 async function writeStyleReadyBook(root: string): Promise<void> {
   const io = silentIo();
   assert.equal(await run(['init', 'Demo Book', '--quick', '--dir', join(root, 'books/demo')], root, io.io, { env: {} }), 0, io.err.join(''));
@@ -430,6 +499,66 @@ test('web server runs style rewrite preview and apply jobs', async () => {
     const chapter = await readFile(join(root, 'books/demo/chapters/0001.md'), 'utf8');
     assert.match(chapter, /自愿繁殖声明/);
     await assert.rejects(() => stat(join(root, 'books/demo/.authoros/private/pending-style-rewrite.json')));
+  });
+});
+
+test('web server runs quality loop review, decision, and memory jobs', async () => {
+  await withTempRoot(async (root) => {
+    await writeStyleReadyBook(root);
+    const server = createWebServer({
+      root,
+      agentMode: 'rule',
+      writingLlm: fakeQualityLlm(),
+      env: { OPENAI_API_KEY: 'k', AUTHOROS_MODEL: 'm' },
+    });
+
+    const reader = await server.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '生成第 1 章读者模拟' }),
+    }));
+    const readerBody = await reader.json();
+
+    assert.equal(reader.status, 200);
+    assert.equal(readerBody.action, 'reader_sim_review');
+    assert.equal(readerBody.command.type, 'review');
+    await waitForJob(server, 'http://local/api/jobs');
+    await stat(join(root, 'books/demo/reviews/0001.reader-sim.md'));
+
+    let jobsResponse = await server.fetch(new Request('http://local/api/jobs'));
+    let jobs = await jobsResponse.json();
+    assert.equal(jobs.jobs[0].status, 'completed');
+    assert.equal(jobs.jobs[0].events.some((event: { type: string }) => event.type === 'reader_sim_review'), true);
+    assert.match(jobs.jobs[0].result.completion.title, /读者模拟/);
+
+    const decision = await server.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '生成第 1 章决策' }),
+    }));
+    const decisionBody = await decision.json();
+
+    assert.equal(decision.status, 200);
+    assert.equal(decisionBody.action, 'chapter_decision');
+    assert.equal(decisionBody.command.type, 'decide');
+    await waitForJob(server, 'http://local/api/jobs');
+    await stat(join(root, 'books/demo/decisions/0001.md'));
+
+    const memory = await server.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '生成第 1 章记忆更新' }),
+    }));
+    const memoryBody = await memory.json();
+
+    assert.equal(memory.status, 200);
+    assert.equal(memoryBody.action, 'memory_update');
+    assert.equal(memoryBody.command.type, 'memory_update');
+    await waitForJob(server, 'http://local/api/jobs');
+    await stat(join(root, 'books/demo/memory/chapter-0001.delta.md'));
+
+    jobsResponse = await server.fetch(new Request('http://local/api/jobs'));
+    jobs = await jobsResponse.json();
+    assert.equal(jobs.jobs[0].status, 'completed');
+    assert.equal(jobs.jobs[0].events.some((event: { type: string }) => event.type === 'memory_update'), true);
+    assert.match(jobs.jobs[0].result.completion.next, /审阅记忆更新/);
   });
 });
 

@@ -83,6 +83,10 @@ test('llm prompt lists style rewrite actions', async () => {
   assert.match(prompt, /模糊/);
   assert.match(prompt, /style_rewrite_preview/);
   assert.match(prompt, /style_rewrite_apply/);
+  assert.match(prompt, /internal_review/);
+  assert.match(prompt, /reader_sim_review/);
+  assert.match(prompt, /chapter_decision/);
+  assert.match(prompt, /memory_update/);
 });
 
 test('llm agent can route style rewrite preview', async () => {
@@ -116,6 +120,22 @@ test('llm agent can route style rewrite apply', async () => {
   assert.equal(result.kind, 'job');
   assert.equal(result.action, 'style_rewrite_apply');
   assert.equal(result.command.type, 'style_apply');
+});
+
+test('llm agent can route quality loop actions with chapter numbers', async () => {
+  const result = await handleAgentMessageWithLlm(createWebAgentSession(), '生成第 2 章决策', {
+    mode: 'llm',
+    llm: llmReturning(JSON.stringify({
+      action: 'chapter_decision',
+      message: '收到，我生成第 2 章创作决策。',
+      chapter: 2,
+    })),
+  });
+
+  assert.equal(result.kind, 'job');
+  assert.equal(result.action, 'chapter_decision');
+  assert.equal(result.command.type, 'decide');
+  assert.equal(result.command.chapter, 2);
 });
 
 test('llm agent falls back to rules when model returns invalid json', async () => {

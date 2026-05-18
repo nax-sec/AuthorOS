@@ -74,6 +74,16 @@ export interface QualityRecoveryAction {
   primary?: boolean;
 }
 
+export type QualityActionType = 'internal_review' | 'reader_sim_review' | 'chapter_decision' | 'memory_update';
+
+export interface QualityAction {
+  type: QualityActionType;
+  label: string;
+  message: string;
+  chapter: number;
+  primary?: boolean;
+}
+
 export interface QualitySignal {
   kind: QualitySignalKind;
   label: string;
@@ -92,6 +102,7 @@ export interface QualityOverview {
   memoryDeltas: PendingMemoryDelta[];
   recovery: QualityRecovery | null;
   signals: QualitySignal[];
+  actions: QualityAction[];
 }
 
 const stageLabels: Record<QualityStage['key'], string> = {
@@ -117,6 +128,7 @@ export async function getQualityOverview(
   const chapters = state.chapters.map((chapter) => renderChapter(chapter, state, memoryDeltas));
   const nextChapter = deriveNextChapter(state, memoryDeltas);
   const recovery = deriveRecovery(jobs.list());
+  const actions = deriveQualityActions(state, memoryDeltas);
 
   return {
     nextChapter,
@@ -126,6 +138,7 @@ export async function getQualityOverview(
     memoryDeltas,
     recovery,
     signals: deriveSignals({ pendingPreview, styleRewritePreview, memoryDeltas, recovery, style }),
+    actions,
   };
 }
 
@@ -177,6 +190,45 @@ function deriveNextChapter(
     message: '继续写',
     blockers,
     stages,
+  };
+}
+
+function deriveQualityActions(
+  state: ProjectStateResult,
+  memoryDeltas: readonly PendingMemoryDelta[],
+): QualityAction[] {
+  const actions: QualityAction[] = [];
+  for (const chapter of state.chapters) {
+    if (!chapter.draft) continue;
+    if (!chapter.internalReview) {
+      actions.push(qualityAction('internal_review', '生成内评', chapter.chapter, actions.length === 0));
+    }
+    if (!chapter.readerSimReview) {
+      actions.push(qualityAction('reader_sim_review', '生成读者模拟', chapter.chapter, actions.length === 0));
+    }
+    if (chapter.internalReview && chapter.readerSimReview && !chapter.decision) {
+      actions.push(qualityAction('chapter_decision', '生成决策', chapter.chapter, actions.length === 0));
+    }
+    const memoryDeltaPending = memoryDeltas.some((delta) => delta.name === `chapter-${chapter.chapterId}.delta.md`);
+    if (chapter.decision && !memoryDeltaPending) {
+      actions.push(qualityAction('memory_update', '生成记忆更新', chapter.chapter, actions.length === 0));
+    }
+  }
+  return actions.slice(0, 8);
+}
+
+function qualityAction(
+  type: QualityActionType,
+  label: string,
+  chapter: number,
+  primary: boolean,
+): QualityAction {
+  return {
+    type,
+    label,
+    message: `生成第 ${chapter} 章${label.replace(/^生成/, '')}`,
+    chapter,
+    primary: primary || undefined,
   };
 }
 

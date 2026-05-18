@@ -27,6 +27,9 @@ import {
 } from '../commands/private.ts';
 import { bindStyleProfile, createStyleProfileFromText, saveStyleProfile, type StyleProfile } from '../commands/style.ts';
 import { getModelDoctor, type ModelDoctorResult } from '../commands/model.ts';
+import { createChapterReview } from '../commands/review.ts';
+import { createChapterDecision } from '../commands/decide.ts';
+import { createMemoryUpdate } from '../commands/memory.ts';
 import { createOpenAiCompatibleClientFromProject, type LlmClient } from '../core/llm.ts';
 import type { EnvLike } from '../core/modelConfig.ts';
 
@@ -395,6 +398,44 @@ async function runCommandJob(
       jobs.append(jobId, 'style_apply', '正在应用文风改写预览');
       const result = await applyPrivateStyleRewrite(root);
       completeCommandJob(jobs, jobId, command.type, { book: result.book, chapter: result.chapter, profile: result.profileId });
+      return;
+    }
+    if (command.type === 'review') {
+      const phase = command.mode === 'internal' ? 'internal_review' : 'reader_sim_review';
+      jobs.append(jobId, phase, `正在生成第 ${command.chapter} 章${command.mode === 'internal' ? '内评' : '读者模拟'}`);
+      const book = await getCurrentPrivateBook(root);
+      const llm = writingLlm ?? await createClientForCurrentBook(root, env);
+      const result = await createChapterReview(join(root, book.path), {
+        chapter: command.chapter,
+        mode: command.mode,
+        llm,
+        write: true,
+      });
+      completeCommandJob(jobs, jobId, phase, { book, chapter: result.chapter, artifacts: result.artifacts.map((artifact) => artifact.path) });
+      return;
+    }
+    if (command.type === 'decide') {
+      jobs.append(jobId, 'chapter_decision', `正在生成第 ${command.chapter} 章创作决策`);
+      const book = await getCurrentPrivateBook(root);
+      const llm = writingLlm ?? await createClientForCurrentBook(root, env);
+      const result = await createChapterDecision(join(root, book.path), {
+        chapter: command.chapter,
+        llm,
+        write: true,
+      });
+      completeCommandJob(jobs, jobId, 'chapter_decision', { book, chapter: result.chapter, path: result.path });
+      return;
+    }
+    if (command.type === 'memory_update') {
+      jobs.append(jobId, 'memory_update', `正在生成第 ${command.chapter} 章记忆更新`);
+      const book = await getCurrentPrivateBook(root);
+      const llm = writingLlm ?? await createClientForCurrentBook(root, env);
+      const result = await createMemoryUpdate(join(root, book.path), {
+        chapter: command.chapter,
+        llm,
+        write: true,
+      });
+      completeCommandJob(jobs, jobId, 'memory_update', { book, chapter: result.chapter, path: result.path });
       return;
     }
     if (command.type === 'read') {

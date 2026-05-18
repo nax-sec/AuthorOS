@@ -23,6 +23,10 @@ type LlmAgentAction =
   | { action: 'feedback_apply'; message: string }
   | { action: 'style_rewrite_preview'; message: string; intent: StyleRewriteIntent; text: string }
   | { action: 'style_rewrite_apply'; message: string }
+  | { action: 'internal_review'; message: string; chapter: number }
+  | { action: 'reader_sim_review'; message: string; chapter: number }
+  | { action: 'chapter_decision'; message: string; chapter: number }
+  | { action: 'memory_update'; message: string; chapter: number }
   | { action: 'download_current_chapter'; message: string }
   | { action: 'download_all_chapters'; message: string }
   | { action: 'status'; message: string }
@@ -60,6 +64,7 @@ function buildAgentPrompt(message: string): string {
     '- Applying feedback requires explicit confirmation.',
     '- Style rewrite preview never overwrites chapters.',
     '- Applying style rewrite requires explicit confirmation.',
+    '- Quality loop actions require an explicit positive chapter number.',
     '- Downloads are safe.',
     '',
     'Allowed actions:',
@@ -72,6 +77,10 @@ function buildAgentPrompt(message: string): string {
     '- feedback_apply',
     '- style_rewrite_preview: generate a bound-style rewrite preview for latest chapter. Requires intent and text.',
     '- style_rewrite_apply: apply the saved style rewrite preview only after explicit confirmation.',
+    '- internal_review: generate internal review for a specific chapter. Requires chapter.',
+    '- reader_sim_review: generate simulated reader review for a specific chapter. Requires chapter.',
+    '- chapter_decision: generate chapter creative decision after reviews. Requires chapter.',
+    '- memory_update: generate memory delta after chapter decision. Requires chapter.',
     '- download_current_chapter',
     '- download_all_chapters',
     '- status',
@@ -80,6 +89,7 @@ function buildAgentPrompt(message: string): string {
     'Output JSON only. Examples:',
     '{"action":"feedback_preview","message":"收到，我先把这条感觉转成修改预览，不会覆盖正文。","text":"用户反馈原文或整理后的反馈"}',
     '{"action":"style_rewrite_preview","message":"收到，我先做一版文风改写预览，正文先不动。","intent":"remove_ai_voice","text":"用户原文"}',
+    '{"action":"reader_sim_review","message":"收到，我生成第 1 章读者模拟。","chapter":1}',
     '{"action":"new_book_intake","message":"我先帮你把开书方向钉稳，再开始建书。"}',
     '{"action":"unknown","message":"我先把下一步收窄一下：可以开新书、继续写，或者读最新章。"}',
     '',
@@ -120,6 +130,14 @@ function parseLlmAgentAction(raw: string): LlmAgentAction {
       if (!text) throw new Error('style_rewrite_preview requires text.');
       if (!isStyleRewriteIntent(intent)) throw new Error('style_rewrite_preview requires valid intent.');
       return { action: parsed.action, message, intent, text };
+    }
+    case 'internal_review':
+    case 'reader_sim_review':
+    case 'chapter_decision':
+    case 'memory_update': {
+      const chapter = 'chapter' in parsed && Number.isInteger(parsed.chapter) ? parsed.chapter : 0;
+      if (chapter < 1) throw new Error(`${parsed.action} requires chapter.`);
+      return { action: parsed.action, message, chapter } as LlmAgentAction;
     }
     case 'continue_book':
     case 'read_chapter':
@@ -182,6 +200,28 @@ function applyLlmAction(session: WebAgentSession, rawMessage: string, action: Ll
   }
   if (action.action === 'style_rewrite_apply') {
     return { kind: 'job', action: action.action, message: action.message, command: { type: 'style_apply' } };
+  }
+  if (action.action === 'internal_review') {
+    return {
+      kind: 'job',
+      action: action.action,
+      message: action.message,
+      command: { type: 'review', chapter: action.chapter, mode: 'internal' },
+    };
+  }
+  if (action.action === 'reader_sim_review') {
+    return {
+      kind: 'job',
+      action: action.action,
+      message: action.message,
+      command: { type: 'review', chapter: action.chapter, mode: 'reader-sim' },
+    };
+  }
+  if (action.action === 'chapter_decision') {
+    return { kind: 'job', action: action.action, message: action.message, command: { type: 'decide', chapter: action.chapter } };
+  }
+  if (action.action === 'memory_update') {
+    return { kind: 'job', action: action.action, message: action.message, command: { type: 'memory_update', chapter: action.chapter } };
   }
   if (action.action === 'download_current_chapter') {
     return { kind: 'job', action: action.action, message: action.message, command: { type: 'download_chapter', chapter: 'latest' } };

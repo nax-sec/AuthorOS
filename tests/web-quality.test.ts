@@ -41,6 +41,41 @@ test('quality overview derives next chapter card and stage states', async () => 
   });
 });
 
+test('quality overview exposes executable actions for review closure', async () => {
+  await withTempBook(async (bookDir) => {
+    await writeFile(join(bookDir, 'plans/0001.md'), 'plan one', 'utf8');
+    await writeFile(join(bookDir, 'chapters/0001.md'), 'draft one', 'utf8');
+
+    const draftState = await getProjectState(bookDir);
+    let overview = await getQualityOverview(bookDir, draftState, createJobStore());
+
+    assert.deepEqual(overview.actions.map((action) => action.type), ['internal_review', 'reader_sim_review']);
+    assert.deepEqual(overview.actions.map((action) => action.message), ['生成第 1 章内评', '生成第 1 章读者模拟']);
+
+    await writeFile(join(bookDir, 'reviews/0001.internal.md'), 'internal review', 'utf8');
+    await writeFile(join(bookDir, 'reviews/0001.reader-sim.md'), 'reader review', 'utf8');
+
+    const reviewedState = await getProjectState(bookDir);
+    overview = await getQualityOverview(bookDir, reviewedState, createJobStore());
+
+    assert.equal(overview.actions.some((action) => action.type === 'chapter_decision' && action.message === '生成第 1 章决策'), true);
+
+    await writeFile(join(bookDir, 'decisions/0001.md'), 'decision', 'utf8');
+
+    const decidedState = await getProjectState(bookDir);
+    overview = await getQualityOverview(bookDir, decidedState, createJobStore());
+
+    assert.equal(overview.actions.some((action) => action.type === 'memory_update' && action.message === '生成第 1 章记忆更新'), true);
+
+    await writeFile(join(bookDir, 'memory/chapter-0001.delta.md'), '# delta', 'utf8');
+
+    const memoryPendingState = await getProjectState(bookDir);
+    overview = await getQualityOverview(bookDir, memoryPendingState, createJobStore());
+
+    assert.equal(overview.actions.some((action) => action.type === 'memory_update'), false);
+  });
+});
+
 test('quality overview signals missing style binding', async () => {
   await withTempBook(async (bookDir) => {
     const state = await getProjectState(bookDir);
