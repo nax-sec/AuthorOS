@@ -63,6 +63,20 @@ export interface MergeMemoryDeltaResult {
   appliedSections: Record<MemoryDeltaSectionKey, string[]>;
 }
 
+export interface MemoryDeltaMergeTarget {
+  path: string;
+  section: MemoryDeltaSectionKey;
+  items: string[];
+}
+
+export interface PreviewMemoryDeltaMergeResult {
+  name: string;
+  alreadyMerged: boolean;
+  changedFiles: string[];
+  appliedSections: Record<MemoryDeltaSectionKey, string[]>;
+  targetFiles: MemoryDeltaMergeTarget[];
+}
+
 const memoryAgent = 'memory-curator';
 const memoryDirectory = 'memory';
 const reviewedMemoryDeltaHeading = '## 已审阅记忆增量';
@@ -238,28 +252,28 @@ export async function mergeMemoryDelta(
 
   const mergedAt = (options.now ?? new Date()).toISOString();
   const marker = `- merged: ${safeName} at ${mergedAt}`;
-  const appliedSections = parseMemoryDeltaSections(deltaContent);
   const canonPath = join(memoryDir, 'canon.md');
   const canon = await readOptional(canonPath) ?? '# 正史设定\n\n## 变更记录\n';
-  if (canon.includes(`- merged: ${safeName} at`)) {
+  const preview = buildMemoryDeltaMergePreview(safeName, deltaContent, canon);
+  if (preview.alreadyMerged) {
     return {
       name: safeName,
       marker,
       mergedAt,
       alreadyMerged: true,
       changedFiles: [],
-      appliedSections,
+      appliedSections: preview.appliedSections,
     };
   }
 
   await mkdir(memoryDir, { recursive: true });
   const changedFiles: string[] = [];
   let nextCanon = canon;
-  if (appliedSections.canon.length > 0) {
+  if (preview.appliedSections.canon.length > 0) {
     nextCanon = appendToMarkdownHeading(
       nextCanon,
       '## 已确认设定',
-      appliedSections.canon.map((item) => `- ${item}`),
+      preview.appliedSections.canon.map((item) => `- ${item}`),
     );
   }
   nextCanon = appendToMarkdownHeading(nextCanon, '## 变更记录', [marker]);
@@ -267,16 +281,16 @@ export async function mergeMemoryDelta(
   await writeFile(canonPath, nextCanon, 'utf8');
   changedFiles.push('memory/canon.md');
 
-  await appendYamlMemoryDeltaSection(memoryDir, 'foreshadowing.yaml', 'foreshadowing', appliedSections.foreshadowing, safeName, mergedAt, changedFiles);
-  await appendYamlMemoryDeltaSection(memoryDir, 'plot_threads.yaml', 'plot_threads', appliedSections.plot_threads, safeName, mergedAt, changedFiles);
-  await appendYamlMemoryDeltaSection(memoryDir, 'character_state.yaml', 'character_state', appliedSections.character_state, safeName, mergedAt, changedFiles);
+  await appendYamlMemoryDeltaSection(memoryDir, 'foreshadowing.yaml', 'foreshadowing', preview.appliedSections.foreshadowing, safeName, mergedAt, changedFiles);
+  await appendYamlMemoryDeltaSection(memoryDir, 'plot_threads.yaml', 'plot_threads', preview.appliedSections.plot_threads, safeName, mergedAt, changedFiles);
+  await appendYamlMemoryDeltaSection(memoryDir, 'character_state.yaml', 'character_state', preview.appliedSections.character_state, safeName, mergedAt, changedFiles);
 
-  if (appliedSections.style.length > 0) {
+  if (preview.appliedSections.style.length > 0) {
     const stylePath = join(memoryDir, 'style.md');
     const style = await readOptional(stylePath) ?? '# 风格规则\n\n## 变更记录\n';
     const nextStyle = appendToMarkdownHeading(style, '## 变更记录', [
       marker,
-      ...appliedSections.style.map((item) => `  - ${item}`),
+      ...preview.appliedSections.style.map((item) => `  - ${item}`),
     ]);
     await writeFile(stylePath, nextStyle, 'utf8');
     changedFiles.push('memory/style.md');
@@ -288,8 +302,21 @@ export async function mergeMemoryDelta(
     mergedAt,
     alreadyMerged: false,
     changedFiles,
-    appliedSections,
+    appliedSections: preview.appliedSections,
   };
+}
+
+export async function previewMemoryDeltaMerge(projectDir: string, name: string): Promise<PreviewMemoryDeltaMergeResult> {
+  const safeName = sanitizeDeltaName(name);
+  const memoryDir = join(projectDir, memoryDirectory);
+  const deltaPath = join(memoryDir, safeName);
+  const deltaContent = await readOptional(deltaPath);
+  if (deltaContent === null) {
+    throw new AuthorOsError(`memory delta not found: ${name}`);
+  }
+
+  const canon = await readOptional(join(memoryDir, 'canon.md')) ?? '# 正史设定\n\n## 变更记录\n';
+  return buildMemoryDeltaMergePreview(safeName, deltaContent, canon);
 }
 
 export function renderMergeMemoryDeltaResult(result: MergeMemoryDeltaResult): string {
@@ -305,6 +332,46 @@ export function renderMergeMemoryDeltaResult(result: MergeMemoryDeltaResult): st
     '',
   ];
   return lines.join('\n');
+}
+
+function buildMemoryDeltaMergePreview(safeName: string, deltaContent: string, canon: string): PreviewMemoryDeltaMergeResult {
+  const appliedSections = parseMemoryDeltaSections(deltaContent);
+  const alreadyMerged = canon.includes(`- merged: ${safeName} at`);
+  const targetFiles = memoryDeltaMergeTargets(appliedSections);
+  return {
+    name: safeName,
+    alreadyMerged,
+    changedFiles: alreadyMerged ? [] : changedFilesForMergePlan(appliedSections),
+    appliedSections,
+    targetFiles,
+  };
+}
+
+function memoryDeltaMergeTargets(sections: Record<MemoryDeltaSectionKey, string[]>): MemoryDeltaMergeTarget[] {
+  return memoryDeltaSectionKeys()
+    .filter((section) => sections[section].length > 0)
+    .map((section) => ({
+      path: memoryPathForSection(section),
+      section,
+      items: [...sections[section]],
+    }));
+}
+
+function changedFilesForMergePlan(sections: Record<MemoryDeltaSectionKey, string[]>): string[] {
+  const files = ['memory/canon.md'];
+  if (sections.foreshadowing.length > 0) files.push('memory/foreshadowing.yaml');
+  if (sections.plot_threads.length > 0) files.push('memory/plot_threads.yaml');
+  if (sections.character_state.length > 0) files.push('memory/character_state.yaml');
+  if (sections.style.length > 0) files.push('memory/style.md');
+  return files;
+}
+
+function memoryPathForSection(section: MemoryDeltaSectionKey): string {
+  if (section === 'foreshadowing') return 'memory/foreshadowing.yaml';
+  if (section === 'plot_threads') return 'memory/plot_threads.yaml';
+  if (section === 'character_state') return 'memory/character_state.yaml';
+  if (section === 'style') return 'memory/style.md';
+  return 'memory/canon.md';
 }
 
 function appendReviewedMemoryDeltaToCanon(canon: string, safeName: string, deltaContent: string, markedAt: string): string {

@@ -747,8 +747,8 @@
           view.addEventListener('click', () => loadMemoryDelta(delta.name).catch(error => addMessage(`读取记忆更新失败：${error.message}`, false, true)));
           const merge = document.createElement('button');
           merge.type = 'button';
-          merge.textContent = '拆分合并';
-          merge.addEventListener('click', () => mergeMemoryDelta(delta.name).catch(error => addMessage(`拆分合并失败：${error.message}`, false, true)));
+          merge.textContent = '预览拆分';
+          merge.addEventListener('click', () => previewMemoryDeltaMerge(delta.name).catch(error => addMessage(`预览拆分失败：${error.message}`, false, true)));
           const mark = document.createElement('button');
           mark.type = 'button';
           mark.className = 'secondary';
@@ -787,6 +787,63 @@
         memoryReview.appendChild(content);
       }
       content.textContent = result.content || '这个记忆更新为空。';
+    }
+
+    async function previewMemoryDeltaMerge(name) {
+      const result = await api(`/api/memory/deltas/${encodeURIComponent(name)}/merge-preview`);
+      renderMemoryDeltaMergePreview(result, name);
+    }
+
+    function renderMemoryDeltaMergePreview(preview, fallbackName) {
+      const existing = memoryReview.querySelector('#memoryMergePreview');
+      if (existing) existing.remove();
+
+      const panel = document.createElement('div');
+      panel.id = 'memoryMergePreview';
+      panel.className = 'stack';
+
+      const title = document.createElement('div');
+      title.className = 'book-title';
+      title.textContent = `拆分合并预览：${preview.name || fallbackName}`;
+
+      const files = document.createElement('div');
+      files.className = 'muted';
+      files.textContent = preview.changedFiles && preview.changedFiles.length > 0
+        ? `将写入：${preview.changedFiles.join('、')}`
+        : '没有新增写入。';
+
+      panel.append(title, files);
+
+      const targets = Array.isArray(preview.targetFiles) ? preview.targetFiles : [];
+      if (targets.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'muted';
+        empty.textContent = '没有可拆分条目；确认后只会归档原始记忆更新。';
+        panel.appendChild(empty);
+      }
+
+      for (const target of targets) {
+        const group = document.createElement('div');
+        group.className = 'stack';
+        const groupTitle = document.createElement('div');
+        groupTitle.className = 'muted';
+        groupTitle.textContent = `${target.path} · ${target.section}`;
+        const list = document.createElement('ul');
+        for (const item of target.items || []) {
+          const li = document.createElement('li');
+          li.textContent = item;
+          list.appendChild(li);
+        }
+        group.append(groupTitle, list);
+        panel.appendChild(group);
+      }
+
+      const confirm = document.createElement('button');
+      confirm.type = 'button';
+      confirm.textContent = '确认拆分合并';
+      confirm.addEventListener('click', () => mergeMemoryDelta(preview.name || fallbackName).catch(error => addMessage(`拆分合并失败：${error.message}`, false, true)));
+      panel.appendChild(confirm);
+      memoryReview.appendChild(panel);
     }
 
     async function mergeMemoryDelta(name) {

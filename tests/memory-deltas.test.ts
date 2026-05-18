@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../src/cli.ts';
-import { listMemoryDeltas, markMemoryDeltaReviewed, mergeMemoryDelta } from '../src/commands/memory.ts';
+import { listMemoryDeltas, markMemoryDeltaReviewed, mergeMemoryDelta, previewMemoryDeltaMerge } from '../src/commands/memory.ts';
 
 async function withBook(body: (bookDir: string) => Promise<void>): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), 'authoros-memory-deltas-'));
@@ -175,5 +175,50 @@ test('merging a memory delta splits sections into memory files and archives the 
 
     assert.equal(second.alreadyMerged, true);
     assert.equal((canonAfterSecondMerge.match(/- merged: chapter-0001\.delta\.md/g) ?? []).length, 1);
+  });
+});
+
+test('previewing a memory delta merge reports planned writes without changing memory files', async () => {
+  await withBook(async (bookDir) => {
+    await mkdir(join(bookDir, 'memory'), { recursive: true });
+    await writeFile(join(bookDir, 'memory/chapter-0001.delta.md'), [
+      '# 章节 1 记忆更新建议',
+      '',
+      '## canon (新增 / 变更)',
+      '- 预览正史条目',
+      '',
+      '## foreshadowing (新增 / 推进 / 回收)',
+      '- H001.status -> previewed',
+      '',
+      '## style (规则增 / 禁)',
+      '- 预览风格条目',
+      '',
+    ].join('\n'), 'utf8');
+    const beforeCanon = await readFile(join(bookDir, 'memory/canon.md'), 'utf8');
+    const beforeForeshadowing = await readFile(join(bookDir, 'memory/foreshadowing.yaml'), 'utf8');
+    const beforeStyle = await readFile(join(bookDir, 'memory/style.md'), 'utf8');
+
+    const preview = await previewMemoryDeltaMerge(bookDir, 'chapter-0001.delta.md');
+    const afterCanon = await readFile(join(bookDir, 'memory/canon.md'), 'utf8');
+    const afterForeshadowing = await readFile(join(bookDir, 'memory/foreshadowing.yaml'), 'utf8');
+    const afterStyle = await readFile(join(bookDir, 'memory/style.md'), 'utf8');
+    const pending = await listMemoryDeltas(bookDir);
+
+    assert.equal(preview.name, 'chapter-0001.delta.md');
+    assert.equal(preview.alreadyMerged, false);
+    assert.deepEqual(preview.changedFiles, [
+      'memory/canon.md',
+      'memory/foreshadowing.yaml',
+      'memory/style.md',
+    ]);
+    assert.deepEqual(preview.targetFiles, [
+      { path: 'memory/canon.md', section: 'canon', items: ['预览正史条目'] },
+      { path: 'memory/foreshadowing.yaml', section: 'foreshadowing', items: ['H001.status -> previewed'] },
+      { path: 'memory/style.md', section: 'style', items: ['预览风格条目'] },
+    ]);
+    assert.equal(afterCanon, beforeCanon);
+    assert.equal(afterForeshadowing, beforeForeshadowing);
+    assert.equal(afterStyle, beforeStyle);
+    assert.equal(pending.some((delta) => delta.name === 'chapter-0001.delta.md'), true);
   });
 });
