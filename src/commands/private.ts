@@ -282,7 +282,8 @@ export async function previewPrivateFeedback(root: string, opts: {
 }
 
 export async function applyPrivateFeedback(root: string, opts: {
-  llm: LlmClient;
+  llm?: LlmClient;
+  getLlm?: () => Promise<LlmClient>;
   now?: Date;
 }): Promise<PrivateApplyResult> {
   const resolvedRoot = resolve(root);
@@ -303,9 +304,13 @@ export async function applyPrivateFeedback(root: string, opts: {
   }
 
   await ensurePrivateReviewPlaceholder(projectDir, pending.chapter, opts.now);
+  const llm = opts.llm ?? await opts.getLlm?.();
+  if (!llm) {
+    throw new AuthorOsError('Pending feedback does not include a saved preview and requires model access to apply.');
+  }
   const revise = await reviseChapter(projectDir, {
     chapter: pending.chapter,
-    llm: opts.llm,
+    llm,
     now: opts.now,
     write: true,
     instruction: pending.instruction,

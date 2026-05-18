@@ -693,6 +693,10 @@
           feedbackStats.textContent = `原文 ${quality.pendingPreview.originalCharCount || 0} 字 · 预览 ${quality.pendingPreview.revisedCharCount ?? '未知'} 字`;
           pendingPreview.append(feedbackContentTitle, feedbackContent, feedbackStats);
         }
+        const feedbackApplyButton = document.createElement('button');
+        feedbackApplyButton.textContent = '确认应用修改';
+        feedbackApplyButton.addEventListener('click', () => sendMessage('确认应用修改').catch(error => addMessage(`失败：${error.message}`, false, true)));
+        pendingPreview.appendChild(feedbackApplyButton);
       }
 
       if (quality.styleRewritePreview) {

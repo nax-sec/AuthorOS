@@ -417,8 +417,10 @@ async function runCommandJob(
     }
     if (command.type === 'apply') {
       jobs.append(jobId, 'applying', '正在应用待确认修改');
-      const llm = writingLlm ?? await createClientForCurrentBook(root, env);
-      const result = await applyPrivateFeedback(root, { llm });
+      const result = await applyPrivateFeedback(root, {
+        llm: writingLlm,
+        getLlm: () => createClientForCurrentBook(root, env),
+      });
       completeCommandJob(jobs, jobId, command.type, { book: result.book, chapter: result.chapter });
       return;
     }

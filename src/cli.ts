@@ -1012,9 +1012,9 @@ async function runPrivate(args: string[], cwd: string, io: Io, options: RunOptio
   }
 
   if (subcommand === 'apply') {
-    const llm = options.llm ?? await createWritingClient(await privateCurrentProjectDir(root), env);
     io.stdout(renderPrivateApplyResult(await applyPrivateFeedback(root, {
-      llm,
+      llm: options.llm,
+      getLlm: async () => createWritingClient(await privateCurrentProjectDir(root), env),
       now: options.now,
     })));
     return 0;
