@@ -115,7 +115,8 @@ function deriveNextChapter(
   state: ProjectStateResult,
   memoryDeltas: readonly PendingMemoryDelta[],
 ): QualityNextChapterCard {
-  const chapter = state.nextDraftChapter;
+  const hasPlanGap = state.nextPlanChapter < state.nextDraftChapter;
+  const chapter = hasPlanGap ? state.nextPlanChapter : state.nextDraftChapter;
   const existing = state.chapters.find((item) => item.chapter === chapter);
   const stages = existing
     ? renderChapter(existing, state, memoryDeltas).stages
@@ -127,13 +128,13 @@ function deriveNextChapter(
         stage('decision', 'optional'),
         stage('memoryDelta', 'optional'),
       ];
-  const blockers = existing?.plan === false && chapter !== state.nextPlanChapter
+  const blockers = hasPlanGap || (existing?.plan === false && chapter !== state.nextPlanChapter)
     ? [`第 ${chapter} 章缺少计划`]
     : [];
 
   return {
     chapter,
-    state: existing?.draft ? 'ready_to_review' : existing?.plan ? 'ready_to_draft' : 'needs_plan',
+    state: hasPlanGap || !existing?.plan ? 'needs_plan' : existing.draft ? 'ready_to_review' : 'ready_to_draft',
     label: `第 ${chapter} 章生产线`,
     message: '继续写',
     blockers,
@@ -142,7 +143,9 @@ function deriveNextChapter(
 }
 
 function deriveRecovery(jobs: readonly WebJob[]): QualityRecovery | null {
-  const failed = jobs.find((job) => job.status === 'failed');
+  const failed = jobs
+    .filter((job) => job.status === 'failed')
+    .sort(compareJobsNewestFirst)[0];
   if (!failed) return null;
   const lastPhase = [...failed.events].reverse().find((event) => event.type !== 'failed');
 
@@ -153,6 +156,24 @@ function deriveRecovery(jobs: readonly WebJob[]): QualityRecovery | null {
     message: failed.error ?? '任务失败',
     suggestion: recoverySuggestion(failed.action),
   };
+}
+
+function compareJobsNewestFirst(a: WebJob, b: WebJob): number {
+  const byCreatedAt = b.createdAt.localeCompare(a.createdAt);
+  if (byCreatedAt !== 0) return byCreatedAt;
+
+  const aSequence = jobSequence(a.id);
+  const bSequence = jobSequence(b.id);
+  if (aSequence !== undefined && bSequence !== undefined) {
+    return bSequence - aSequence;
+  }
+
+  return b.id.localeCompare(a.id);
+}
+
+function jobSequence(id: string): number | undefined {
+  const match = id.match(/^job-(\d+)$/);
+  return match ? Number(match[1]) : undefined;
 }
 
 function recoverySuggestion(action: string): string {
@@ -192,14 +213,17 @@ async function readPendingFeedback(projectDir: string): Promise<QualityPendingPr
     throw error;
   }
 
-  const parsed = JSON.parse(raw) as Partial<{
-    chapter: unknown;
-    text: unknown;
-    instruction: unknown;
-    created_at: unknown;
-  }>;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('Invalid pending private feedback JSON.');
+  }
+
   if (
-    !Number.isInteger(parsed.chapter)
+    !isRecord(parsed)
+    || !Number.isInteger(parsed.chapter)
+    || parsed.chapter < 1
     || typeof parsed.text !== 'string'
     || typeof parsed.instruction !== 'string'
     || typeof parsed.created_at !== 'string'
@@ -215,4 +239,8 @@ async function readPendingFeedback(projectDir: string): Promise<QualityPendingPr
     createdAt: parsed.created_at,
     path: '.authoros/private/pending-feedback.json',
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
