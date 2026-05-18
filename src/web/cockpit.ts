@@ -25,6 +25,7 @@ export interface CockpitStyleOverview {
   profiles: CockpitStyleProfile[];
   binding: CockpitStyleBinding | null;
   currentProfile: CockpitStyleProfile | null;
+  generation: CockpitStyleGenerationStatus | null;
 }
 
 export interface CockpitStyleProfile {
@@ -41,6 +42,15 @@ export interface CockpitStyleBinding {
   version?: number;
   profileId: string;
   boundAt?: string;
+}
+
+export interface CockpitStyleGenerationStatus {
+  active: boolean;
+  snapshotPresent: boolean;
+  matchedBinding: boolean;
+  profileId?: string;
+  label: string;
+  detail: string;
 }
 
 export interface CockpitLatestChapter {
@@ -78,6 +88,7 @@ export async function getCockpitOverview(
         profiles: styleProfiles,
         binding: null,
         currentProfile: null,
+        generation: null,
       },
     };
   }
@@ -188,10 +199,12 @@ async function getCockpitStyleOverview(
   profiles: CockpitStyleProfile[],
 ): Promise<CockpitStyleOverview> {
   const bindingResult = await readCockpitStyleBinding(root, projectDir);
+  const generation = await getCockpitStyleGeneration(projectDir, bindingResult?.binding ?? null);
   return {
     profiles,
     binding: bindingResult?.binding ?? null,
     currentProfile: bindingResult?.profile ?? null,
+    generation,
   };
 }
 
@@ -215,9 +228,56 @@ async function readCockpitStyleBinding(
   return { binding, profile };
 }
 
+async function getCockpitStyleGeneration(
+  projectDir: string,
+  binding: CockpitStyleBinding | null,
+): Promise<CockpitStyleGenerationStatus> {
+  if (!binding) {
+    return {
+      active: false,
+      snapshotPresent: false,
+      matchedBinding: false,
+      label: '尚未绑定文风',
+      detail: '绑定文风后，下一章生成才会收到文风档案。',
+    };
+  }
+
+  const snapshot = await readCockpitBookStyleProfile(projectDir);
+  if (!snapshot) {
+    return {
+      active: false,
+      snapshotPresent: false,
+      matchedBinding: false,
+      profileId: binding.profileId,
+      label: '需要同步文风快照',
+      detail: '重新绑定或同步当前文风后，下一章生成会读取文风档案。',
+    };
+  }
+
+  const matchedBinding = snapshot.id === binding.profileId;
+  return {
+    active: matchedBinding,
+    snapshotPresent: true,
+    matchedBinding,
+    profileId: snapshot.id,
+    label: matchedBinding ? '已接入章节生成' : '文风快照与绑定不一致',
+    detail: matchedBinding
+      ? '下一章生成会读取当前文风档案。'
+      : '请重新同步文风快照，避免生成时使用旧档案。',
+  };
+}
+
+async function readCockpitBookStyleProfile(projectDir: string): Promise<CockpitStyleProfile | null> {
+  const commands = await loadStyleCommands();
+  if (!commands?.readBookStyleProfile) return null;
+  const profile = await commands.readBookStyleProfile(projectDir);
+  return normalizeStyleProfile(profile);
+}
+
 interface StyleCommands {
   listStyleProfiles(root: string): Promise<unknown[]>;
   readStyleBinding(root: string, projectDir: string): Promise<{ binding: unknown; profile: unknown } | null>;
+  readBookStyleProfile?(projectDir: string): Promise<unknown | null>;
 }
 
 async function loadStyleCommands(): Promise<StyleCommands | null> {
@@ -232,6 +292,9 @@ async function loadStyleCommands(): Promise<StyleCommands | null> {
     return {
       listStyleProfiles: mod.listStyleProfiles as StyleCommands['listStyleProfiles'],
       readStyleBinding: mod.readStyleBinding as StyleCommands['readStyleBinding'],
+      readBookStyleProfile: typeof mod.readBookStyleProfile === 'function'
+        ? mod.readBookStyleProfile as StyleCommands['readBookStyleProfile']
+        : undefined,
     };
   } catch (error) {
     if (error instanceof Error && error.message.includes('/commands/style.ts')) return null;

@@ -406,6 +406,30 @@ test('web server runs style rewrite preview and apply jobs', async () => {
   });
 });
 
+test('web server binds a style profile and refreshes the book generation snapshot', async () => {
+  await withTempRoot(async (root) => {
+    await writeStyleReadyBook(root);
+    const existing = JSON.parse(await readFile(join(root, 'books/demo/.authoros/private/style-binding.json'), 'utf8'));
+    const server = createWebServer({
+      root,
+      env: {},
+    });
+
+    const response = await server.fetch(new Request('http://local/api/style/bind', {
+      method: 'POST',
+      body: JSON.stringify({ profileId: existing.profileId }),
+    }));
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.binding.profileId, existing.profileId);
+    const binding = JSON.parse(await readFile(join(root, 'books/demo/.authoros/private/style-binding.json'), 'utf8'));
+    assert.equal(binding.profileId, existing.profileId);
+    assert.equal(binding.profile.name, '雨夜冷调');
+  });
+});
+
 test('web server exposes cockpit overview', async () => {
   await withTempRoot(async (root) => {
     const server = createWebServer({

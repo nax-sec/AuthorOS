@@ -39,9 +39,9 @@ async function writeStyleProfile(root: string, input: {
   name: string;
   description: string;
   antiAiVoice: string[];
-}): Promise<void> {
+}): Promise<Record<string, unknown>> {
   await mkdir(join(root, '.authoros/styles/profiles'), { recursive: true });
-  await writeFile(join(root, `.authoros/styles/profiles/${input.id}.json`), JSON.stringify({
+  const profile = {
     version: 1,
     id: input.id,
     name: input.name,
@@ -60,7 +60,9 @@ async function writeStyleProfile(root: string, input: {
       avoid: ['避免空泛。'],
       antiAiVoice: input.antiAiVoice,
     },
-  }, null, 2), 'utf8');
+  };
+  await writeFile(join(root, `.authoros/styles/profiles/${input.id}.json`), JSON.stringify(profile, null, 2), 'utf8');
+  return profile;
 }
 
 test('cockpit overview handles an empty bookshelf', async () => {
@@ -68,7 +70,7 @@ test('cockpit overview handles an empty bookshelf', async () => {
     const overview = await getCockpitOverview(root, {}, createJobStore());
 
     assert.equal(overview.current, null);
-    assert.deepEqual(overview.style, { profiles: [], binding: null, currentProfile: null });
+    assert.deepEqual(overview.style, { profiles: [], binding: null, currentProfile: null, generation: null });
     assert.equal(overview.nextAction.kind, 'new_book');
     assert.equal(overview.books.length, 0);
     assert.equal(overview.quality, null);
@@ -107,6 +109,8 @@ test('cockpit overview reports missing style binding for the current book', asyn
 
     assert.deepEqual(overview.style.binding, null);
     assert.deepEqual(overview.style.currentProfile, null);
+    assert.equal(overview.style.generation?.active, false);
+    assert.equal(overview.style.generation?.label, '尚未绑定文风');
     assert.equal(overview.quality?.signals.some((signal) => signal.label === '尚未绑定文风'), true);
   });
 });
@@ -133,7 +137,37 @@ test('cockpit overview reports global profiles and the current bound style', asy
     assert.equal(overview.style.profiles[0].name, '雨夜冷调');
     assert.equal(overview.style.binding?.profileId, 'rain-night-12345678');
     assert.equal(overview.style.currentProfile?.name, '雨夜冷调');
+    assert.equal(overview.style.generation?.active, false);
+    assert.equal(overview.style.generation?.snapshotPresent, false);
+    assert.equal(overview.style.generation?.label, '需要同步文风快照');
     assert.equal(overview.quality?.signals.some((signal) => signal.label === '已绑定文风：雨夜冷调'), true);
+  });
+});
+
+test('cockpit overview reports active style generation when binding has a matching snapshot', async () => {
+  await withTempRoot(async (root) => {
+    await writeBook(root);
+    const profile = await writeStyleProfile(root, {
+      id: 'rain-night-12345678',
+      name: '雨夜冷调',
+      description: '短句、冷感、带一点城市潮湿气味。',
+      antiAiVoice: ['避免万能形容词和总结式抒情。'],
+    });
+    await mkdir(join(root, 'books/demo/.authoros/private'), { recursive: true });
+    await writeFile(join(root, 'books/demo/.authoros/private/style-binding.json'), JSON.stringify({
+      version: 1,
+      profileId: 'rain-night-12345678',
+      boundAt: '2026-05-18T08:00:00.000Z',
+      profile,
+    }, null, 2), 'utf8');
+
+    const overview = await getCockpitOverview(root, {}, createJobStore());
+
+    assert.equal(overview.style.generation?.active, true);
+    assert.equal(overview.style.generation?.snapshotPresent, true);
+    assert.equal(overview.style.generation?.matchedBinding, true);
+    assert.equal(overview.style.generation?.profileId, 'rain-night-12345678');
+    assert.equal(overview.style.generation?.label, '已接入章节生成');
   });
 });
 

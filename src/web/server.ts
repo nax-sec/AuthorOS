@@ -23,6 +23,7 @@ import {
   switchPrivateBook,
   type PrivateShelf,
 } from '../commands/private.ts';
+import { bindStyleProfile } from '../commands/style.ts';
 import { createOpenAiCompatibleClientFromProject, type LlmClient } from '../core/llm.ts';
 import type { EnvLike } from '../core/modelConfig.ts';
 
@@ -106,6 +107,14 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
       if (routePath === '/api/jobs' && request.method === 'GET') {
         const runtime = runtimeForRoute(roomRoute, () => singleRuntime ??= createRuntimeForRoot(options.root), roomRuntimes);
         return json({ jobs: runtime.jobs.list() });
+      }
+      if (routePath === '/api/style/bind' && request.method === 'POST') {
+        const body = await request.json() as { profileId?: unknown };
+        const profileId = typeof body.profileId === 'string' ? body.profileId.trim() : '';
+        if (!profileId) return json({ error: 'profileId is required' }, 400);
+        const book = await getCurrentPrivateBook(root);
+        const binding = await bindStyleProfile(root, join(root, book.path), profileId);
+        return json({ ok: true, binding });
       }
       if (routePath === '/api/chat' && request.method === 'POST') {
         const runtime = runtimeForRoute(roomRoute, () => singleRuntime ??= createRuntimeForRoot(options.root), roomRuntimes);

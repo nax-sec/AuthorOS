@@ -32,6 +32,8 @@
     .quality-loop { display: grid; gap: 12px; }
     .next-chapter-card, .preview-card { display: grid; gap: 8px; padding: 12px; border: 1px solid #d9dee7; border-radius: 7px; background: #fafbfc; }
     .style-profile { display: grid; gap: 8px; }
+    .style-actions { display: grid; gap: 8px; }
+    .profile-option { display: grid; gap: 6px; padding: 10px; border: 1px solid #e5e9f0; border-radius: 7px; background: #fafbfc; }
     .stage-grid { display: flex; flex-wrap: wrap; gap: 8px; }
     .stage-pill { display: inline-flex; align-items: center; border: 1px solid #d9dee7; border-radius: 999px; padding: 5px 9px; background: #fff; color: #344054; font-size: 12px; font-weight: 600; }
     .stage-pill.done { border-color: #98d7aa; background: #edf8f0; color: #176b37; }
@@ -107,8 +109,11 @@
       <section class="panel style-profile" data-testid="style-profile" aria-label="文风档案">
         <h2>文风档案</h2>
         <div id="styleProfileStatus" class="book-title">尚未绑定文风</div>
+        <div id="styleGenerationStatus" class="muted">生成接入：检查中...</div>
+        <div id="styleGenerationDetail" class="muted"></div>
         <div id="styleProfileMeta" class="muted">档案数量：0</div>
         <div id="styleProfileDetail" class="muted">还没有可用文风档案。</div>
+        <div id="styleProfileActions" class="style-actions"></div>
       </section>
       <section class="panel stack">
         <h2>作者助理</h2>
@@ -139,8 +144,11 @@
     const memoryReview = document.querySelector('#memoryReview');
     const recoveryHint = document.querySelector('#recoveryHint');
     const styleProfileStatus = document.querySelector('#styleProfileStatus');
+    const styleGenerationStatus = document.querySelector('#styleGenerationStatus');
+    const styleGenerationDetail = document.querySelector('#styleGenerationDetail');
     const styleProfileMeta = document.querySelector('#styleProfileMeta');
     const styleProfileDetail = document.querySelector('#styleProfileDetail');
+    const styleProfileActions = document.querySelector('#styleProfileActions');
     const messageInput = document.querySelector('#message');
     const roomPrefix = (location.pathname.match(/^\/room\/[^/]+/) || [''])[0];
     const tokenKey = `authoros_token:${roomPrefix || 'single'}`;
@@ -261,18 +269,84 @@
     function renderStyle(style) {
       const profiles = style && Array.isArray(style.profiles) ? style.profiles : [];
       const current = style && style.currentProfile ? style.currentProfile : null;
+      const generation = style && style.generation ? style.generation : null;
       if (current) {
         styleProfileStatus.textContent = `已绑定：${current.name || current.id}`;
       } else {
         styleProfileStatus.textContent = '尚未绑定文风';
       }
       styleProfileMeta.textContent = `档案数量：${profiles.length}`;
+      renderStyleGeneration(generation);
       const detailSource = current || profiles[0] || null;
       const antiAiVoice = detailSource && detailSource.rules && Array.isArray(detailSource.rules.antiAiVoice)
         ? detailSource.rules.antiAiVoice.find(Boolean)
         : '';
       const detail = detailSource && (detailSource.description || antiAiVoice);
       styleProfileDetail.textContent = detail || (profiles.length > 0 ? '可以从已有档案中绑定当前书。' : '还没有可用文风档案。');
+      renderStyleActions(profiles, current, generation);
+    }
+
+    function renderStyleGeneration(generation) {
+      const label = generation && generation.label ? generation.label : '未启用';
+      styleGenerationStatus.textContent = `生成接入：${label}`;
+      styleGenerationStatus.className = generation && generation.active
+        ? 'signal-ok'
+        : generation && generation.label !== '尚未绑定文风'
+        ? 'signal-warning'
+        : 'muted';
+      styleGenerationDetail.textContent = generation && generation.detail ? generation.detail : '绑定文风后，下一章生成才会收到文风档案。';
+    }
+
+    function renderStyleActions(profiles, current, generation) {
+      styleProfileActions.innerHTML = '';
+      if (!cockpit || !cockpit.current) {
+        styleProfileActions.textContent = '开书后可以绑定文风。';
+        return;
+      }
+
+      if (current) {
+        const syncButton = document.createElement('button');
+        syncButton.className = 'secondary';
+        syncButton.textContent = generation && generation.active ? '重新同步到写作生成' : '同步到写作生成';
+        syncButton.addEventListener('click', () => bindStyleProfileFromCockpit(current.id));
+        styleProfileActions.appendChild(syncButton);
+      }
+
+      if (!profiles.length) {
+        const empty = document.createElement('div');
+        empty.className = 'muted';
+        empty.textContent = '还没有可绑定的文风档案。';
+        styleProfileActions.appendChild(empty);
+        return;
+      }
+
+      for (const profile of profiles) {
+        const option = document.createElement('div');
+        option.className = 'profile-option';
+        const title = document.createElement('div');
+        title.className = 'book-title';
+        title.textContent = profile.name || profile.id;
+        const meta = document.createElement('div');
+        meta.className = 'muted';
+        meta.textContent = profile.description || profile.id;
+        const button = document.createElement('button');
+        button.className = 'secondary';
+        button.textContent = current && profile.id === current.id ? '已绑定' : '绑定到当前书';
+        button.disabled = Boolean(current && profile.id === current.id);
+        button.addEventListener('click', () => bindStyleProfileFromCockpit(profile.id));
+        option.append(title, meta, button);
+        styleProfileActions.appendChild(option);
+      }
+    }
+
+    async function bindStyleProfileFromCockpit(profileId) {
+      try {
+        await api('/api/style/bind', { method: 'POST', body: JSON.stringify({ profileId }) });
+        addMessage('文风已同步到写作生成。');
+        await loadCockpit();
+      } catch (error) {
+        addMessage(`文风绑定失败：${error.message}`, false, true);
+      }
     }
 
     function renderQuality(quality, jobs = []) {
