@@ -10,6 +10,7 @@ test('private web app exposes personal cockpit regions', async () => {
   assert.match(html, /data-testid="next-action"/);
   assert.match(html, /data-testid="task-center"/);
   assert.match(html, /data-testid="quality-loop"/);
+  assert.match(html, /data-testid="style-profile"/);
   assert.match(html, /data-testid="next-chapter-card"/);
   assert.match(html, /data-testid="pending-preview"/);
   assert.match(html, /data-testid="chapter-reader"/);
@@ -18,7 +19,11 @@ test('private web app exposes personal cockpit regions', async () => {
   assert.match(html, /质量环路/);
   assert.match(html, /loadCockpit/);
   assert.match(html, /renderQuality/);
+  assert.match(html, /renderStyle/);
   assert.match(html, /renderQuality\(data\.quality, data\.jobs \|\| \[\]\)/);
+  assert.match(html, /文风档案/);
+  assert.match(html, /尚未绑定文风/);
+  assert.match(html, /已绑定/);
   assert.match(html, /deriveBooklessRecovery/);
   assert.match(html, /确认已有正文后，再读取最新章。/);
   assert.match(html, /jobActionLabel/);

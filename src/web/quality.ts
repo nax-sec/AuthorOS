@@ -50,6 +50,11 @@ export interface QualitySignal {
   label: string;
 }
 
+export interface QualityStyleStatus {
+  binding: { profileId: string } | null;
+  currentProfile: { name: string } | null;
+}
+
 export interface QualityOverview {
   nextChapter: QualityNextChapterCard;
   chapters: QualityChapter[];
@@ -74,6 +79,7 @@ export async function getQualityOverview(
   projectDir: string,
   state: ProjectStateResult,
   jobs: JobStore,
+  style?: QualityStyleStatus,
 ): Promise<QualityOverview> {
   const pendingPreview = await readPendingFeedback(projectDir);
   const memoryDeltas = await listMemoryDeltas(projectDir);
@@ -87,7 +93,7 @@ export async function getQualityOverview(
     pendingPreview,
     memoryDeltas,
     recovery,
-    signals: deriveSignals({ pendingPreview, memoryDeltas, recovery }),
+    signals: deriveSignals({ pendingPreview, memoryDeltas, recovery, style }),
   };
 }
 
@@ -188,11 +194,19 @@ function deriveSignals(input: {
   pendingPreview: QualityPendingPreview | null;
   memoryDeltas: readonly PendingMemoryDelta[];
   recovery: QualityRecovery | null;
+  style?: QualityStyleStatus;
 }): QualitySignal[] {
   const signals: QualitySignal[] = [];
   if (input.recovery) signals.push({ kind: 'danger', label: `上次任务失败：${input.recovery.failedPhase}` });
   if (input.pendingPreview) signals.push({ kind: 'warning', label: `第 ${input.pendingPreview.chapter} 章有修改预览待确认` });
   if (input.memoryDeltas.length > 0) signals.push({ kind: 'warning', label: `记忆更新待审阅：${input.memoryDeltas.length} 个` });
+  if (input.style) {
+    if (input.style.binding && input.style.currentProfile) {
+      signals.push({ kind: 'ok', label: `已绑定文风：${input.style.currentProfile.name}` });
+    } else {
+      signals.push({ kind: 'warning', label: '尚未绑定文风' });
+    }
+  }
   if (signals.length === 0) signals.push({ kind: 'ok', label: '质量环路暂无阻塞' });
   return signals;
 }

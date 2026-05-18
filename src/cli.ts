@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { initProject } from './commands/init.ts';
 import {
   clearModelConfig,
@@ -205,6 +206,10 @@ export async function run(
 
     if (command === 'private') {
       return await runPrivate(rest, cwd, io, options);
+    }
+
+    if (command === 'style') {
+      return await runStyle(rest, cwd, io, options);
     }
 
     if (command === 'web') {
@@ -1013,6 +1018,187 @@ async function runPrivate(args: string[], cwd: string, io: Io, options: RunOptio
   throw new AuthorOsError(`Unknown private subcommand: ${subcommand}`);
 }
 
+async function runStyle(args: string[], cwd: string, io: Io, options: RunOptions): Promise<number> {
+  const [subcommand, ...rest] = args;
+  if (!subcommand || subcommand === '--help' || subcommand === '-h') {
+    io.stdout(styleHelpText());
+    return 0;
+  }
+
+  const parsed = parseArgs(rest);
+  if (parsed.flags.help || parsed.flags.h) {
+    io.stdout(styleHelpText());
+    return 0;
+  }
+
+  const env = options.env ?? process.env;
+  const root = resolvePrivateRoot(cwd, parsed, env);
+  const style = await loadStyleCommands();
+
+  if (subcommand === 'extract') {
+    const name = stringFlag(parsed.flags.name);
+    const textFile = stringFlag(parsed.flags['text-file']);
+    if (!name?.trim()) throw new AuthorOsError('author style extract requires --name <name>.');
+    if (!textFile?.trim()) throw new AuthorOsError('author style extract requires --text-file <file>.');
+
+    const textPath = resolve(cwd, textFile);
+    const text = await readFile(textPath, 'utf8');
+    const profile = await style.createStyleProfileFromText(root, {
+      name,
+      text,
+      sourceNote: textPath,
+    });
+    await style.saveStyleProfile(root, profile);
+    io.stdout(renderStyleExtract(profile, styleProfilePath(root, profile.id)));
+    return 0;
+  }
+
+  if (subcommand === 'list') {
+    io.stdout(renderStyleList(await style.listStyleProfiles(root)));
+    return 0;
+  }
+
+  if (subcommand === 'show') {
+    const id = parsed.positionals[0];
+    if (!id?.trim()) throw new AuthorOsError('author style show requires <id>.');
+    io.stdout(renderStyleProfile(await style.loadStyleProfile(root, id)));
+    return 0;
+  }
+
+  if (subcommand === 'bind') {
+    const id = parsed.positionals[0];
+    if (!id?.trim()) throw new AuthorOsError('author style bind requires <id>.');
+    const projectDir = await privateCurrentProjectDir(root);
+    const binding = await style.bindStyleProfile(root, projectDir, id, options.now);
+    io.stdout(renderStyleBind(id, binding, basename(projectDir)));
+    return 0;
+  }
+
+  throw new AuthorOsError(`Unknown style subcommand: ${subcommand}`);
+}
+
+type StyleCommandModule = {
+  createStyleProfileFromText: (root: string, opts: {
+    name: string;
+    text: string;
+    sourceNote?: string;
+  }) => Promise<StyleProfileLike> | StyleProfileLike;
+  saveStyleProfile: (root: string, profile: StyleProfileLike) => Promise<unknown> | unknown;
+  listStyleProfiles: (root: string) => Promise<StyleProfileSummaryLike[]> | StyleProfileSummaryLike[];
+  loadStyleProfile: (root: string, id: string) => Promise<StyleProfileLike> | StyleProfileLike;
+  bindStyleProfile: (
+    root: string,
+    projectDir: string,
+    profileId: string,
+    now?: Date,
+  ) => Promise<StyleBindingLike> | StyleBindingLike;
+};
+
+type StyleProfileLike = {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt?: string;
+  sourceHash?: string;
+  rules?: Record<string, string[]>;
+};
+
+type StyleProfileSummaryLike = {
+  id: string;
+  name?: string;
+  description?: string;
+  createdAt?: string;
+};
+
+type StyleBindingLike = {
+  profileId?: string;
+  boundAt?: string;
+};
+
+async function loadStyleCommands(): Promise<StyleCommandModule> {
+  try {
+    return await import('./commands/style.ts') as StyleCommandModule;
+  } catch (error) {
+    if (isMissingStyleModuleError(error)) {
+      throw new AuthorOsError('Style core module is not available yet: src/commands/style.ts');
+    }
+    throw error;
+  }
+}
+
+function isMissingStyleModuleError(error: unknown): boolean {
+  return error instanceof Error
+    && 'code' in error
+    && (error as { code?: string }).code === 'ERR_MODULE_NOT_FOUND'
+    && error.message.includes('/commands/style.ts');
+}
+
+function styleProfilePath(root: string, id: string): string {
+  return join(root, '.authoros/styles/profiles', `${id}.json`);
+}
+
+function renderStyleExtract(profile: StyleProfileLike, path: string): string {
+  return [
+    'Style profile extracted',
+    `ID: ${profile.id}`,
+    `Name: ${profile.name}`,
+    `Path: ${path}`,
+    '',
+  ].join('\n');
+}
+
+function renderStyleList(profiles: StyleProfileSummaryLike[]): string {
+  if (profiles.length === 0) {
+    return 'Style profiles: none\n';
+  }
+
+  return [
+    'Style profiles:',
+    ...profiles.map((profile) => {
+      const created = profile.createdAt ? ` ${profile.createdAt}` : '';
+      const name = profile.name ? ` ${profile.name}` : '';
+      return `- ${profile.id}${name}${created}`;
+    }),
+    '',
+  ].join('\n');
+}
+
+function renderStyleProfile(profile: StyleProfileLike): string {
+  const lines = [
+    'Style profile',
+    `ID: ${profile.id}`,
+    `Name: ${profile.name}`,
+  ];
+  if (profile.description) lines.push(`Description: ${profile.description}`);
+  if (profile.createdAt) lines.push(`Created: ${profile.createdAt}`);
+  if (profile.sourceHash) lines.push(`Source hash: ${profile.sourceHash}`);
+
+  lines.push('Rules:');
+  const rules = profile.rules ?? {};
+  for (const [section, values] of Object.entries(rules)) {
+    lines.push(`  ${section}:`);
+    for (const value of values) {
+      lines.push(`    - ${value}`);
+    }
+  }
+  if (Object.keys(rules).length === 0) {
+    lines.push('  none');
+  }
+
+  lines.push('');
+  return lines.join('\n');
+}
+
+function renderStyleBind(id: string, binding: StyleBindingLike, bookName: string): string {
+  return [
+    'Style profile bound',
+    `Profile: ${binding.profileId ?? id}`,
+    `Book: ${bookName}`,
+    binding.boundAt ? `Bound at: ${binding.boundAt}` : undefined,
+    '',
+  ].filter((line): line is string => line !== undefined).join('\n');
+}
+
 function optionalConsoleScope(value: string | undefined): ConsoleScope | undefined {
   if (value === undefined) return undefined;
   if (value === 'book' || value === 'author' || value === 'both') return value;
@@ -1197,6 +1383,7 @@ function helpText(): string {
     '  author template list | show | promote | forget | export',
     '  author console ["instruction"] [--dry-run] [--write] [--scope author|book|both]',
     '  author private new|list|switch|current|status|continue|read|feedback|apply',
+    '  author style extract|list|show|bind [--root <dir>]',
     '  author web [--root <dir>] [--port <n>]',
     '  author skill install [--dir <skills-root>] [--force]',
     '',
@@ -1220,6 +1407,7 @@ function helpText(): string {
     '  template   Manage seed and author-level templates',
     '  console    Author control seat for shape edits through a 4-block structured edits protocol',
     '  private    Private AI author bookshelf mode for one reader and many books',
+    '  style      Extract, list, show, and bind writing style profiles',
     '  skill      Install the bundled Claude Code skill (SKILL.md)',
     '',
   ].join('\n');
@@ -1315,6 +1503,22 @@ function privateHelpText(): string {
     '',
     'Default root: AUTHOROS_PRIVATE_ROOT or ./private-author.',
     'new / continue / feedback / apply require the configured model.',
+    '',
+  ].join('\n');
+}
+
+function styleHelpText(): string {
+  return [
+    'Writing style profiles for private books.',
+    '',
+    'Usage:',
+    '  author style extract --name <name> --text-file <file> [--root <dir>]',
+    '  author style list [--root <dir>]',
+    '  author style show <id> [--root <dir>]',
+    '  author style bind <id> [--root <dir>]',
+    '',
+    'Default root: AUTHOROS_PRIVATE_ROOT or ./private-author.',
+    'bind applies to the current private book.',
     '',
   ].join('\n');
 }

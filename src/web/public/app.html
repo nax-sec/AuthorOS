@@ -31,6 +31,7 @@
     .current-book { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
     .quality-loop { display: grid; gap: 12px; }
     .next-chapter-card, .preview-card { display: grid; gap: 8px; padding: 12px; border: 1px solid #d9dee7; border-radius: 7px; background: #fafbfc; }
+    .style-profile { display: grid; gap: 8px; }
     .stage-grid { display: flex; flex-wrap: wrap; gap: 8px; }
     .stage-pill { display: inline-flex; align-items: center; border: 1px solid #d9dee7; border-radius: 999px; padding: 5px 9px; background: #fff; color: #344054; font-size: 12px; font-weight: 600; }
     .stage-pill.done { border-color: #98d7aa; background: #edf8f0; color: #176b37; }
@@ -103,6 +104,12 @@
     </section>
 
     <aside class="stack">
+      <section class="panel style-profile" data-testid="style-profile" aria-label="文风档案">
+        <h2>文风档案</h2>
+        <div id="styleProfileStatus" class="book-title">尚未绑定文风</div>
+        <div id="styleProfileMeta" class="muted">档案数量：0</div>
+        <div id="styleProfileDetail" class="muted">还没有可用文风档案。</div>
+      </section>
       <section class="panel stack">
         <h2>作者助理</h2>
         <div id="chatLog" class="chat-log" data-testid="assistant-chat"></div>
@@ -131,6 +138,9 @@
     const pendingPreview = document.querySelector('#pendingPreview');
     const memoryReview = document.querySelector('#memoryReview');
     const recoveryHint = document.querySelector('#recoveryHint');
+    const styleProfileStatus = document.querySelector('#styleProfileStatus');
+    const styleProfileMeta = document.querySelector('#styleProfileMeta');
+    const styleProfileDetail = document.querySelector('#styleProfileDetail');
     const messageInput = document.querySelector('#message');
     const roomPrefix = (location.pathname.match(/^\/room\/[^/]+/) || [''])[0];
     const tokenKey = `authoros_token:${roomPrefix || 'single'}`;
@@ -245,6 +255,24 @@
         nextActionHint.textContent = '刷新后再看看。';
       }
       renderQuality(data.quality, data.jobs || []);
+      renderStyle(data.style);
+    }
+
+    function renderStyle(style) {
+      const profiles = style && Array.isArray(style.profiles) ? style.profiles : [];
+      const current = style && style.currentProfile ? style.currentProfile : null;
+      if (current) {
+        styleProfileStatus.textContent = `已绑定：${current.name || current.id}`;
+      } else {
+        styleProfileStatus.textContent = '尚未绑定文风';
+      }
+      styleProfileMeta.textContent = `档案数量：${profiles.length}`;
+      const detailSource = current || profiles[0] || null;
+      const antiAiVoice = detailSource && detailSource.rules && Array.isArray(detailSource.rules.antiAiVoice)
+        ? detailSource.rules.antiAiVoice.find(Boolean)
+        : '';
+      const detail = detailSource && (detailSource.description || antiAiVoice);
+      styleProfileDetail.textContent = detail || (profiles.length > 0 ? '可以从已有档案中绑定当前书。' : '还没有可用文风档案。');
     }
 
     function renderQuality(quality, jobs = []) {

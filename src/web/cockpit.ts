@@ -18,6 +18,29 @@ export interface CockpitOverview {
   model: Pick<ResolvedProjectModelConfig, 'apiKeyEnv' | 'apiKeySet' | 'baseUrl' | 'model'>;
   nextAction: CockpitNextAction;
   quality: QualityOverview | null;
+  style: CockpitStyleOverview;
+}
+
+export interface CockpitStyleOverview {
+  profiles: CockpitStyleProfile[];
+  binding: CockpitStyleBinding | null;
+  currentProfile: CockpitStyleProfile | null;
+}
+
+export interface CockpitStyleProfile {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt?: string;
+  rules?: {
+    antiAiVoice?: string[];
+  };
+}
+
+export interface CockpitStyleBinding {
+  version?: number;
+  profileId: string;
+  boundAt?: string;
 }
 
 export interface CockpitLatestChapter {
@@ -37,6 +60,7 @@ export async function getCockpitOverview(
   jobs: JobStore,
 ): Promise<CockpitOverview> {
   const shelf = await listPrivateBooks(root);
+  const styleProfiles = await listCockpitStyleProfiles(root);
   if (!shelf.current) {
     const model = await resolveProjectModelConfig(root, env);
     return {
@@ -50,6 +74,11 @@ export async function getCockpitOverview(
         message: '我想开一本新书',
       },
       quality: null,
+      style: {
+        profiles: styleProfiles,
+        binding: null,
+        currentProfile: null,
+      },
     };
   }
 
@@ -58,7 +87,11 @@ export async function getCockpitOverview(
   const model = await resolveProjectModelConfig(projectDir, env);
   const latestChapter = await tryLatestChapter(root);
   const pendingFeedback = await fileExists(join(projectDir, '.authoros/private/pending-feedback.json'));
-  const quality = await getQualityOverview(projectDir, status.state, jobs);
+  const style = await getCockpitStyleOverview(root, projectDir, styleProfiles);
+  const quality = await getQualityOverview(projectDir, status.state, jobs, {
+    binding: style.binding,
+    currentProfile: style.currentProfile,
+  });
   return {
     books: shelf.books.map(bookSummary),
     current: {
@@ -71,6 +104,7 @@ export async function getCockpitOverview(
     model: modelSummary(model),
     nextAction: deriveNextAction(status.state, latestChapter?.chapter ?? null, pendingFeedback),
     quality,
+    style,
   };
 }
 
@@ -146,4 +180,94 @@ async function fileExists(path: string): Promise<boolean> {
     }
     throw error;
   }
+}
+
+async function getCockpitStyleOverview(
+  root: string,
+  projectDir: string,
+  profiles: CockpitStyleProfile[],
+): Promise<CockpitStyleOverview> {
+  const bindingResult = await readCockpitStyleBinding(root, projectDir);
+  return {
+    profiles,
+    binding: bindingResult?.binding ?? null,
+    currentProfile: bindingResult?.profile ?? null,
+  };
+}
+
+async function listCockpitStyleProfiles(root: string): Promise<CockpitStyleProfile[]> {
+  const commands = await loadStyleCommands();
+  if (!commands) return [];
+  return (await commands.listStyleProfiles(root)).map(normalizeStyleProfile).filter(isStyleProfile);
+}
+
+async function readCockpitStyleBinding(
+  root: string,
+  projectDir: string,
+): Promise<{ binding: CockpitStyleBinding; profile: CockpitStyleProfile } | null> {
+  const commands = await loadStyleCommands();
+  if (!commands) return null;
+  const result = await commands.readStyleBinding(root, projectDir);
+  if (!result) return null;
+  const binding = normalizeStyleBinding(result.binding);
+  const profile = normalizeStyleProfile(result.profile);
+  if (!binding || !profile) return null;
+  return { binding, profile };
+}
+
+interface StyleCommands {
+  listStyleProfiles(root: string): Promise<unknown[]>;
+  readStyleBinding(root: string, projectDir: string): Promise<{ binding: unknown; profile: unknown } | null>;
+}
+
+async function loadStyleCommands(): Promise<StyleCommands | null> {
+  try {
+    const mod = await import('../commands/style.ts');
+    if (
+      typeof mod.listStyleProfiles !== 'function'
+      || typeof mod.readStyleBinding !== 'function'
+    ) {
+      return null;
+    }
+    return {
+      listStyleProfiles: mod.listStyleProfiles as StyleCommands['listStyleProfiles'],
+      readStyleBinding: mod.readStyleBinding as StyleCommands['readStyleBinding'],
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('/commands/style.ts')) return null;
+    throw error;
+  }
+}
+
+function normalizeStyleProfile(value: unknown): CockpitStyleProfile | null {
+  if (!isRecord(value) || typeof value.id !== 'string' || typeof value.name !== 'string') return null;
+  const profile: CockpitStyleProfile = {
+    id: value.id,
+    name: value.name,
+  };
+  if (typeof value.description === 'string') profile.description = value.description;
+  if (typeof value.createdAt === 'string') profile.createdAt = value.createdAt;
+  if (isRecord(value.rules)) {
+    const antiAiVoice = Array.isArray(value.rules.antiAiVoice)
+      ? value.rules.antiAiVoice.filter((item): item is string => typeof item === 'string')
+      : undefined;
+    profile.rules = antiAiVoice ? { antiAiVoice } : {};
+  }
+  return profile;
+}
+
+function normalizeStyleBinding(value: unknown): CockpitStyleBinding | null {
+  if (!isRecord(value) || typeof value.profileId !== 'string') return null;
+  const binding: CockpitStyleBinding = { profileId: value.profileId };
+  if (typeof value.version === 'number') binding.version = value.version;
+  if (typeof value.boundAt === 'string') binding.boundAt = value.boundAt;
+  return binding;
+}
+
+function isStyleProfile(value: CockpitStyleProfile | null): value is CockpitStyleProfile {
+  return value !== null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

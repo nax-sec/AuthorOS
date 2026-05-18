@@ -41,6 +41,32 @@ test('quality overview derives next chapter card and stage states', async () => 
   });
 });
 
+test('quality overview signals missing style binding', async () => {
+  await withTempBook(async (bookDir) => {
+    const state = await getProjectState(bookDir);
+
+    const overview = await getQualityOverview(bookDir, state, createJobStore(), {
+      binding: null,
+      currentProfile: null,
+    });
+
+    assert.equal(overview.signals.some((signal) => signal.kind === 'warning' && signal.label === '尚未绑定文风'), true);
+  });
+});
+
+test('quality overview signals bound style profile name', async () => {
+  await withTempBook(async (bookDir) => {
+    const state = await getProjectState(bookDir);
+
+    const overview = await getQualityOverview(bookDir, state, createJobStore(), {
+      binding: { version: 1, profileId: 'rain-night-12345678', boundAt: '2026-05-18T08:00:00.000Z' },
+      currentProfile: { id: 'rain-night-12345678', name: '雨夜冷调' },
+    });
+
+    assert.equal(overview.signals.some((signal) => signal.kind === 'ok' && signal.label === '已绑定文风：雨夜冷调'), true);
+  });
+});
+
 test('quality overview prioritizes missing plans before the next draft', async () => {
   await withTempBook(async (bookDir) => {
     await writeFile(join(bookDir, 'chapters/0001.md'), 'draft one', 'utf8');

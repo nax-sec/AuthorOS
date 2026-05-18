@@ -34,11 +34,41 @@ async function writeBook(root: string): Promise<void> {
   await writeFile(join(root, 'books/demo/chapters/0001.md'), 'chapter one body', 'utf8');
 }
 
+async function writeStyleProfile(root: string, input: {
+  id: string;
+  name: string;
+  description: string;
+  antiAiVoice: string[];
+}): Promise<void> {
+  await mkdir(join(root, '.authoros/styles/profiles'), { recursive: true });
+  await writeFile(join(root, `.authoros/styles/profiles/${input.id}.json`), JSON.stringify({
+    version: 1,
+    id: input.id,
+    name: input.name,
+    description: input.description,
+    createdAt: '2026-05-18T07:00:00.000Z',
+    sourceNote: '测试样本',
+    sourceHash: 'a'.repeat(64),
+    rules: {
+      sentenceRhythm: ['短句优先。'],
+      paragraphDensity: ['段落保持紧凑。'],
+      dialogue: ['对白少解释。'],
+      narrativeDistance: ['贴近视角。'],
+      sensoryDetail: ['保留触感。'],
+      imagery: ['城市意象。'],
+      pacing: ['快慢交替。'],
+      avoid: ['避免空泛。'],
+      antiAiVoice: input.antiAiVoice,
+    },
+  }, null, 2), 'utf8');
+}
+
 test('cockpit overview handles an empty bookshelf', async () => {
   await withTempRoot(async (root) => {
     const overview = await getCockpitOverview(root, {}, createJobStore());
 
     assert.equal(overview.current, null);
+    assert.deepEqual(overview.style, { profiles: [], binding: null, currentProfile: null });
     assert.equal(overview.nextAction.kind, 'new_book');
     assert.equal(overview.books.length, 0);
     assert.equal(overview.quality, null);
@@ -66,6 +96,44 @@ test('cockpit overview reports current book latest chapter and model status', as
     assert.equal(overview.nextAction.kind, 'continue_book');
     assert.equal(overview.quality?.nextChapter.chapter, 2);
     assert.equal((overview.quality?.signals[0].label.length ?? 0) > 0, true);
+  });
+});
+
+test('cockpit overview reports missing style binding for the current book', async () => {
+  await withTempRoot(async (root) => {
+    await writeBook(root);
+
+    const overview = await getCockpitOverview(root, {}, createJobStore());
+
+    assert.deepEqual(overview.style.binding, null);
+    assert.deepEqual(overview.style.currentProfile, null);
+    assert.equal(overview.quality?.signals.some((signal) => signal.label === '尚未绑定文风'), true);
+  });
+});
+
+test('cockpit overview reports global profiles and the current bound style', async () => {
+  await withTempRoot(async (root) => {
+    await writeBook(root);
+    await writeStyleProfile(root, {
+      id: 'rain-night-12345678',
+      name: '雨夜冷调',
+      description: '短句、冷感、带一点城市潮湿气味。',
+      antiAiVoice: ['避免万能形容词和总结式抒情。'],
+    });
+    await mkdir(join(root, 'books/demo/.authoros/private'), { recursive: true });
+    await writeFile(join(root, 'books/demo/.authoros/private/style-binding.json'), JSON.stringify({
+      version: 1,
+      profileId: 'rain-night-12345678',
+      boundAt: '2026-05-18T08:00:00.000Z',
+    }, null, 2), 'utf8');
+
+    const overview = await getCockpitOverview(root, {}, createJobStore());
+
+    assert.equal(overview.style.profiles.length, 1);
+    assert.equal(overview.style.profiles[0].name, '雨夜冷调');
+    assert.equal(overview.style.binding?.profileId, 'rain-night-12345678');
+    assert.equal(overview.style.currentProfile?.name, '雨夜冷调');
+    assert.equal(overview.quality?.signals.some((signal) => signal.label === '已绑定文风：雨夜冷调'), true);
   });
 });
 
