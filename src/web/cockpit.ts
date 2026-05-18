@@ -4,6 +4,7 @@ import { getPrivateStatus, listPrivateBooks, readPrivateChapter, type PrivateBoo
 import type { ProjectStateResult } from '../commands/state.ts';
 import { resolveProjectModelConfig, type EnvLike, type ResolvedProjectModelConfig } from '../core/modelConfig.ts';
 import type { JobStore, WebJob } from './jobs.ts';
+import { getQualityOverview, type QualityOverview } from './quality.ts';
 
 export interface CockpitOverview {
   books: Array<Pick<PrivateBook, 'id' | 'title' | 'concept' | 'path' | 'last_active_at'>>;
@@ -16,6 +17,7 @@ export interface CockpitOverview {
   jobs: WebJob[];
   model: Pick<ResolvedProjectModelConfig, 'apiKeyEnv' | 'apiKeySet' | 'baseUrl' | 'model'>;
   nextAction: CockpitNextAction;
+  quality: QualityOverview | null;
 }
 
 export interface CockpitLatestChapter {
@@ -47,13 +49,16 @@ export async function getCockpitOverview(
         label: '开一本新书',
         message: '我想开一本新书',
       },
+      quality: null,
     };
   }
 
   const status = await getPrivateStatus(root);
-  const model = await resolveProjectModelConfig(join(root, status.book.path), env);
+  const projectDir = join(root, status.book.path);
+  const model = await resolveProjectModelConfig(projectDir, env);
   const latestChapter = await tryLatestChapter(root);
-  const pendingFeedback = await fileExists(join(root, status.book.path, '.authoros/private/pending-feedback.json'));
+  const pendingFeedback = await fileExists(join(projectDir, '.authoros/private/pending-feedback.json'));
+  const quality = await getQualityOverview(projectDir, status.state, jobs);
   return {
     books: shelf.books.map(bookSummary),
     current: {
@@ -65,6 +70,7 @@ export async function getCockpitOverview(
     jobs: jobs.list(),
     model: modelSummary(model),
     nextAction: deriveNextAction(status.state, latestChapter?.chapter ?? null, pendingFeedback),
+    quality,
   };
 }
 

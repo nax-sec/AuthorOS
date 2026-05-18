@@ -41,6 +41,7 @@ test('cockpit overview handles an empty bookshelf', async () => {
     assert.equal(overview.current, null);
     assert.equal(overview.nextAction.kind, 'new_book');
     assert.equal(overview.books.length, 0);
+    assert.equal(overview.quality, null);
   });
 });
 
@@ -63,6 +64,8 @@ test('cockpit overview reports current book latest chapter and model status', as
     assert.equal(overview.model.model, 'gpt-test');
     assert.equal(overview.jobs[0].id, job.id);
     assert.equal(overview.nextAction.kind, 'continue_book');
+    assert.equal(overview.quality?.nextChapter.chapter, 2);
+    assert.equal((overview.quality?.signals[0].label.length ?? 0) > 0, true);
   });
 });
 
@@ -82,6 +85,21 @@ test('cockpit overview detects pending feedback', async () => {
 
     assert.equal(overview.current?.pendingFeedback, true);
     assert.equal(overview.nextAction.kind, 'apply_feedback');
+    assert.equal(overview.quality?.pendingPreview?.kind, 'feedback');
+    assert.equal(overview.quality?.pendingPreview?.chapter, 1);
+  });
+});
+
+test('cockpit overview includes pending memory delta visibility', async () => {
+  await withTempRoot(async (root) => {
+    await writeBook(root);
+    await mkdir(join(root, 'books/demo/memory'), { recursive: true });
+    await writeFile(join(root, 'books/demo/memory/chapter-0001.delta.md'), '# delta', 'utf8');
+
+    const overview = await getCockpitOverview(root, {}, createJobStore());
+
+    assert.equal(overview.quality?.memoryDeltas.length, 1);
+    assert.equal(overview.quality?.memoryDeltas[0].name, 'chapter-0001.delta.md');
   });
 });
 
