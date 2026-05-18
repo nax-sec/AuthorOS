@@ -83,6 +83,9 @@ test('llm prompt lists style rewrite actions', async () => {
   assert.match(prompt, /模糊/);
   assert.match(prompt, /style_rewrite_preview/);
   assert.match(prompt, /style_rewrite_apply/);
+  assert.match(prompt, /强化章尾钩子/);
+  assert.match(prompt, /减少解释/);
+  assert.match(prompt, /保留剧情换文风/);
   assert.match(prompt, /internal_review/);
   assert.match(prompt, /reader_sim_review/);
   assert.match(prompt, /chapter_decision/);

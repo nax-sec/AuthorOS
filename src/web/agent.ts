@@ -59,6 +59,14 @@ export type WebAgentCommand =
 
 export type StyleRewriteIntent = 'imitate_style' | 'remove_ai_voice' | 'style_polish';
 
+const craftRewriteIntents = [
+  { label: '强化开头', text: '强化开头：让这一章开场更快抓住读者，先生成修改预览。' },
+  { label: '强化章尾钩子', text: '强化章尾钩子：让本章结尾留下更强的继续阅读冲动，先生成修改预览。' },
+  { label: '减少解释', text: '减少解释：删掉总结性、说明性、替读者下结论的句子，先生成修改预览。' },
+  { label: '增加压迫感', text: '增加压迫感：强化危险、时间压力和场景逼近感，先生成修改预览。' },
+  { label: '对白瘦身', text: '对白瘦身：压缩对白，让表达更锋利，先生成修改预览。' },
+] as const;
+
 export function createWebAgentSession(): WebAgentSession {
   return {};
 }
@@ -87,6 +95,14 @@ export function handleAgentMessage(session: WebAgentSession, rawMessage: string)
       chapter: 'latest',
       intent: styleIntent,
       text: message,
+    });
+  }
+  const craftIntent = getCraftRewriteIntent(message);
+  if (craftIntent) {
+    return job('feedback_preview', '收到，我先生成修改预览，不会直接覆盖正文。', {
+      type: 'feedback',
+      chapter: 'latest',
+      text: craftIntent.text,
     });
   }
   if (isApply(message)) {
@@ -249,8 +265,12 @@ function parseChapterNumber(message: string): number | null {
 function getStyleRewriteIntent(message: string): StyleRewriteIntent | null {
   if (/去\s*AI\s*味|去ai味|AI味/i.test(message)) return 'remove_ai_voice';
   if (/仿写文风/.test(message)) return 'imitate_style';
-  if (/文风改写|按文风润色/.test(message)) return 'style_polish';
+  if (/文风改写|文风润色|按文风润色|保留剧情换文风|换文风/.test(message)) return 'style_polish';
   return null;
+}
+
+function getCraftRewriteIntent(message: string): { label: string; text: string } | null {
+  return craftRewriteIntents.find((intent) => message.includes(intent.label)) ?? null;
 }
 
 function isDownloadCurrent(message: string): boolean {

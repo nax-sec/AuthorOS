@@ -87,8 +87,10 @@ test('style rewrite phrases route to preview command', () => {
     ['这章去ai味', 'remove_ai_voice'],
     ['AI味太重了', 'remove_ai_voice'],
     ['文风改写一下', 'style_polish'],
+    ['文风润色', 'style_polish'],
     ['仿写文风处理这一章', 'imitate_style'],
     ['按文风润色最新章', 'style_polish'],
+    ['保留剧情换文风', 'style_polish'],
   ] as const;
 
   for (const [message, intent] of cases) {
@@ -100,6 +102,19 @@ test('style rewrite phrases route to preview command', () => {
     assert.equal(result.command.chapter, 'latest');
     assert.equal(result.command.intent, intent);
     assert.equal(result.command.text, message);
+  }
+});
+
+test('craft rewrite intents route to feedback preview commands', () => {
+  const cases = ['强化开头', '强化章尾钩子', '减少解释', '增加压迫感', '对白瘦身'];
+
+  for (const message of cases) {
+    const result = handleAgentMessage(createWebAgentSession(), message);
+
+    assert.equal(result.kind, 'job');
+    assert.equal(result.action, 'feedback_preview');
+    assert.equal(result.command.type, 'feedback');
+    assert.match(result.command.text, new RegExp(message));
   }
 });
 
