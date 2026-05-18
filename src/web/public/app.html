@@ -87,9 +87,9 @@
           <button class="secondary" id="downloadAll">下载全部章节</button>
         </div>
       </div>
-      <section class="panel quality-loop" data-testid="quality-loop" aria-label="Quality Loop">
+      <section class="panel quality-loop" data-testid="quality-loop" aria-label="质量环路">
         <div>
-          <h2>Quality Loop</h2>
+          <h2>质量环路</h2>
           <div id="qualitySignal" class="muted">加载质量环路...</div>
         </div>
         <div id="nextChapterCard" class="next-chapter-card" data-testid="next-chapter-card"></div>
@@ -338,8 +338,18 @@
     function renderStagePill(stage) {
       const pill = document.createElement('span');
       pill.className = `stage-pill ${stage.status}`;
-      pill.textContent = `${stage.label} · ${stage.status}`;
+      pill.textContent = `${stage.label} · ${stageStatusLabel(stage.status)}`;
       return pill;
+    }
+
+    function stageStatusLabel(status) {
+      const labels = {
+        done: '已完成',
+        next: '下一步',
+        missing: '缺失',
+        optional: '可选',
+      };
+      return labels[status] || status;
     }
 
     async function refreshJobs() {
