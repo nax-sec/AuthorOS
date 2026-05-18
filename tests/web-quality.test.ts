@@ -321,6 +321,29 @@ test('quality overview lists pending memory deltas', async () => {
   });
 });
 
+test('quality overview groups memory deltas into review cards', async () => {
+  await withTempBook(async (bookDir) => {
+    await writeFile(join(bookDir, 'memory/chapter-0001.delta.md'), [
+      '# 第 1 章记忆更新',
+      '## 正史设定',
+      '- 雨夜会暴露主角的旧伤。',
+      '## 伏笔',
+      '- 黑伞还会出现。',
+      '## 文风规则',
+      '- 少解释，多动作。',
+    ].join('\n'), 'utf8');
+    const state = await getProjectState(bookDir);
+
+    const overview = await getQualityOverview(bookDir, state, createJobStore());
+
+    assert.equal(overview.memoryReviewCards.length, 3);
+    assert.equal(overview.memoryReviewCards[0].type, 'canon');
+    assert.equal(overview.memoryReviewCards[0].mergePlanLabel, '结构化更新');
+    assert.equal(overview.memoryReviewCards[2].type, 'style');
+    assert.deepEqual(overview.memoryReviewCards[2].items, ['少解释，多动作。']);
+  });
+});
+
 test('quality overview gives recovery guidance for the latest failed job', async () => {
   await withTempBook(async (bookDir) => {
     const jobs = createJobStore({ now: () => new Date('2026-05-18T09:00:00Z') });

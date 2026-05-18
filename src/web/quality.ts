@@ -84,6 +84,15 @@ export interface QualityPreviewComparison {
   actions: { applyMessage: string; discardMessage: string; readMessage: string };
 }
 
+export interface QualityMemoryReviewCard {
+  type: 'canon' | 'foreshadowing' | 'plot' | 'character' | 'style';
+  label: string;
+  deltaName: string;
+  items: string[];
+  mergePlanLabel: '结构化更新' | '注释保底' | '追加记录';
+  rawPath: string;
+}
+
 export interface QualityRecovery {
   jobId: string;
   action: string;
@@ -140,6 +149,7 @@ export interface QualityOverview {
   styleRewritePreview: QualityStyleRewritePreview | null;
   previewComparison: QualityPreviewComparison | null;
   memoryDeltas: PendingMemoryDelta[];
+  memoryReviewCards: QualityMemoryReviewCard[];
   recovery: QualityRecovery | null;
   signals: QualitySignal[];
   actions: QualityAction[];
@@ -167,6 +177,7 @@ export async function getQualityOverview(
   const styleRewritePreview = await readPendingStyleRewrite(projectDir);
   const previewComparison = await getCurrentPreviewComparison(projectDir);
   const memoryDeltas = await listMemoryDeltas(projectDir);
+  const memoryReviewCards = await deriveMemoryReviewCards(projectDir, memoryDeltas);
   const chapters = state.chapters.map((chapter) => renderChapter(chapter, state, memoryDeltas));
   const nextChapter = deriveNextChapter(state, memoryDeltas);
   const recovery = deriveRecovery(jobs.list());
@@ -188,11 +199,104 @@ export async function getQualityOverview(
     styleRewritePreview,
     previewComparison,
     memoryDeltas,
+    memoryReviewCards,
     recovery,
     signals: deriveSignals({ pendingPreview, styleRewritePreview, memoryDeltas, recovery, style }),
     actions,
     artifacts,
   };
+}
+
+const memoryReviewSections = [
+  { type: 'canon', label: '正史设定', headings: ['正史设定', 'canon'], mergePlanLabel: '结构化更新' },
+  { type: 'foreshadowing', label: '伏笔', headings: ['伏笔', 'foreshadowing'], mergePlanLabel: '结构化更新' },
+  { type: 'plot', label: '主线', headings: ['主线', 'plot_threads'], mergePlanLabel: '结构化更新' },
+  { type: 'character', label: '人物状态', headings: ['人物状态', 'character_state'], mergePlanLabel: '结构化更新' },
+  { type: 'style', label: '文风规则', headings: ['文风规则', 'style'], mergePlanLabel: '追加记录' },
+] as const satisfies readonly Array<{
+  type: QualityMemoryReviewCard['type'];
+  label: string;
+  headings: readonly string[];
+  mergePlanLabel: QualityMemoryReviewCard['mergePlanLabel'];
+}>;
+
+async function deriveMemoryReviewCards(
+  projectDir: string,
+  deltas: readonly PendingMemoryDelta[],
+): Promise<QualityMemoryReviewCard[]> {
+  const cards: QualityMemoryReviewCard[] = [];
+  for (const delta of deltas) {
+    const rawPath = `memory/${delta.name}`;
+    const content = await readFile(join(projectDir, rawPath), 'utf8');
+    const sections = splitMemoryDeltaSections(content);
+    for (const config of memoryReviewSections) {
+      const items = itemsForMemorySection(sections, config.headings);
+      if (items.length === 0) continue;
+      cards.push({
+        type: config.type,
+        label: config.label,
+        deltaName: delta.name,
+        items,
+        mergePlanLabel: config.mergePlanLabel,
+        rawPath,
+      });
+    }
+    if (!cards.some((card) => card.deltaName === delta.name)) {
+      cards.push({
+        type: 'canon',
+        label: '正史设定',
+        deltaName: delta.name,
+        items: fallbackMemoryItems(content),
+        mergePlanLabel: '注释保底',
+        rawPath,
+      });
+    }
+  }
+  return cards;
+}
+
+function splitMemoryDeltaSections(content: string): Array<{ heading: string; lines: string[] }> {
+  const sections: Array<{ heading: string; lines: string[] }> = [];
+  let current: { heading: string; lines: string[] } | null = null;
+  for (const line of content.split(/\r?\n/)) {
+    const heading = line.match(/^##+\s+(.+?)\s*$/);
+    if (heading) {
+      current = { heading: heading[1], lines: [] };
+      sections.push(current);
+      continue;
+    }
+    current?.lines.push(line);
+  }
+  return sections;
+}
+
+function itemsForMemorySection(
+  sections: readonly { heading: string; lines: string[] }[],
+  headings: readonly string[],
+): string[] {
+  const matches = sections.filter((section) => {
+    const normalized = section.heading.toLowerCase();
+    return headings.some((heading) => normalized.includes(heading.toLowerCase()));
+  });
+  return matches.flatMap((section) => bulletItems(section.lines)).slice(0, 8);
+}
+
+function bulletItems(lines: readonly string[]): string[] {
+  return lines
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('- '))
+    .map((line) => line.replace(/^-\s*/, '').trim())
+    .filter(Boolean);
+}
+
+function fallbackMemoryItems(content: string): string[] {
+  const lines = content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'))
+    .map((line) => line.replace(/^-\s*/, '').trim())
+    .filter(Boolean);
+  return lines.slice(0, 6);
 }
 
 export async function getCurrentPreviewComparison(projectDir: string): Promise<QualityPreviewComparison | null> {

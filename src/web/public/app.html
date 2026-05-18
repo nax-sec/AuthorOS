@@ -92,6 +92,8 @@
     .pipeline-flag { display: inline-flex; align-items: center; min-height: 24px; border: 1px solid #f0c57d; border-radius: 999px; padding: 3px 8px; background: var(--amber-soft); color: var(--amber); font-size: 12px; font-weight: 700; }
     .comparison-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
     .comparison-pane { display: grid; gap: 8px; min-width: 0; }
+    .memory-review-cards { display: grid; gap: 10px; }
+    .memory-card { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--line-soft); border-radius: 7px; background: #fff; }
     .quality-actions-row { display: flex; flex-wrap: wrap; gap: 8px; }
     .quality-actions-row button { min-height: 34px; }
     .memory-delta-content { max-height: 260px; overflow: auto; margin: 0; padding: 10px; border: 1px solid var(--line-soft); border-radius: 7px; background: #fff; white-space: pre-wrap; font: inherit; line-height: 1.55; }
@@ -234,6 +236,7 @@
           <div id="qualityArtifacts" class="preview-card" data-testid="quality-artifacts"></div>
           <div id="previewComparison" class="preview-card" data-testid="preview-comparison"></div>
           <div id="pendingPreview" class="preview-card" data-testid="pending-preview"></div>
+          <div id="memoryReviewCards" class="preview-card memory-review-cards" data-testid="memory-review-cards"></div>
           <div id="memoryReview" class="preview-card" data-testid="memory-review"></div>
           <div id="recoveryHint" class="preview-card"></div>
         </section>
@@ -360,6 +363,7 @@
     const qualityArtifacts = document.querySelector('#qualityArtifacts');
     const previewComparison = document.querySelector('#previewComparison');
     const pendingPreview = document.querySelector('#pendingPreview');
+    const memoryReviewCards = document.querySelector('#memoryReviewCards');
     const memoryReview = document.querySelector('#memoryReview');
     const recoveryHint = document.querySelector('#recoveryHint');
     const styleProfileStatus = document.querySelector('#styleProfileStatus');
@@ -826,6 +830,7 @@
       qualityArtifacts.innerHTML = '';
       previewComparison.innerHTML = '';
       pendingPreview.innerHTML = '';
+      memoryReviewCards.innerHTML = '';
       memoryReview.innerHTML = '';
       recoveryHint.innerHTML = '';
 
@@ -842,6 +847,7 @@
         qualityArtifacts.textContent = '没有质量产物。';
         previewComparison.textContent = '没有待对比预览。';
         pendingPreview.textContent = '没有待确认预览。';
+        memoryReviewCards.textContent = '没有记忆审阅卡。';
         memoryReview.textContent = '没有记忆更新。';
         if (booklessRecovery) {
           renderRecovery(booklessRecovery);
@@ -872,6 +878,7 @@
       renderQualityArtifacts(quality.artifacts || []);
       renderProductionLine(quality.productionLine || []);
       renderPreviewComparison(quality.previewComparison);
+      renderMemoryReviewCards(quality.memoryReviewCards || []);
 
       if (quality.pendingPreview) {
         const previewTitle = document.createElement('div');
@@ -1091,6 +1098,51 @@
       body.textContent = content || '这里没有正文内容。';
       pane.append(heading, body);
       return pane;
+    }
+
+    function renderMemoryReviewCards(cards) {
+      memoryReviewCards.innerHTML = '';
+      const title = document.createElement('div');
+      title.className = 'book-title';
+      title.textContent = '记忆审阅卡';
+      memoryReviewCards.appendChild(title);
+      if (!cards.length) {
+        const empty = document.createElement('div');
+        empty.className = 'muted';
+        empty.textContent = '暂无记忆更新待审阅。';
+        memoryReviewCards.appendChild(empty);
+        return;
+      }
+      for (const card of cards) {
+        const item = document.createElement('article');
+        item.className = 'memory-card';
+        const head = document.createElement('div');
+        head.className = 'pipeline-row-head';
+        const label = document.createElement('strong');
+        label.textContent = card.label || '记忆更新';
+        const plan = document.createElement('span');
+        plan.className = 'pipeline-flag';
+        plan.textContent = card.mergePlanLabel || '注释保底';
+        head.append(label, plan);
+
+        const list = document.createElement('ul');
+        for (const text of card.items || []) {
+          const li = document.createElement('li');
+          li.textContent = text;
+          list.appendChild(li);
+        }
+        if (list.children.length === 0) {
+          const li = document.createElement('li');
+          li.textContent = '这个卡片没有可展示条目。';
+          list.appendChild(li);
+        }
+
+        const meta = document.createElement('div');
+        meta.className = 'muted';
+        meta.textContent = `${card.deltaName || ''} · ${card.rawPath || ''}`;
+        item.append(head, list, meta);
+        memoryReviewCards.appendChild(item);
+      }
     }
 
     async function loadMemoryDelta(name) {
