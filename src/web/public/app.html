@@ -9,7 +9,7 @@
     :root { color-scheme: light; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; }
     * { box-sizing: border-box; }
     body { margin: 0; background: #f5f7fb; color: #1d2430; }
-    header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 24px; border-bottom: 1px solid #d9dee7; background: #ffffff; }
+    header { display: grid; grid-template-columns: minmax(180px, auto) minmax(0, 1fr); align-items: center; gap: 16px; padding: 18px 24px; border-bottom: 1px solid #d9dee7; background: #ffffff; }
     h1 { margin: 0; font-size: 22px; line-height: 1.2; }
     h2 { margin: 0 0 12px; font-size: 16px; }
     h3 { margin: 0 0 8px; font-size: 14px; }
@@ -20,6 +20,12 @@
     input { width: 100%; border: 1px solid #b9c2d0; border-radius: 7px; padding: 8px 10px; background: #fff; color: inherit; }
     textarea { width: 100%; min-height: 92px; resize: vertical; border: 1px solid #b9c2d0; border-radius: 8px; padding: 10px; background: #fff; color: inherit; }
     .muted { color: #667085; font-size: 13px; }
+    .header-title { display: grid; gap: 4px; }
+    .resident-shell { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px 14px; min-width: 0; }
+    .resident-heading { font-size: 12px; font-weight: 700; color: #344054; }
+    .resident-item { display: grid; gap: 2px; min-width: 112px; }
+    .resident-label { color: #667085; font-size: 11px; }
+    .resident-value { overflow: hidden; color: #1d2430; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
     .cockpit { display: grid; grid-template-columns: 240px minmax(0, 1fr) 300px; gap: 16px; max-width: 1440px; margin: 0 auto; padding: 16px 24px 24px; }
     .panel { min-width: 0; border: 1px solid #d9dee7; border-radius: 8px; background: #fff; padding: 16px; }
     .stack { display: grid; gap: 12px; }
@@ -54,7 +60,8 @@
     .job { display: grid; gap: 4px; padding: 10px; border: 1px solid #e5e9f0; border-radius: 7px; background: #fafbfc; }
     .job-top { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 600; }
     @media (max-width: 1100px) {
-      header { align-items: flex-start; flex-direction: column; }
+      header { align-items: flex-start; grid-template-columns: 1fr; }
+      .resident-shell { justify-content: flex-start; }
       .cockpit { grid-template-columns: 1fr; padding: 14px; }
       .chapter, .chat-log { max-height: none; }
     }
@@ -62,8 +69,26 @@
 </head>
 <body>
   <header>
-    <h1>AuthorOS Personal Cockpit</h1>
-    <span id="sessionStatus" class="muted" data-testid="session-status">正在检查会话...</span>
+    <div class="header-title">
+      <h1>AuthorOS Personal Cockpit</h1>
+      <span id="sessionStatus" class="muted" data-testid="session-status">正在检查会话...</span>
+    </div>
+    <section class="resident-shell" data-testid="resident-shell" aria-label="常驻会话">
+      <span class="resident-heading">常驻会话</span>
+      <div class="resident-item">
+        <span class="resident-label">服务</span>
+        <span id="residentService" class="resident-value">检查中...</span>
+      </div>
+      <div class="resident-item">
+        <span class="resident-label">当前书</span>
+        <span id="residentBook" class="resident-value">暂无当前书</span>
+      </div>
+      <div class="resident-item">
+        <span class="resident-label">任务</span>
+        <span id="residentTask" class="resident-value">暂无任务</span>
+      </div>
+      <button class="secondary" id="resumeSession" disabled>恢复现场</button>
+    </section>
   </header>
   <main class="cockpit">
     <aside class="panel stack" aria-label="书架">
@@ -145,6 +170,10 @@
     const chapter = document.querySelector('#chapter');
     const books = document.querySelector('#books');
     const sessionStatus = document.querySelector('#sessionStatus');
+    const residentService = document.querySelector('#residentService');
+    const residentBook = document.querySelector('#residentBook');
+    const residentTask = document.querySelector('#residentTask');
+    const resumeSession = document.querySelector('#resumeSession');
     const nextAction = document.querySelector('#nextAction');
     const nextActionHint = document.querySelector('#nextActionHint');
     const currentBookTitle = document.querySelector('#currentBookTitle');
@@ -240,6 +269,7 @@
     function renderCockpit(data) {
       const model = data.model || {};
       sessionStatus.textContent = `${model.model || '默认模型'} · ${model.apiKeySet ? 'API key 已配置' : 'API key 未配置'}`;
+      renderResidentShell(data.session);
       books.innerHTML = '';
       if (!data.books || data.books.length === 0) {
         books.textContent = '还没有书。';
@@ -282,6 +312,26 @@
       }
       renderQuality(data.quality, data.jobs || []);
       renderStyle(data.style);
+    }
+
+    function renderResidentShell(session) {
+      const service = session && session.service ? session.service : { label: '本机服务检查中' };
+      const book = session && session.currentBook ? session.currentBook : { label: '暂无当前书' };
+      const task = session && session.currentTask
+        ? `正在：${session.currentTask.label}`
+        : session && session.lastCompleted
+        ? `最近完成：${session.lastCompleted.label}`
+        : '暂无任务';
+      residentService.textContent = service.label || '本机服务在线';
+      residentBook.textContent = book.label || '暂无当前书';
+      residentTask.textContent = task;
+      resumeSession.textContent = session && session.resume ? session.resume.label : '恢复现场';
+      resumeSession.disabled = !(session && session.resume && session.resume.available);
+      resumeSession.title = session && session.currentTask
+        ? session.currentTask.detail
+        : session && session.lastCompleted
+        ? session.lastCompleted.detail
+        : '刷新并回到当前创作现场';
     }
 
     function renderStyle(style) {
@@ -703,6 +753,12 @@
       }
     }
 
+    async function resumeCurrentSession() {
+      await loadCockpit();
+      if (cockpit && cockpit.current) await loadLatestChapter(true);
+      document.querySelector('.workspace').scrollIntoView({ block: 'start' });
+    }
+
     function watchJob(id) {
       const events = new EventSource(`${roomPrefix}/api/jobs/${id}/events?token=${encodeURIComponent(token)}`);
       events.onmessage = (event) => {
@@ -718,6 +774,7 @@
     }
 
     document.querySelector('#send').addEventListener('click', send);
+    resumeSession.addEventListener('click', () => resumeCurrentSession().catch(error => addMessage(`恢复失败：${error.message}`, false, true)));
     messageInput.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) send();
     });

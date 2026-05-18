@@ -16,9 +16,27 @@ export interface CockpitOverview {
   } | null;
   jobs: WebJob[];
   model: Pick<ResolvedProjectModelConfig, 'apiKeyEnv' | 'apiKeySet' | 'baseUrl' | 'model'>;
+  session: CockpitSessionOverview;
   nextAction: CockpitNextAction;
   quality: QualityOverview | null;
   style: CockpitStyleOverview;
+}
+
+export interface CockpitSessionOverview {
+  service: { status: 'online'; label: string };
+  currentBook: { id?: string; label: string };
+  currentTask: CockpitSessionTask | null;
+  lastCompleted: CockpitSessionTask | null;
+  resume: { label: string; available: boolean };
+}
+
+export interface CockpitSessionTask {
+  jobId: string;
+  action: string;
+  label: string;
+  status: WebJob['status'];
+  detail: string;
+  updatedAt: string;
 }
 
 export interface CockpitStyleOverview {
@@ -71,13 +89,15 @@ export async function getCockpitOverview(
 ): Promise<CockpitOverview> {
   const shelf = await listPrivateBooks(root);
   const styleProfiles = await listCockpitStyleProfiles(root);
+  const jobList = jobs.list();
   if (!shelf.current) {
     const model = await resolveProjectModelConfig(root, env);
     return {
       books: shelf.books.map(bookSummary),
       current: null,
-      jobs: jobs.list(),
+      jobs: jobList,
       model: modelSummary(model),
+      session: deriveSessionOverview(null, jobList),
       nextAction: {
         kind: 'new_book',
         label: '开一本新书',
@@ -111,8 +131,9 @@ export async function getCockpitOverview(
       latestChapter,
       pendingFeedback,
     },
-    jobs: jobs.list(),
+    jobs: jobList,
     model: modelSummary(model),
+    session: deriveSessionOverview(status.book, jobList),
     nextAction: deriveNextAction(status.state, latestChapter?.chapter ?? null, pendingFeedback, style),
     quality,
     style,
@@ -127,6 +148,48 @@ function bookSummary(book: PrivateBook): CockpitOverview['books'][number] {
     path: book.path,
     last_active_at: book.last_active_at,
   };
+}
+
+function deriveSessionOverview(book: PrivateBook | null, jobs: readonly WebJob[]): CockpitSessionOverview {
+  const currentTask = jobs.find((job) => job.status === 'running');
+  const lastCompleted = jobs.find((job) => job.status === 'completed');
+  return {
+    service: { status: 'online', label: '本机服务在线' },
+    currentBook: book ? { id: book.id, label: book.title } : { label: '暂无当前书' },
+    currentTask: currentTask ? sessionTask(currentTask) : null,
+    lastCompleted: lastCompleted ? sessionTask(lastCompleted) : null,
+    resume: book
+      ? { label: `恢复 ${book.title}`, available: true }
+      : { label: '开一本新书后可恢复现场', available: false },
+  };
+}
+
+function sessionTask(job: WebJob): CockpitSessionTask {
+  const lastEvent = job.events.at(-1);
+  return {
+    jobId: job.id,
+    action: job.action,
+    label: jobActionLabel(job.action),
+    status: job.status,
+    detail: lastEvent?.message ?? '等待事件。',
+    updatedAt: job.updatedAt,
+  };
+}
+
+function jobActionLabel(action: string): string {
+  const labels: Record<string, string> = {
+    read_chapter: '读取章节',
+    continue_book: '继续写作',
+    feedback_preview: '生成修改预览',
+    feedback_apply: '应用修改',
+    style_rewrite_preview: '生成文风改写预览',
+    style_rewrite_apply: '应用文风修改',
+    new_book_confirmed: '创建新书',
+    create_book_and_continue: '创建并续写',
+    download_current_chapter: '下载当前章',
+    download_all_chapters: '下载全部章节',
+  };
+  return labels[action] ?? action;
 }
 
 function modelSummary(model: ResolvedProjectModelConfig): CockpitOverview['model'] {

@@ -7,6 +7,7 @@ test('private web app exposes personal cockpit regions', async () => {
 
   assert.match(html, /AuthorOS Personal Cockpit/);
   assert.match(html, /data-testid="session-status"/);
+  assert.match(html, /data-testid="resident-shell"/);
   assert.match(html, /data-testid="next-action"/);
   assert.match(html, /data-testid="task-center"/);
   assert.match(html, /data-testid="quality-loop"/);
@@ -62,4 +63,10 @@ test('private web app exposes personal cockpit regions', async () => {
   assert.match(html, /api\('\/api\/jobs'\)/);
   assert.match(html, /EventSource/);
   assert.match(html, /completed/);
+  assert.match(html, /常驻会话/);
+  assert.match(html, /residentService/);
+  assert.match(html, /residentBook/);
+  assert.match(html, /residentTask/);
+  assert.match(html, /resumeSession/);
+  assert.match(html, /renderResidentShell/);
 });

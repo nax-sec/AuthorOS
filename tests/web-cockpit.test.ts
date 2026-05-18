@@ -74,6 +74,11 @@ test('cockpit overview handles an empty bookshelf', async () => {
     assert.equal(overview.nextAction.kind, 'new_book');
     assert.equal(overview.books.length, 0);
     assert.equal(overview.quality, null);
+    assert.equal(overview.session.service.label, '本机服务在线');
+    assert.equal(overview.session.currentBook.label, '暂无当前书');
+    assert.equal(overview.session.currentTask, null);
+    assert.equal(overview.session.lastCompleted, null);
+    assert.equal(overview.session.resume.label, '开一本新书后可恢复现场');
   });
 });
 
@@ -81,8 +86,9 @@ test('cockpit overview reports current book latest chapter and model status', as
   await withTempRoot(async (root) => {
     await writeBook(root);
     const jobs = createJobStore({ now: () => new Date('2026-05-14T02:00:00Z') });
-    const job = jobs.createJob('continue_book', '开始写下一章');
-    jobs.complete(job.id, { chapter: 1 });
+    const completed = jobs.createJob('continue_book', '开始写下一章');
+    jobs.complete(completed.id, { chapter: 1 });
+    const running = jobs.createJob('continue_book', '正在写第 2 章');
 
     const overview = await getCockpitOverview(root, {
       OPENAI_API_KEY: 'key',
@@ -94,10 +100,15 @@ test('cockpit overview reports current book latest chapter and model status', as
     assert.equal(overview.current?.latestChapter?.excerpt, 'chapter one body');
     assert.equal(overview.model.apiKeySet, true);
     assert.equal(overview.model.model, 'gpt-test');
-    assert.equal(overview.jobs[0].id, job.id);
+    assert.equal(overview.jobs[0].id, running.id);
     assert.equal(overview.nextAction.kind, 'continue_book');
     assert.equal(overview.quality?.nextChapter.chapter, 2);
     assert.equal((overview.quality?.signals[0].label.length ?? 0) > 0, true);
+    assert.equal(overview.session.currentBook.label, 'Demo Book');
+    assert.equal(overview.session.currentTask?.jobId, running.id);
+    assert.equal(overview.session.currentTask?.label, '继续写作');
+    assert.equal(overview.session.lastCompleted?.label, '继续写作');
+    assert.equal(overview.session.resume.label, '恢复 Demo Book');
   });
 });
 
