@@ -4,6 +4,7 @@ import { getPrivateStatus, listPrivateBooks, readPrivateChapter, type PrivateBoo
 import type { ProjectStateResult } from '../commands/state.ts';
 import { resolveProjectModelConfig, type EnvLike, type ResolvedProjectModelConfig } from '../core/modelConfig.ts';
 import { emptyCockpitAssetOverview, getCockpitAssetOverview, type CockpitAssetOverview } from './assets.ts';
+import { deriveBookCommitment, type BookCommitment } from './commitment.ts';
 import type { JobStore, WebJob } from './jobs.ts';
 import { getQualityOverview, type QualityOverview } from './quality.ts';
 
@@ -24,6 +25,7 @@ export interface CockpitOverview {
   quality: QualityOverview | null;
   style: CockpitStyleOverview;
   assets: CockpitAssetOverview;
+  commitment: BookCommitment | null;
 }
 
 export interface CockpitModelHealth {
@@ -141,6 +143,7 @@ export async function getCockpitOverview(
         generation: null,
       },
       assets: emptyCockpitAssetOverview(),
+      commitment: null,
     };
   }
 
@@ -151,6 +154,7 @@ export async function getCockpitOverview(
   const pendingFeedback = await fileExists(join(projectDir, '.authoros/private/pending-feedback.json'));
   const style = await getCockpitStyleOverview(root, projectDir, styleProfiles);
   const assets = await getCockpitAssetOverview(projectDir);
+  const commitment = await deriveBookCommitment(projectDir);
   const quality = await getQualityOverview(projectDir, status.state, jobs, {
     binding: style.binding,
     currentProfile: style.currentProfile,
@@ -173,6 +177,7 @@ export async function getCockpitOverview(
     quality,
     style,
     assets,
+    commitment,
   };
 }
 

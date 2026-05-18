@@ -259,6 +259,28 @@ test('cockpit overview summarizes durable writing assets', async () => {
   });
 });
 
+test('cockpit overview derives book commitment from identity files', async () => {
+  await withTempRoot(async (root) => {
+    await writeBook(root);
+    await writeFile(join(root, 'books/demo/product.md'), [
+      '# 类型承诺',
+      '悬疑成长。',
+      '# 读者钩子',
+      '每章都要给一个无法立刻解释的异常。',
+      '# 禁区',
+      '不要写成纯恋爱。',
+    ].join('\n'), 'utf8');
+    await writeFile(join(root, 'books/demo/outline.md'), '# 前十章方向\n主角追查黑伞。', 'utf8');
+
+    const overview = await getCockpitOverview(root, {}, createJobStore());
+
+    assert.match(overview.commitment?.genrePromise ?? '', /悬疑成长/);
+    assert.match(overview.commitment?.readerHook ?? '', /异常/);
+    assert.match(overview.commitment?.boundaries[0] ?? '', /纯恋爱/);
+    assert.match(overview.commitment?.firstActDirection ?? '', /黑伞/);
+  });
+});
+
 test('cockpit overview resolves model status from the current book directory', async () => {
   await withTempRoot(async (root) => {
     await writeBook(root);

@@ -29,6 +29,7 @@ test('private web app exposes personal cockpit regions', async () => {
   assert.match(html, /data-testid="memory-review-cards"/);
   assert.match(html, /data-testid="style-profile"/);
   assert.match(html, /data-testid="asset-panel"/);
+  assert.match(html, /data-testid="book-commitment-card"/);
   assert.match(html, /data-testid="next-chapter-card"/);
   assert.match(html, /data-testid="pending-preview"/);
   assert.match(html, /data-testid="preview-comparison"/);
@@ -89,6 +90,7 @@ test('private web app exposes personal cockpit regions', async () => {
   assert.match(html, /renderStyle/);
   assert.match(html, /function renderAssets/);
   assert.match(html, /function loadAssetDetail/);
+  assert.match(html, /function renderCommitment/);
   assert.match(html, /renderQuality\(data\.quality, data\.jobs \|\| \[\]\)/);
   assert.match(html, /文风档案/);
   assert.match(html, /尚未绑定文风/);

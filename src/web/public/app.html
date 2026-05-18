@@ -99,6 +99,8 @@
     .asset-item { display: grid; gap: 4px; padding: 9px; border: 1px solid var(--line-soft); border-radius: 7px; background: var(--panel-soft); text-align: left; color: var(--ink); }
     .asset-item.available { border-color: #98d7aa; background: #f6fbf7; }
     .asset-item.missing { opacity: .72; }
+    .commitment-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .commitment-item { display: grid; gap: 4px; padding: 10px; border: 1px solid var(--line-soft); border-radius: 7px; background: var(--panel-soft); }
     .quality-actions-row { display: flex; flex-wrap: wrap; gap: 8px; }
     .quality-actions-row button { min-height: 34px; }
     .memory-delta-content { max-height: 260px; overflow: auto; margin: 0; padding: 10px; border: 1px solid var(--line-soft); border-radius: 7px; background: #fff; white-space: pre-wrap; font: inherit; line-height: 1.55; }
@@ -128,6 +130,7 @@
       .resident-heading { grid-column: 1 / -1; }
       .cockpit { grid-template-columns: 1fr; padding: 14px; }
       .comparison-grid { grid-template-columns: 1fr; }
+      .commitment-grid { grid-template-columns: 1fr; }
       .desk-sidebar, .desk-rail { position: static; max-height: none; overflow: visible; }
       .chapter, .chat-log { max-height: none; }
     }
@@ -212,6 +215,16 @@
             <button class="secondary" id="downloadChapter">下载当前章</button>
             <button class="secondary" id="downloadAll">下载全部章节</button>
           </div>
+        </section>
+        <section class="panel stack" data-testid="book-commitment-card" aria-label="书籍承诺">
+          <div class="section-head">
+            <div>
+              <span class="panel-subtitle">承诺</span>
+              <h2>书籍承诺</h2>
+            </div>
+            <div id="commitmentConfidence" class="muted">检查中</div>
+          </div>
+          <div id="commitmentGrid" class="commitment-grid"></div>
         </section>
         <section class="panel chapter-panel">
           <div class="section-head chapter-head">
@@ -371,6 +384,8 @@
     const dailySessionAction = document.querySelector('#dailySessionAction');
     const currentBookTitle = document.querySelector('#currentBookTitle');
     const currentBookMeta = document.querySelector('#currentBookMeta');
+    const commitmentConfidence = document.querySelector('#commitmentConfidence');
+    const commitmentGrid = document.querySelector('#commitmentGrid');
     const qualitySignal = document.querySelector('#qualitySignal');
     const nextChapterCard = document.querySelector('#nextChapterCard');
     const chapterProductionLine = document.querySelector('#chapterProductionLine');
@@ -525,6 +540,7 @@
         currentBookMeta.textContent = '开一本新书后，这里会显示创作状态。';
       }
       renderChapterWorkbench(data.current);
+      renderCommitment(data.commitment);
 
       if (data.nextAction && data.nextAction.message) {
         nextAction.textContent = data.nextAction.label;
@@ -637,6 +653,39 @@
         button.setAttribute('data-chapter', String(item.chapter));
         button.addEventListener('click', () => loadChapter(item.chapter, true));
         chapterList.appendChild(button);
+      }
+    }
+
+    function renderCommitment(commitment) {
+      commitmentGrid.innerHTML = '';
+      if (!commitment) {
+        commitmentConfidence.textContent = '暂无当前书';
+        const empty = document.createElement('div');
+        empty.className = 'muted';
+        empty.textContent = '开书后会显示作品承诺。';
+        commitmentGrid.appendChild(empty);
+        return;
+      }
+      const confidenceLabels = { strong: '承诺清晰', partial: '承诺部分清晰', sparse: '承诺稀疏' };
+      commitmentConfidence.textContent = confidenceLabels[commitment.confidence] || '承诺待补齐';
+      const fields = [
+        ['类型承诺', commitment.genrePromise],
+        ['主角欲望', commitment.protagonistDesire],
+        ['核心冲突', commitment.coreConflict],
+        ['读者钩子', commitment.readerHook],
+        ['禁区', (commitment.boundaries || []).join('；')],
+        ['前十章方向', commitment.firstActDirection],
+      ];
+      for (const [label, value] of fields) {
+        const item = document.createElement('div');
+        item.className = 'commitment-item';
+        const title = document.createElement('strong');
+        title.textContent = label;
+        const text = document.createElement('div');
+        text.className = 'muted';
+        text.textContent = value || '尚未写清';
+        item.append(title, text);
+        commitmentGrid.appendChild(item);
       }
     }
 
