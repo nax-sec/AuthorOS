@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createWebAgentSession, handleAgentMessage, type WebAgentCommand } from './agent.ts';
+import { emptyCockpitAssetOverview, getCockpitAssetOverview, readCockpitAsset } from './assets.ts';
 import { createJobStore, type WebJob } from './jobs.ts';
 import { loadWebJobHistory, saveWebJobHistory } from './job-persistence.ts';
 import { withJobCompletion, type CompletedCommandType } from './job-completion.ts';
@@ -145,6 +146,18 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
         const target = await getWebModelTarget(root);
         if (target.scope.kind !== 'current_book') return json({ comparison: null });
         return json({ comparison: await getCurrentPreviewComparison(target.projectDir) });
+      }
+      if (routePath === '/api/assets' && request.method === 'GET') {
+        const target = await getWebModelTarget(root);
+        if (target.scope.kind !== 'current_book') return json({ assets: emptyCockpitAssetOverview() });
+        return json({ assets: await getCockpitAssetOverview(target.projectDir) });
+      }
+      const assetMatch = routePath.match(/^\/api\/assets\/([a-z0-9_-]+)$/);
+      if (assetMatch?.[1] && request.method === 'GET') {
+        const target = await getWebModelTarget(root);
+        if (target.scope.kind !== 'current_book') return json({ error: 'no current book' }, 404);
+        const asset = await readCockpitAsset(target.projectDir, assetMatch[1]);
+        return asset ? json({ asset }) : json({ error: 'asset not found' }, 404);
       }
       if (routePath === '/api/model/doctor' && request.method === 'GET') {
         return json(await getWebModelDoctor(root, env));

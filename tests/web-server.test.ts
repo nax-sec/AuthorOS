@@ -1016,6 +1016,38 @@ test('web server returns current preview comparison', async () => {
   });
 });
 
+test('web server reads current book assets without exposing files outside the book', async () => {
+  await withTempRoot(async (root) => {
+    await mkdir(join(root, 'books/demo'), { recursive: true });
+    await writeFile(join(root, 'bookshelf.json'), JSON.stringify({
+      version: 1,
+      current: 'demo',
+      books: [{
+        id: 'demo',
+        title: 'Demo Book',
+        concept: 'asset panel',
+        path: 'books/demo',
+        created_at: '2026-05-19T00:00:00.000Z',
+        last_active_at: '2026-05-19T00:00:00.000Z',
+      }],
+    }, null, 2), 'utf8');
+    await writeFile(join(root, 'books/demo/product.md'), '# 产品承诺\n悬疑长篇', 'utf8');
+    const server = createWebServer({ root });
+
+    const listResponse = await server.fetch(new Request('http://local/api/assets'));
+    const listBody = await listResponse.json();
+    const detailResponse = await server.fetch(new Request('http://local/api/assets/product'));
+    const detailBody = await detailResponse.json();
+    const escapeResponse = await server.fetch(new Request('http://local/api/assets/../../package'));
+
+    assert.equal(listResponse.status, 200);
+    assert.equal(listBody.assets.items.find((item) => item.id === 'product').status, 'available');
+    assert.equal(detailResponse.status, 200);
+    assert.match(detailBody.asset.content, /产品承诺/);
+    assert.equal(escapeResponse.status, 404);
+  });
+});
+
 test('web server keeps room cockpit overview isolated', async () => {
   await withTempRoot(async (root) => {
     const server = createWebServer({

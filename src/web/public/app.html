@@ -94,6 +94,11 @@
     .comparison-pane { display: grid; gap: 8px; min-width: 0; }
     .memory-review-cards { display: grid; gap: 10px; }
     .memory-card { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--line-soft); border-radius: 7px; background: #fff; }
+    .asset-panel { display: grid; gap: 10px; }
+    .asset-list { display: grid; gap: 8px; }
+    .asset-item { display: grid; gap: 4px; padding: 9px; border: 1px solid var(--line-soft); border-radius: 7px; background: var(--panel-soft); text-align: left; color: var(--ink); }
+    .asset-item.available { border-color: #98d7aa; background: #f6fbf7; }
+    .asset-item.missing { opacity: .72; }
     .quality-actions-row { display: flex; flex-wrap: wrap; gap: 8px; }
     .quality-actions-row button { min-height: 34px; }
     .memory-delta-content { max-height: 260px; overflow: auto; margin: 0; padding: 10px; border: 1px solid var(--line-soft); border-radius: 7px; background: #fff; white-space: pre-wrap; font: inherit; line-height: 1.55; }
@@ -320,6 +325,17 @@
         </div>
         <div id="styleProfileActions" class="style-actions"></div>
       </section>
+      <section class="panel asset-panel" data-testid="asset-panel" aria-label="写作资产">
+        <div class="section-head">
+          <div>
+            <span class="panel-subtitle">资产</span>
+            <h2>写作资产</h2>
+          </div>
+        </div>
+        <div id="assetSummary" class="muted">正在读取资产...</div>
+        <div id="assetList" class="asset-list"></div>
+        <pre id="assetPreview" class="memory-delta-content">选择一个资产查看内容。</pre>
+      </section>
       <section class="panel stack">
         <div class="section-head">
           <div>
@@ -375,6 +391,9 @@
     const styleProfileName = document.querySelector('#styleProfileName');
     const styleReferenceText = document.querySelector('#styleReferenceText');
     const styleExtractHint = document.querySelector('#styleExtractHint');
+    const assetSummary = document.querySelector('#assetSummary');
+    const assetList = document.querySelector('#assetList');
+    const assetPreview = document.querySelector('#assetPreview');
     const modelConfigStatus = document.querySelector('#modelConfigStatus');
     const modelConfigScope = document.querySelector('#modelConfigScope');
     const modelConfigHint = document.querySelector('#modelConfigHint');
@@ -522,6 +541,7 @@
       }
       renderQuality(data.quality, data.jobs || []);
       renderStyle(data.style);
+      renderAssets(data.assets);
     }
 
     async function loadModelConfig(showMessage = false) {
@@ -773,6 +793,47 @@
         await loadCockpit();
       } catch (error) {
         addMessage(`文风绑定失败：${error.message}`, false, true);
+      }
+    }
+
+    function renderAssets(assets) {
+      const overview = assets || { total: 0, available: 0, items: [] };
+      assetSummary.textContent = overview.total > 0
+        ? `可用 ${overview.available}/${overview.total}`
+        : '开书后会显示核心写作资产。';
+      assetList.innerHTML = '';
+      assetPreview.textContent = '选择一个资产查看内容。';
+      const items = Array.isArray(overview.items) ? overview.items : [];
+      if (items.length === 0) {
+        assetList.textContent = '暂无资产。';
+        return;
+      }
+      for (const asset of items) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `asset-item ${asset.status || 'missing'}`;
+        button.disabled = asset.status !== 'available';
+        const title = document.createElement('strong');
+        title.textContent = asset.label || asset.id;
+        const meta = document.createElement('span');
+        meta.className = 'muted';
+        meta.textContent = `${asset.path || ''} · ${asset.status === 'available' ? '可读取' : '缺失'}`;
+        const excerpt = document.createElement('span');
+        excerpt.className = 'muted';
+        excerpt.textContent = asset.excerpt || '缺失';
+        button.append(title, meta, excerpt);
+        button.addEventListener('click', () => loadAssetDetail(asset.id));
+        assetList.appendChild(button);
+      }
+    }
+
+    async function loadAssetDetail(id) {
+      try {
+        const result = await api(`/api/assets/${encodeURIComponent(id)}`);
+        const asset = result.asset || {};
+        assetPreview.textContent = `${asset.label || id}\n${asset.path || ''}\n\n${asset.content || ''}`;
+      } catch (error) {
+        assetPreview.textContent = `读取资产失败：${error.message}`;
       }
     }
 

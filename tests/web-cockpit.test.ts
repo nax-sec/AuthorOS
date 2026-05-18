@@ -244,6 +244,21 @@ test('cockpit overview includes pending memory delta visibility', async () => {
   });
 });
 
+test('cockpit overview summarizes durable writing assets', async () => {
+  await withTempRoot(async (root) => {
+    await writeBook(root);
+    await writeFile(join(root, 'books/demo/product.md'), '# 产品承诺\n悬疑长篇', 'utf8');
+    await writeFile(join(root, 'books/demo/world.md'), '# 世界\n雨城', 'utf8');
+
+    const overview = await getCockpitOverview(root, {}, createJobStore());
+
+    assert.equal(overview.assets.total, 11);
+    assert.equal(overview.assets.available, 2);
+    assert.equal(overview.assets.items.find((item) => item.id === 'product')?.status, 'available');
+    assert.equal(overview.assets.items.find((item) => item.id === 'characters')?.status, 'missing');
+  });
+});
+
 test('cockpit overview resolves model status from the current book directory', async () => {
   await withTempRoot(async (root) => {
     await writeBook(root);
