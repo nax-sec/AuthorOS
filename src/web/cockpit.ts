@@ -17,10 +17,19 @@ export interface CockpitOverview {
   } | null;
   jobs: WebJob[];
   model: Pick<ResolvedProjectModelConfig, 'apiKeyEnv' | 'apiKeySet' | 'apiKeySource' | 'baseUrl' | 'model'>;
+  modelHealth: CockpitModelHealth;
   session: CockpitSessionOverview;
   nextAction: CockpitNextAction;
   quality: QualityOverview | null;
   style: CockpitStyleOverview;
+}
+
+export interface CockpitModelHealth {
+  status: 'ready' | 'missing_key' | 'configured_without_key';
+  label: string;
+  detail: string;
+  sourceLabel: string;
+  actionLabel: string;
 }
 
 export interface CockpitSessionOverview {
@@ -29,6 +38,16 @@ export interface CockpitSessionOverview {
   currentTask: CockpitSessionTask | null;
   lastCompleted: CockpitSessionTask | null;
   resume: { label: string; available: boolean };
+  daily: CockpitDailySession;
+}
+
+export interface CockpitDailySession {
+  openedAt: string;
+  lastActiveBook: { id?: string; label: string } | null;
+  currentTask: CockpitSessionTask | null;
+  lastCompleted: CockpitSessionTask | null;
+  chaptersTouched: number[];
+  nextRecommendedAction: { label: string; message: string };
 }
 
 export interface CockpitSessionTask {
@@ -99,17 +118,19 @@ export async function getCockpitOverview(
   const jobList = jobs.list();
   if (!shelf.current) {
     const model = await resolveProjectModelConfig(root, env);
+    const nextAction: CockpitNextAction = {
+      kind: 'new_book',
+      label: '开一本新书',
+      message: '我想开一本新书',
+    };
     return {
       books: shelf.books.map(bookSummary),
       current: null,
       jobs: jobList,
       model: modelSummary(model),
-      session: deriveSessionOverview(null, jobList),
-      nextAction: {
-        kind: 'new_book',
-        label: '开一本新书',
-        message: '我想开一本新书',
-      },
+      modelHealth: deriveModelHealth(model),
+      session: deriveSessionOverview(null, jobList, nextAction),
+      nextAction,
       quality: null,
       style: {
         profiles: styleProfiles,
@@ -130,6 +151,7 @@ export async function getCockpitOverview(
     binding: style.binding,
     currentProfile: style.currentProfile,
   });
+  const nextAction = deriveNextAction(status.state, latestChapter?.chapter ?? null, pendingFeedback, style);
   return {
     books: shelf.books.map(bookSummary),
     current: {
@@ -141,8 +163,9 @@ export async function getCockpitOverview(
     },
     jobs: jobList,
     model: modelSummary(model),
-    session: deriveSessionOverview(status.book, jobList),
-    nextAction: deriveNextAction(status.state, latestChapter?.chapter ?? null, pendingFeedback, style),
+    modelHealth: deriveModelHealth(model),
+    session: deriveSessionOverview(status.book, jobList, nextAction),
+    nextAction,
     quality,
     style,
   };
@@ -168,17 +191,46 @@ function draftedChapters(state: ProjectStateResult): CockpitDraftedChapter[] {
     }));
 }
 
-function deriveSessionOverview(book: PrivateBook | null, jobs: readonly WebJob[]): CockpitSessionOverview {
+function deriveSessionOverview(
+  book: PrivateBook | null,
+  jobs: readonly WebJob[],
+  nextAction: CockpitNextAction,
+): CockpitSessionOverview {
   const currentTask = jobs.find((job) => job.status === 'running');
   const lastCompleted = jobs.find((job) => job.status === 'completed');
+  const currentSessionTask = currentTask ? sessionTask(currentTask) : null;
+  const lastCompletedTask = lastCompleted ? sessionTask(lastCompleted) : null;
   return {
     service: { status: 'online', label: '本机服务在线' },
     currentBook: book ? { id: book.id, label: book.title } : { label: '暂无当前书' },
-    currentTask: currentTask ? sessionTask(currentTask) : null,
-    lastCompleted: lastCompleted ? sessionTask(lastCompleted) : null,
+    currentTask: currentSessionTask,
+    lastCompleted: lastCompletedTask,
     resume: book
       ? { label: `恢复 ${book.title}`, available: true }
       : { label: '开一本新书后可恢复现场', available: false },
+    daily: deriveDailySession(book, jobs, nextAction, currentSessionTask, lastCompletedTask),
+  };
+}
+
+function deriveDailySession(
+  book: PrivateBook | null,
+  jobs: readonly WebJob[],
+  nextAction: CockpitNextAction,
+  currentTask: CockpitSessionTask | null,
+  lastCompleted: CockpitSessionTask | null,
+): CockpitDailySession {
+  const chaptersTouched = [...new Set(jobs.flatMap((job) => {
+    const result = isRecord(job.result) ? job.result : {};
+    const chapter = result.chapter;
+    return Number.isInteger(chapter) ? [chapter] : [];
+  }))].slice(0, 5);
+  return {
+    openedAt: new Date().toISOString(),
+    lastActiveBook: book ? { id: book.id, label: book.title } : null,
+    currentTask,
+    lastCompleted,
+    chaptersTouched,
+    nextRecommendedAction: { label: nextAction.label, message: nextAction.message },
   };
 }
 
@@ -221,6 +273,34 @@ function modelSummary(model: ResolvedProjectModelConfig): CockpitOverview['model
     apiKeySource: model.apiKeySource,
     baseUrl: model.baseUrl,
     model: model.model,
+  };
+}
+
+function deriveModelHealth(
+  model: Pick<ResolvedProjectModelConfig, 'apiKeySet' | 'apiKeySource' | 'baseUrl' | 'model'>,
+): CockpitModelHealth {
+  const sourceLabel = model.apiKeySource === 'env'
+    ? '环境变量'
+    : model.apiKeySource === 'local'
+      ? '本地保存'
+      : '未设置';
+  const modelLabel = model.model || '未设置模型';
+  const baseUrlLabel = model.baseUrl || '默认 Base URL';
+  if (model.apiKeySet) {
+    return {
+      status: 'ready',
+      label: '模型可用',
+      detail: `${modelLabel} / ${baseUrlLabel}`,
+      sourceLabel,
+      actionLabel: '检查配置',
+    };
+  }
+  return {
+    status: model.model || model.baseUrl ? 'configured_without_key' : 'missing_key',
+    label: '需要配置 API Key',
+    detail: `${modelLabel} / ${baseUrlLabel}`,
+    sourceLabel,
+    actionLabel: '保存 Key',
   };
 }
 

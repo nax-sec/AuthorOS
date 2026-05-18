@@ -118,6 +118,26 @@ test('cockpit overview reports current book latest chapter and model status', as
   });
 });
 
+test('cockpit overview includes model health and daily resume cues', async () => {
+  await withTempRoot(async (root) => {
+    await writeBook(root);
+    const jobs = createJobStore({ now: () => new Date('2026-05-19T09:00:00.000Z') });
+    const running = jobs.createJob('continue_book', '继续写');
+
+    const overview = await getCockpitOverview(root, {
+      OPENAI_API_KEY: 'sk-test',
+      AUTHOROS_MODEL: 'gpt-test',
+    }, jobs);
+
+    assert.equal(overview.modelHealth.status, 'ready');
+    assert.equal(overview.modelHealth.sourceLabel, '环境变量');
+    assert.match(overview.modelHealth.detail, /gpt-test/);
+    assert.equal(overview.session.daily.currentTask?.jobId, running.id);
+    assert.equal(overview.session.daily.lastActiveBook?.label, 'Demo Book');
+    assert.match(overview.session.daily.nextRecommendedAction.label, /继续|处理|开/);
+  });
+});
+
 test('cockpit overview reports missing style binding for the current book', async () => {
   await withTempRoot(async (root) => {
     await writeBook(root);

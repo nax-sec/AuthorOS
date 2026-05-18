@@ -57,11 +57,14 @@
     .book.current { border-color: #9bb9ff; background: var(--accent-soft); }
     .book-title { font-weight: 800; }
     .next-action { display: grid; gap: 8px; padding: 12px; border: 1px solid #b8d6d0; border-radius: 8px; background: var(--teal-soft); }
-    .workspace { display: grid; gap: 16px; }
+    .workspace, .cockpit-center { display: grid; gap: 16px; }
     .current-book { display: grid; gap: 14px; border-color: #cbd8f5; background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%); }
     .current-book .book-title { font-size: 20px; }
     .context-copy { display: grid; gap: 8px; }
     .context-actions { justify-content: flex-start; }
+    .model-health-card, .daily-session-card { display: grid; gap: 8px; }
+    .model-health-card.ready { border-color: #98d7aa; background: #f6fbf7; }
+    .model-health-card.missing_key, .model-health-card.configured_without_key { border-color: #f0c57d; background: var(--amber-soft); }
     .quality-loop { display: grid; gap: 12px; }
     .next-chapter-card, .preview-card { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line-soft); border-radius: 7px; background: var(--panel-soft); }
     .chapter-panel { padding: 0; overflow: hidden; }
@@ -154,6 +157,20 @@
           <div id="nextActionHint" class="muted">我会根据当前书籍状态推荐动作。</div>
         </section>
       </section>
+      <section id="modelHealthCard" class="panel model-health-card" data-testid="model-health-card" aria-label="模型状态">
+        <span class="panel-subtitle">模型状态</span>
+        <h2 id="modelHealthLabel">正在检查模型</h2>
+        <div id="modelHealthDetail" class="muted">模型状态会影响写作、审稿和改写任务。</div>
+        <div id="modelHealthSource" class="muted">来源：检查中</div>
+        <button id="modelHealthAction" class="secondary" type="button">检查配置</button>
+      </section>
+      <section class="panel daily-session-card" data-testid="daily-session-summary" aria-label="今日现场">
+        <span class="panel-subtitle">今日现场</span>
+        <h2 id="dailySessionBook">暂无当前书</h2>
+        <div id="dailySessionDetail" class="muted">打开一本书后，这里会显示最近动作。</div>
+        <div id="dailySessionChapters" class="muted"></div>
+        <button id="dailySessionAction" class="secondary" type="button" disabled>继续写</button>
+      </section>
       <section class="panel stack" aria-label="书架">
         <div class="section-head">
           <div>
@@ -166,49 +183,51 @@
     </aside>
 
     <section class="workspace desk-main" data-testid="desk-main">
-      <section class="panel current-book book-context-card" data-testid="book-context-card">
-        <div class="context-copy">
-          <span class="panel-subtitle">今日写作台</span>
-          <h2>创作现场</h2>
-          <div id="currentBookTitle" class="book-title">还没有当前书。</div>
-          <div id="currentBookMeta" class="muted">开一本新书后，这里会显示创作状态。</div>
-        </div>
-        <div class="row context-actions">
-          <button class="secondary" id="refresh">刷新</button>
-          <button class="secondary" id="readLatest">读最新章</button>
-          <button class="secondary" id="downloadChapter">下载当前章</button>
-          <button class="secondary" id="downloadAll">下载全部章节</button>
-        </div>
-      </section>
-      <section class="panel chapter-panel">
-        <div class="section-head chapter-head">
-          <div>
-            <span class="panel-subtitle">正文</span>
-            <h2>当前章节</h2>
+      <div class="cockpit-center" data-testid="cockpit-center">
+        <section class="panel current-book book-context-card" data-testid="book-context-card">
+          <div class="context-copy">
+            <span class="panel-subtitle">今日写作台</span>
+            <h2>创作现场</h2>
+            <div id="currentBookTitle" class="book-title">还没有当前书。</div>
+            <div id="currentBookMeta" class="muted">开一本新书后，这里会显示创作状态。</div>
           </div>
-        </div>
-        <div class="chapter-workbench">
-          <div class="muted">章节工作台</div>
-          <div id="chapterList" class="chapter-list" data-testid="chapter-list">还没有已起草章节。</div>
-        </div>
-        <article class="chapter" id="chapter" data-testid="chapter-reader">还没有读取章节。</article>
-      </section>
-      <section class="panel quality-loop" data-testid="quality-loop" aria-label="质量环路">
-        <div class="section-head">
-          <div>
-            <span class="panel-subtitle">章节生产线</span>
-            <h2>质量环路</h2>
+          <div class="row context-actions">
+            <button class="secondary" id="refresh">刷新</button>
+            <button class="secondary" id="readLatest">读最新章</button>
+            <button class="secondary" id="downloadChapter">下载当前章</button>
+            <button class="secondary" id="downloadAll">下载全部章节</button>
           </div>
-          <div id="qualitySignal" class="muted">加载质量环路...</div>
-        </div>
-        <div id="nextChapterCard" class="next-chapter-card" data-testid="next-chapter-card"></div>
-        <div id="qualityStages" class="stage-grid"></div>
-        <div id="qualityActions" class="preview-card quality-actions" data-testid="quality-actions"></div>
-        <div id="qualityArtifacts" class="preview-card" data-testid="quality-artifacts"></div>
-        <div id="pendingPreview" class="preview-card" data-testid="pending-preview"></div>
-        <div id="memoryReview" class="preview-card" data-testid="memory-review"></div>
-        <div id="recoveryHint" class="preview-card"></div>
-      </section>
+        </section>
+        <section class="panel chapter-panel">
+          <div class="section-head chapter-head">
+            <div>
+              <span class="panel-subtitle">正文</span>
+              <h2>当前章节</h2>
+            </div>
+          </div>
+          <div class="chapter-workbench">
+            <div class="muted">章节工作台</div>
+            <div id="chapterList" class="chapter-list" data-testid="chapter-list">还没有已起草章节。</div>
+          </div>
+          <article class="chapter" id="chapter" data-testid="chapter-reader">还没有读取章节。</article>
+        </section>
+        <section class="panel quality-loop" data-testid="quality-loop" aria-label="质量环路">
+          <div class="section-head">
+            <div>
+              <span class="panel-subtitle">章节生产线</span>
+              <h2>质量环路</h2>
+            </div>
+            <div id="qualitySignal" class="muted">加载质量环路...</div>
+          </div>
+          <div id="nextChapterCard" class="next-chapter-card" data-testid="next-chapter-card"></div>
+          <div id="qualityStages" class="stage-grid"></div>
+          <div id="qualityActions" class="preview-card quality-actions" data-testid="quality-actions"></div>
+          <div id="qualityArtifacts" class="preview-card" data-testid="quality-artifacts"></div>
+          <div id="pendingPreview" class="preview-card" data-testid="pending-preview"></div>
+          <div id="memoryReview" class="preview-card" data-testid="memory-review"></div>
+          <div id="recoveryHint" class="preview-card"></div>
+        </section>
+      </div>
     </section>
 
     <aside class="desk-rail stack" data-testid="desk-rail">
@@ -301,6 +320,15 @@
     const resumeSession = document.querySelector('#resumeSession');
     const nextAction = document.querySelector('#nextAction');
     const nextActionHint = document.querySelector('#nextActionHint');
+    const modelHealthCard = document.querySelector('#modelHealthCard');
+    const modelHealthLabel = document.querySelector('#modelHealthLabel');
+    const modelHealthDetail = document.querySelector('#modelHealthDetail');
+    const modelHealthSource = document.querySelector('#modelHealthSource');
+    const modelHealthAction = document.querySelector('#modelHealthAction');
+    const dailySessionBook = document.querySelector('#dailySessionBook');
+    const dailySessionDetail = document.querySelector('#dailySessionDetail');
+    const dailySessionChapters = document.querySelector('#dailySessionChapters');
+    const dailySessionAction = document.querySelector('#dailySessionAction');
     const currentBookTitle = document.querySelector('#currentBookTitle');
     const currentBookMeta = document.querySelector('#currentBookMeta');
     const qualitySignal = document.querySelector('#qualitySignal');
@@ -422,6 +450,8 @@
       const model = data.model || {};
       sessionStatus.textContent = `${model.model || '默认模型'} · ${model.apiKeySet ? 'API key 已配置' : 'API key 未配置'}`;
       renderResidentShell(data.session);
+      renderModelHealth(data.modelHealth);
+      renderDailySession(data.session);
       books.innerHTML = '';
       if (!data.books || data.books.length === 0) {
         books.textContent = '还没有书。';
@@ -581,6 +611,39 @@
         : session && session.lastCompleted
         ? session.lastCompleted.detail
         : '刷新并回到当前创作现场';
+    }
+
+    function renderModelHealth(modelHealth) {
+      const status = modelHealth || {
+        status: 'missing_key',
+        label: '模型状态未知',
+        detail: '打开模型配置后补齐模型信息。',
+        sourceLabel: '未设置',
+        actionLabel: '配置',
+      };
+      modelHealthCard.className = `panel model-health-card ${status.status || 'missing_key'}`;
+      modelHealthLabel.textContent = status.label || '模型状态未知';
+      modelHealthDetail.textContent = status.detail || '打开模型配置后补齐模型信息。';
+      modelHealthSource.textContent = `来源：${status.sourceLabel || '未设置'}`;
+      modelHealthAction.textContent = status.actionLabel || '配置';
+    }
+
+    function renderDailySession(session) {
+      const daily = session && session.daily ? session.daily : null;
+      dailySessionBook.textContent = daily && daily.lastActiveBook ? daily.lastActiveBook.label : '暂无当前书';
+      dailySessionDetail.textContent = daily && daily.currentTask
+        ? `正在：${daily.currentTask.label} · ${daily.currentTask.detail}`
+        : daily && daily.lastCompleted
+        ? `最近完成：${daily.lastCompleted.label} · ${daily.lastCompleted.detail}`
+        : '打开一本书后，这里会显示最近动作。';
+      const chapters = daily && Array.isArray(daily.chaptersTouched) ? daily.chaptersTouched : [];
+      dailySessionChapters.textContent = chapters.length > 0
+        ? `最近触达：${chapters.map((item) => `第 ${item} 章`).join('、')}`
+        : '最近触达：暂无章节记录';
+      const next = daily && daily.nextRecommendedAction ? daily.nextRecommendedAction : null;
+      dailySessionAction.textContent = next ? next.label : '继续写';
+      dailySessionAction.dataset.message = next ? next.message : '';
+      dailySessionAction.disabled = !(next && next.message);
     }
 
     function renderStyle(style) {
@@ -1672,6 +1735,14 @@
       });
     }
     resumeSession.addEventListener('click', () => resumeCurrentSession().catch(error => addMessage(`恢复失败：${error.message}`, false, true)));
+    modelHealthAction.addEventListener('click', () => {
+      document.querySelector('[data-testid="model-config"]').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      modelApiKey.focus();
+    });
+    dailySessionAction.addEventListener('click', () => {
+      const next = dailySessionAction.dataset.message || '';
+      if (next) sendMessage(next).catch(error => addMessage(`失败：${error.message}`, false, true));
+    });
     messageInput.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) send();
     });
