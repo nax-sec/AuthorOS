@@ -72,4 +72,7 @@ test('private web app exposes personal cockpit regions', async () => {
   assert.match(html, /announceJobCompletion/);
   assert.match(html, /任务完成/);
   assert.match(html, /下一步建议/);
+  assert.match(html, /announceJobFailure/);
+  assert.match(html, /failureDetail/);
+  assert.match(html, /任务失败/);
 });

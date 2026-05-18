@@ -6,6 +6,7 @@ import { createWebAgentSession, handleAgentMessage, type WebAgentCommand } from 
 import { createJobStore, type WebJob } from './jobs.ts';
 import { loadWebJobHistory, saveWebJobHistory } from './job-persistence.ts';
 import { withJobCompletion, type CompletedCommandType } from './job-completion.ts';
+import { explainJobFailure } from './job-failure.ts';
 import { isAuthorized } from './auth.ts';
 import { getCockpitOverview } from './cockpit.ts';
 import { buildChaptersZip, readChapterDownload, type DownloadResult } from './downloads.ts';
@@ -370,7 +371,8 @@ async function runCommandJob(
       return;
     }
   } catch (error) {
-    jobs.fail(jobId, error instanceof Error ? error.message : String(error));
+    const failure = explainJobFailure(error);
+    jobs.fail(jobId, failure.title, failure);
   }
 }
 

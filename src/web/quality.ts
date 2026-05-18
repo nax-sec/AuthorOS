@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { listMemoryDeltas, type PendingMemoryDelta } from '../commands/memory.ts';
 import type { ChapterState, ProjectStateResult } from '../commands/state.ts';
+import type { JobFailureExplanation } from './job-failure.ts';
 import type { JobStore, WebJob } from './jobs.ts';
 
 export type QualityStageStatus = 'done' | 'next' | 'missing' | 'optional';
@@ -60,6 +61,7 @@ export interface QualityRecovery {
   failedPhase: string;
   message: string;
   suggestion: string;
+  failure?: JobFailureExplanation;
 }
 
 export interface QualitySignal {
@@ -179,8 +181,9 @@ function deriveRecovery(jobs: readonly WebJob[]): QualityRecovery | null {
     jobId: failed.id,
     action: failed.action,
     failedPhase: lastPhase?.type ?? failed.action,
-    message: failed.error ?? '任务失败',
-    suggestion: recoverySuggestion(failed.action),
+    message: failed.failure?.title ?? failed.error ?? '任务失败',
+    suggestion: failed.failure?.next ?? recoverySuggestion(failed.action),
+    failure: failed.failure,
   };
 }
 

@@ -28,6 +28,23 @@ test('job store records failed jobs with message', () => {
   assert.equal(stored?.events.at(-1)?.message, 'model timeout');
 });
 
+test('job store records structured failed job details', () => {
+  const jobs = createJobStore({ now: () => new Date('2026-05-14T10:00:00Z') });
+  const failure = {
+    kind: 'model_length',
+    title: '模型输出被截断。',
+    detail: 'finish_reason: length',
+    next: '降低章节字数或换更大上下文模型后重试。',
+  };
+
+  const job = jobs.createJob('continue_book', '开始写下一章');
+  jobs.fail(job.id, failure.title, failure);
+
+  const stored = jobs.get(job.id);
+  assert.deepEqual(stored?.failure, failure);
+  assert.deepEqual(stored?.events.at(-1)?.data, failure);
+});
+
 test('job store notifies subscribers when new events are appended', () => {
   const jobs = createJobStore({ now: () => new Date('2026-05-14T10:00:00Z') });
   const job = jobs.createJob('continue_book', '开始写下一章');

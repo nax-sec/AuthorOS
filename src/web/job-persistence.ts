@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { isJobFailureExplanation } from './job-failure.ts';
 import type { WebJob, WebJobEvent, WebJobStatus } from './jobs.ts';
 
 interface StoredWebJobHistory {
@@ -66,6 +67,10 @@ function parseJob(value: unknown): WebJob {
   if ('error' in record) {
     if (typeof record.error !== 'string') throw invalidHistory();
     job.error = record.error;
+  }
+  if ('failure' in record) {
+    if (!isJobFailureExplanation(record.failure)) throw invalidHistory();
+    job.failure = record.failure;
   }
   return job;
 }

@@ -1,3 +1,5 @@
+import type { JobFailureExplanation } from './job-failure.ts';
+
 export type WebJobStatus = 'running' | 'completed' | 'failed';
 
 export interface WebJobEvent {
@@ -16,13 +18,14 @@ export interface WebJob {
   events: WebJobEvent[];
   result?: unknown;
   error?: string;
+  failure?: JobFailureExplanation;
 }
 
 export interface JobStore {
   createJob(action: string, message: string): WebJob;
   append(id: string, type: string, message: string, data?: unknown): WebJob;
   complete(id: string, result?: unknown): WebJob;
-  fail(id: string, message: string): WebJob;
+  fail(id: string, message: string, failure?: JobFailureExplanation): WebJob;
   get(id: string): WebJob | undefined;
   list(): WebJob[];
   listEvents(id: string, after?: number): WebJobEvent[];
@@ -104,11 +107,12 @@ export function createJobStore(opts: CreateJobStoreOptions = {}): JobStore {
       notifyChange();
       return cloneJob(job);
     },
-    fail(id, message) {
+    fail(id, message, failure) {
       const job = requireJob(id);
       job.status = 'failed';
       job.error = message;
-      push(job, 'failed', message);
+      if (failure) job.failure = failure;
+      push(job, 'failed', message, failure);
       notifyChange();
       return cloneJob(job);
     },

@@ -433,6 +433,36 @@ test('web server runs style rewrite preview and apply jobs', async () => {
   });
 });
 
+test('web server explains failed model jobs with readable failure details', async () => {
+  await withTempRoot(async (root) => {
+    await writeStyleReadyBook(root);
+    const server = createWebServer({
+      root,
+      writingLlm: {
+        async generate() {
+          throw new Error('OpenAI-compatible response did not include message content (finish_reason: length).');
+        },
+      },
+    });
+
+    const preview = await server.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '去 AI 味' }),
+    }));
+    assert.equal(preview.status, 200);
+    await waitForJob(server, 'http://local/api/jobs');
+
+    const jobsResponse = await server.fetch(new Request('http://local/api/jobs'));
+    const jobs = await jobsResponse.json();
+    const failed = jobs.jobs[0];
+
+    assert.equal(failed.status, 'failed');
+    assert.equal(failed.failure.kind, 'model_length');
+    assert.equal(failed.error, '模型输出被截断。');
+    assert.equal(failed.events.at(-1).data.kind, 'model_length');
+  });
+});
+
 test('web server binds a style profile and refreshes the book generation snapshot', async () => {
   await withTempRoot(async (root) => {
     await writeStyleReadyBook(root);

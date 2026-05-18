@@ -580,15 +580,19 @@
     }
 
     function renderRecovery(recovery) {
+      const failure = failureDetail(recovery);
       const title = document.createElement('div');
       title.className = 'book-title';
       title.textContent = `失败恢复：${jobActionLabel(recovery.action)} · ${jobPhaseLabel(recovery.failedPhase)}`;
       const message = document.createElement('div');
-      message.textContent = recovery.message;
+      message.textContent = failure.title;
+      const detail = document.createElement('div');
+      detail.className = 'muted';
+      detail.textContent = failure.detail;
       const suggestion = document.createElement('div');
       suggestion.className = 'muted';
-      suggestion.textContent = recovery.suggestion;
-      recoveryHint.append(title, message, suggestion);
+      suggestion.textContent = failure.next;
+      recoveryHint.append(title, message, detail, suggestion);
     }
 
     function deriveBooklessRecovery(jobs) {
@@ -601,8 +605,26 @@
       return {
         action: failed.action,
         failedPhase: lastPhase ? lastPhase.type : failed.action,
-        message: failed.error || '任务失败',
-        suggestion: recoverySuggestion(failed.action),
+        message: failureDetail(failed).title,
+        suggestion: failureDetail(failed).next || recoverySuggestion(failed.action),
+        failure: failed.failure,
+      };
+    }
+
+    function failureDetail(source) {
+      const failure = source && (source.failure || source.data);
+      if (failure && failure.title) {
+        return {
+          title: failure.title,
+          detail: failure.detail || '',
+          next: failure.next || '',
+        };
+      }
+      const fallback = source && (source.message || source.error) ? source.message || source.error : '任务失败';
+      return {
+        title: fallback,
+        detail: fallback,
+        next: source && source.suggestion ? source.suggestion : '查看失败原因后，重新执行上一步。',
       };
     }
 
@@ -736,6 +758,16 @@
       ].filter(Boolean).join('\n'));
     }
 
+    function announceJobFailure(event) {
+      const failure = failureDetail(event);
+      addMessage([
+        '任务失败',
+        failure.title,
+        failure.detail,
+        failure.next ? `下一步建议：${failure.next}` : '',
+      ].filter(Boolean).join('\n'), false, true);
+    }
+
     async function sendMessage(message) {
       addMessage(message, true);
       const result = await api('/api/chat', { method: 'POST', body: JSON.stringify({ message }) });
@@ -781,6 +813,8 @@
           if (data.type === 'completed') {
             announceJobCompletion(data);
             loadLatestChapter(false).catch(() => {});
+          } else {
+            announceJobFailure(data);
           }
         }
       };
