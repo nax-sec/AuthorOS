@@ -3,91 +3,148 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AuthorOS Private Web</title>
+  <meta name="legacy-app-name" content="AuthorOS Private Web">
+  <title>AuthorOS Personal Cockpit</title>
   <style>
     :root { color-scheme: light; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; }
-    body { margin: 0; background: #f6f7f9; color: #1d2430; }
-    header { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 1px solid #d9dee7; background: #ffffff; }
-    main { display: grid; grid-template-columns: minmax(280px, 34%) 1fr 280px; min-height: calc(100vh - 57px); }
-    section { border-right: 1px solid #d9dee7; padding: 16px; overflow: auto; }
-    section:last-child { border-right: 0; }
-    h1 { font-size: 18px; margin: 0; }
-    h2 { font-size: 15px; margin: 0 0 12px; }
-    #chatLog, #progressLog, #chapter { white-space: pre-wrap; }
-    #chatLog { min-height: 50vh; display: flex; flex-direction: column; gap: 10px; }
-    .msg { padding: 10px 12px; border-radius: 8px; background: #fff; border: 1px solid #d9dee7; }
-    .me { background: #eaf2ff; }
-    textarea { box-sizing: border-box; width: 100%; min-height: 84px; resize: vertical; border: 1px solid #b9c2d0; border-radius: 8px; padding: 10px; font: inherit; }
-    button, input { font: inherit; }
-    button { border: 1px solid #1f5eff; background: #1f5eff; color: white; border-radius: 7px; padding: 8px 12px; cursor: pointer; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f5f7fb; color: #1d2430; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 24px; border-bottom: 1px solid #d9dee7; background: #ffffff; }
+    h1 { margin: 0; font-size: 22px; line-height: 1.2; }
+    h2 { margin: 0 0 12px; font-size: 16px; }
+    h3 { margin: 0 0 8px; font-size: 14px; }
+    button, textarea { font: inherit; }
+    button { border: 1px solid #1f5eff; background: #1f5eff; color: #fff; border-radius: 7px; padding: 8px 12px; cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .55; }
     button.secondary { background: #fff; color: #1d2430; border-color: #b9c2d0; }
-    .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
-    .stack { display: grid; gap: 10px; }
+    textarea { width: 100%; min-height: 92px; resize: vertical; border: 1px solid #b9c2d0; border-radius: 8px; padding: 10px; background: #fff; color: inherit; }
     .muted { color: #667085; font-size: 13px; }
-    @media (max-width: 900px) { main { grid-template-columns: 1fr; } section { border-right: 0; border-bottom: 1px solid #d9dee7; } }
+    .cockpit { display: grid; grid-template-columns: 240px minmax(0, 1fr) 300px; gap: 16px; max-width: 1440px; margin: 0 auto; padding: 16px 24px 24px; }
+    .panel { min-width: 0; border: 1px solid #d9dee7; border-radius: 8px; background: #fff; padding: 16px; }
+    .stack { display: grid; gap: 12px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .book { display: grid; gap: 4px; padding: 10px; border: 1px solid #e5e9f0; border-radius: 7px; background: #fafbfc; }
+    .book.current { border-color: #1f5eff; background: #eef4ff; }
+    .book-title { font-weight: 600; }
+    .next-action { display: grid; gap: 8px; }
+    .workspace { display: grid; gap: 16px; }
+    .current-book { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .chapter { min-height: 280px; max-height: 58vh; overflow: auto; white-space: pre-wrap; line-height: 1.7; }
+    .chat-log { min-height: 260px; max-height: 44vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; white-space: pre-wrap; }
+    .msg { padding: 10px 12px; border: 1px solid #d9dee7; border-radius: 8px; background: #fff; }
+    .me { align-self: flex-end; max-width: 86%; background: #eaf2ff; }
+    .assistant { align-self: flex-start; max-width: 86%; }
+    .error { border-color: #f1b8b8; background: #fff1f1; }
+    .job { display: grid; gap: 4px; padding: 10px; border: 1px solid #e5e9f0; border-radius: 7px; background: #fafbfc; }
+    .job-top { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 600; }
+    @media (max-width: 1100px) {
+      header { align-items: flex-start; flex-direction: column; }
+      .cockpit { grid-template-columns: 1fr; padding: 14px; }
+      .chapter, .chat-log { max-height: none; }
+    }
   </style>
 </head>
 <body>
   <header>
-    <h1>AuthorOS Private Web</h1>
-    <span class="muted">本机私人 AI 作者</span>
+    <h1>AuthorOS Personal Cockpit</h1>
+    <span id="sessionStatus" class="muted" data-testid="session-status">正在检查会话...</span>
   </header>
-  <main>
-    <section>
-      <h2>对话</h2>
-      <div id="chatLog"></div>
-      <div class="stack">
+  <main class="cockpit">
+    <aside class="panel stack" aria-label="书架">
+      <section>
+        <h2>书架</h2>
+        <div id="books" class="stack muted">加载中...</div>
+      </section>
+      <section class="next-action">
+        <h2>下一步</h2>
+        <button id="nextAction" data-testid="next-action" disabled>加载中...</button>
+        <div id="nextActionHint" class="muted">我会根据当前书籍状态推荐动作。</div>
+      </section>
+    </aside>
+
+    <section class="workspace">
+      <div class="panel current-book">
+        <div>
+          <h2>工作区当前创作现场</h2>
+          <div id="currentBookTitle" class="book-title">还没有当前书。</div>
+          <div id="currentBookMeta" class="muted">开一本新书后，这里会显示创作状态。</div>
+        </div>
+        <div class="row">
+          <button class="secondary" id="refresh">刷新</button>
+          <button class="secondary" id="readLatest">读最新章</button>
+          <button class="secondary" id="downloadChapter">下载当前章</button>
+          <button class="secondary" id="downloadAll">下载全部章节</button>
+        </div>
+      </div>
+      <article class="panel chapter" id="chapter" data-testid="chapter-reader">还没有读取章节。</article>
+    </section>
+
+    <aside class="stack">
+      <section class="panel stack">
+        <h2>作者助理</h2>
+        <div id="chatLog" class="chat-log" data-testid="assistant-chat"></div>
         <textarea id="message" placeholder="开一本新书、继续写、读最新章，或直接说哪里要改"></textarea>
         <button id="send">发送</button>
-      </div>
-    </section>
-    <section>
-      <h2>当前章节</h2>
-      <article id="chapter" class="msg">还没有读取章节。</article>
-    </section>
-    <section>
-      <h2>书架与下载</h2>
-      <div id="books" class="stack muted">加载中...</div>
-      <div class="row">
-        <button class="secondary" id="refresh">刷新</button>
-        <button class="secondary" id="downloadChapter">下载当前章</button>
-      </div>
-      <div class="row">
-        <button class="secondary" id="downloadAll">下载全部章节</button>
-      </div>
-      <h2 style="margin-top:20px">进度</h2>
-      <div id="progressLog" class="msg muted">等待任务。</div>
-    </section>
+      </section>
+      <section class="panel stack">
+        <h2>任务中心</h2>
+        <div id="taskCenter" class="stack muted" data-testid="task-center">还没有任务。</div>
+      </section>
+    </aside>
   </main>
   <script>
     const chatLog = document.querySelector('#chatLog');
-    const progressLog = document.querySelector('#progressLog');
+    const taskCenter = document.querySelector('#taskCenter');
     const chapter = document.querySelector('#chapter');
     const books = document.querySelector('#books');
+    const sessionStatus = document.querySelector('#sessionStatus');
+    const nextAction = document.querySelector('#nextAction');
+    const nextActionHint = document.querySelector('#nextActionHint');
+    const currentBookTitle = document.querySelector('#currentBookTitle');
+    const currentBookMeta = document.querySelector('#currentBookMeta');
+    const messageInput = document.querySelector('#message');
     const roomPrefix = (location.pathname.match(/^\/room\/[^/]+/) || [''])[0];
     const tokenKey = `authoros_token:${roomPrefix || 'single'}`;
     let token = sessionStorage.getItem(tokenKey) || '';
+    let cockpit = null;
 
     function headers() {
       return { 'content-type': 'application/json', authorization: `Bearer ${token}` };
     }
-    function addMessage(text, own = false) {
+
+    async function api(path, options = {}) {
+      const response = await fetch(`${roomPrefix}${path}`, { ...options, headers: { ...headers(), ...(options.headers || {}) } });
+      if (!response.ok) {
+        let payload = {};
+        try {
+          payload = await response.json();
+        } catch {
+          payload = {};
+        }
+        throw new Error(payload.error || response.statusText);
+      }
+      return response.json();
+    }
+
+    function addMessage(text, own = false, error = false) {
       const div = document.createElement('div');
-      div.className = `msg${own ? ' me' : ''}`;
+      div.className = `msg ${own ? 'me' : 'assistant'}${error ? ' error' : ''}`;
       div.textContent = text;
       chatLog.appendChild(div);
       chatLog.scrollTop = chatLog.scrollHeight;
     }
-    async function api(path, options = {}) {
-      const response = await fetch(`${roomPrefix}${path}`, { ...options, headers: { ...headers(), ...(options.headers || {}) } });
-      if (!response.ok) throw new Error((await response.json()).error || response.statusText);
-      return response.json();
-    }
+
     async function loginIfNeeded() {
       const session = await fetch('/api/session').then(response => response.json());
-      if (!session.tokenRequired) return;
+      if (!session.tokenRequired) {
+        sessionStatus.textContent = session.rooms ? '请选择房间' : '本机会话已连接';
+        return true;
+      }
       token = sessionStorage.getItem(tokenKey) || prompt('访问码（如果没有配置可留空）') || '';
-      if (!token) return;
+      if (!token) {
+        sessionStatus.textContent = '等待访问码';
+        return false;
+      }
       if (session.rooms && !roomPrefix) {
         const response = await fetch('/api/login', {
           method: 'POST',
@@ -98,7 +155,7 @@
           alert((await response.json()).error || 'invalid access code');
           sessionStorage.removeItem(tokenKey);
           location.reload();
-          return;
+          return false;
         }
         const result = await response.json();
         sessionStorage.setItem(`authoros_token:${result.roomPath}`, token);
@@ -106,42 +163,149 @@
         return false;
       }
       sessionStorage.setItem(tokenKey, token);
+      sessionStatus.textContent = roomPrefix ? `房间 ${roomPrefix.replace('/room/', '')} 已连接` : '本机会话已连接';
       return true;
     }
-    async function refreshBooks() {
-      const shelf = await api('/api/books');
-      books.textContent = shelf.books.length ? shelf.books.map(b => `${b.id === shelf.current ? '* ' : '  '}${b.title} (${b.id})`).join('\n') : '还没有书。';
+
+    async function loadCockpit() {
+      cockpit = await api('/api/cockpit');
+      renderCockpit(cockpit);
+      renderJobs(cockpit.jobs || []);
+      if (cockpit.current && cockpit.current.latestChapter) await loadLatestChapter(false);
     }
-    async function send() {
-      const input = document.querySelector('#message');
-      const message = input.value.trim();
-      if (!message) return;
-      input.value = '';
-      addMessage(message, true);
-      try {
-        const result = await api('/api/chat', { method: 'POST', body: JSON.stringify({ message }) });
-        addMessage(result.message);
-        if (result.jobId) watchJob(result.jobId);
-      } catch (error) {
-        addMessage(`失败：${error.message}`);
+
+    function renderCockpit(data) {
+      const model = data.model || {};
+      sessionStatus.textContent = `${model.model || '默认模型'} · ${model.apiKeySet ? 'API key 已配置' : 'API key 未配置'}`;
+      books.innerHTML = '';
+      if (!data.books || data.books.length === 0) {
+        books.textContent = '还没有书。';
+      } else {
+        for (const book of data.books) {
+          const item = document.createElement('div');
+          item.className = `book${data.current && data.current.book.id === book.id ? ' current' : ''}`;
+          const title = document.createElement('div');
+          title.className = 'book-title';
+          title.textContent = book.title;
+          const meta = document.createElement('div');
+          meta.className = 'muted';
+          meta.textContent = `${book.id} · ${book.concept || '暂无概念'}`;
+          item.append(title, meta);
+          books.appendChild(item);
+        }
+      }
+
+      if (data.current) {
+        const latest = data.current.latestChapter ? `最新第 ${data.current.latestChapter.chapter} 章` : '还没有章节';
+        currentBookTitle.textContent = data.current.book.title;
+        currentBookMeta.textContent = `${data.current.book.id} · ${latest} · 下一章 ${data.current.state.nextDraftChapter}`;
+      } else {
+        currentBookTitle.textContent = '还没有当前书。';
+        currentBookMeta.textContent = '开一本新书后，这里会显示创作状态。';
+      }
+
+      if (data.nextAction && data.nextAction.message) {
+        nextAction.textContent = data.nextAction.label;
+        nextAction.dataset.message = data.nextAction.message;
+        nextAction.disabled = false;
+        nextActionHint.textContent = data.nextAction.kind === 'new_book' ? '告诉助理你想写什么。' : data.nextAction.message;
+      } else {
+        nextAction.textContent = '暂无建议';
+        nextAction.dataset.message = '';
+        nextAction.disabled = true;
+        nextActionHint.textContent = '刷新后再看看。';
       }
     }
-    async function watchJob(id) {
+
+    async function refreshJobs() {
+      const result = await api('/api/jobs');
+      renderJobs(result.jobs || []);
+    }
+
+    function renderJobs(jobs) {
+      taskCenter.innerHTML = '';
+      if (!jobs || jobs.length === 0) {
+        taskCenter.textContent = '还没有任务。';
+        return;
+      }
+      for (const job of jobs.slice(0, 8)) {
+        const last = job.events && job.events.length ? job.events[job.events.length - 1] : null;
+        const item = document.createElement('div');
+        item.className = 'job';
+        const top = document.createElement('div');
+        top.className = 'job-top';
+        const action = document.createElement('span');
+        action.textContent = job.action;
+        const status = document.createElement('span');
+        status.textContent = job.status;
+        top.append(action, status);
+        const message = document.createElement('div');
+        message.className = 'muted';
+        message.textContent = last ? last.message : '等待事件。';
+        item.append(top, message);
+        taskCenter.appendChild(item);
+      }
+    }
+
+    async function sendMessage(message) {
+      addMessage(message, true);
+      const result = await api('/api/chat', { method: 'POST', body: JSON.stringify({ message }) });
+      addMessage(result.message || '已收到。');
+      if (result.jobId) watchJob(result.jobId);
+      await refreshJobs();
+    }
+
+    async function send() {
+      const message = messageInput.value.trim();
+      if (!message) return;
+      messageInput.value = '';
+      try {
+        await sendMessage(message);
+      } catch (error) {
+        addMessage(`失败：${error.message}`, false, true);
+      }
+    }
+
+    async function loadLatestChapter(showErrors = true) {
+      try {
+        const latest = await api('/api/chapters/latest');
+        chapter.textContent = latest.content || latest.excerpt || '最新章节为空。';
+      } catch (error) {
+        if (showErrors) chapter.textContent = `读取失败：${error.message}`;
+      }
+    }
+
+    function watchJob(id) {
       const events = new EventSource(`${roomPrefix}/api/jobs/${id}/events?token=${encodeURIComponent(token)}`);
       events.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        progressLog.textContent += `\n[${data.type}] ${data.message}`;
+        refreshJobs().catch(() => {});
         if (data.type === 'completed' || data.type === 'failed') {
           events.close();
-          refreshBooks().catch(() => {});
+          loadCockpit().catch(error => addMessage(`刷新失败：${error.message}`, false, true));
+          if (data.type === 'completed') loadLatestChapter(false).catch(() => {});
         }
       };
+      events.onerror = () => events.close();
     }
+
     document.querySelector('#send').addEventListener('click', send);
-    document.querySelector('#refresh').addEventListener('click', refreshBooks);
+    messageInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) send();
+    });
+    nextAction.addEventListener('click', () => {
+      if (nextAction.dataset.message) sendMessage(nextAction.dataset.message).catch(error => addMessage(`失败：${error.message}`, false, true));
+    });
+    document.querySelector('#refresh').addEventListener('click', () => loadCockpit().catch(error => addMessage(`刷新失败：${error.message}`, false, true)));
+    document.querySelector('#readLatest').addEventListener('click', () => loadLatestChapter(true));
     document.querySelector('#downloadChapter').addEventListener('click', () => location.href = `${roomPrefix}/download/chapter/latest?token=${encodeURIComponent(token)}`);
     document.querySelector('#downloadAll').addEventListener('click', () => location.href = `${roomPrefix}/download/chapters.zip?token=${encodeURIComponent(token)}`);
-    loginIfNeeded().then((ready) => ready === false ? undefined : refreshBooks()).catch(error => { books.textContent = `加载失败：${error.message}`; });
+    loginIfNeeded()
+      .then(ready => ready ? loadCockpit() : undefined)
+      .catch(error => {
+        sessionStatus.textContent = `加载失败：${error.message}`;
+        addMessage(`加载失败：${error.message}`, false, true);
+      });
   </script>
 </body>
 </html>
