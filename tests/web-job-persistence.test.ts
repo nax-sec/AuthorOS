@@ -68,3 +68,29 @@ test('web job history rejects invalid json shape', async () => {
     assert.throws(() => loadWebJobHistory(root), /Invalid web job history/);
   });
 });
+
+test('web job history rejects non-string job error', async () => {
+  await withTempRoot(async (root) => {
+    const path = webJobHistoryPath(root);
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, JSON.stringify({
+      version: 1,
+      jobs: [{
+        ...job('job-1', '2026-05-14T10:00:00.000Z'),
+        error: 123,
+      }],
+    }), 'utf8');
+
+    assert.throws(() => loadWebJobHistory(root), /Invalid web job history/);
+  });
+});
+
+test('web job history reports invalid json syntax separately', async () => {
+  await withTempRoot(async (root) => {
+    const path = webJobHistoryPath(root);
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, '{not json', 'utf8');
+
+    assert.throws(() => loadWebJobHistory(root), /Invalid web job history JSON/);
+  });
+});

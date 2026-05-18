@@ -63,7 +63,10 @@ function parseJob(value: unknown): WebJob {
     events: events.map(parseEvent),
   };
   if ('result' in record) job.result = record.result;
-  if (typeof record.error === 'string') job.error = record.error;
+  if ('error' in record) {
+    if (typeof record.error !== 'string') throw invalidHistory();
+    job.error = record.error;
+  }
   return job;
 }
 
