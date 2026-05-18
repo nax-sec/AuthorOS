@@ -202,6 +202,7 @@
         <div id="nextChapterCard" class="next-chapter-card" data-testid="next-chapter-card"></div>
         <div id="qualityStages" class="stage-grid"></div>
         <div id="qualityActions" class="preview-card quality-actions" data-testid="quality-actions"></div>
+        <div id="qualityArtifacts" class="preview-card" data-testid="quality-artifacts"></div>
         <div id="pendingPreview" class="preview-card" data-testid="pending-preview"></div>
         <div id="memoryReview" class="preview-card" data-testid="memory-review"></div>
         <div id="recoveryHint" class="preview-card"></div>
@@ -282,6 +283,7 @@
     const nextChapterCard = document.querySelector('#nextChapterCard');
     const qualityStages = document.querySelector('#qualityStages');
     const qualityActions = document.querySelector('#qualityActions');
+    const qualityArtifacts = document.querySelector('#qualityArtifacts');
     const pendingPreview = document.querySelector('#pendingPreview');
     const memoryReview = document.querySelector('#memoryReview');
     const recoveryHint = document.querySelector('#recoveryHint');
@@ -623,6 +625,7 @@
       nextChapterCard.innerHTML = '';
       qualityStages.innerHTML = '';
       qualityActions.innerHTML = '';
+      qualityArtifacts.innerHTML = '';
       pendingPreview.innerHTML = '';
       memoryReview.innerHTML = '';
       recoveryHint.innerHTML = '';
@@ -636,6 +639,7 @@
         meta.textContent = '开一本新书后，这里会显示下一章生产线。';
         nextChapterCard.append(title, meta);
         qualityActions.textContent = '没有可执行质量动作。';
+        qualityArtifacts.textContent = '没有质量产物。';
         pendingPreview.textContent = '没有待确认预览。';
         memoryReview.textContent = '没有记忆更新。';
         if (booklessRecovery) {
@@ -664,6 +668,7 @@
       }
 
       renderQualityActions(quality.actions || []);
+      renderQualityArtifacts(quality.artifacts || []);
 
       if (quality.pendingPreview) {
         const previewTitle = document.createElement('div');
@@ -783,6 +788,64 @@
         row.appendChild(button);
       }
       qualityActions.append(title, row);
+    }
+
+    function renderQualityArtifacts(artifacts) {
+      qualityArtifacts.innerHTML = '';
+      const normalized = Array.isArray(artifacts) ? artifacts.filter(isQualityArtifact) : [];
+      if (normalized.length === 0) {
+        qualityArtifacts.textContent = '没有质量产物。';
+        return;
+      }
+      const title = document.createElement('div');
+      title.className = 'book-title';
+      title.textContent = '质量产物';
+      qualityArtifacts.appendChild(title);
+      for (const artifact of normalized) {
+        const item = document.createElement('div');
+        item.className = 'row';
+        const meta = document.createElement('span');
+        meta.className = 'muted';
+        meta.textContent = `${artifact.label} · ${artifact.path}`;
+        const view = document.createElement('button');
+        view.type = 'button';
+        view.className = 'secondary';
+        view.textContent = '查看产物';
+        view.addEventListener('click', () => loadQualityArtifact(artifact).catch(error => addMessage(`读取质量产物失败：${error.message}`, false, true)));
+        item.append(meta, view);
+        qualityArtifacts.appendChild(item);
+      }
+    }
+
+    function isQualityArtifact(artifact) {
+      return artifact
+        && typeof artifact === 'object'
+        && typeof artifact.type === 'string'
+        && typeof artifact.label === 'string'
+        && Number.isInteger(artifact.chapter)
+        && artifact.chapter > 0
+        && typeof artifact.path === 'string';
+    }
+
+    async function loadQualityArtifact(artifact) {
+      const result = await api(`/api/quality/artifacts/${artifact.type}/${artifact.chapter}`);
+      let title = qualityArtifacts.querySelector('[data-quality-artifact-title]');
+      if (!title) {
+        title = document.createElement('div');
+        title.className = 'book-title';
+        title.dataset.qualityArtifactTitle = 'true';
+        qualityArtifacts.appendChild(title);
+      }
+      title.textContent = `正在查看：${result.path || artifact.path}`;
+
+      let content = qualityArtifacts.querySelector('#qualityArtifactContent');
+      if (!content) {
+        content = document.createElement('pre');
+        content.id = 'qualityArtifactContent';
+        content.className = 'memory-delta-content';
+        qualityArtifacts.appendChild(content);
+      }
+      content.textContent = result.content || '这个质量产物为空。';
     }
 
     function normalizeQualityAction(action) {

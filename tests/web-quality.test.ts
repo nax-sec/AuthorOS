@@ -76,6 +76,40 @@ test('quality overview exposes executable actions for review closure', async () 
   });
 });
 
+test('quality overview lists readable review and decision artifacts', async () => {
+  await withTempBook(async (bookDir) => {
+    await writeFile(join(bookDir, 'plans/0001.md'), 'plan one', 'utf8');
+    await writeFile(join(bookDir, 'chapters/0001.md'), 'draft one', 'utf8');
+    await writeFile(join(bookDir, 'reviews/0001.internal.md'), 'internal review', 'utf8');
+    await writeFile(join(bookDir, 'reviews/0001.reader-sim.md'), 'reader review', 'utf8');
+    await writeFile(join(bookDir, 'decisions/0001.md'), 'decision', 'utf8');
+    const state = await getProjectState(bookDir);
+
+    const overview = await getQualityOverview(bookDir, state, createJobStore());
+
+    assert.deepEqual(overview.artifacts, [
+      {
+        type: 'internal_review',
+        label: '第 1 章内评',
+        chapter: 1,
+        path: 'reviews/0001.internal.md',
+      },
+      {
+        type: 'reader_sim_review',
+        label: '第 1 章读者模拟',
+        chapter: 1,
+        path: 'reviews/0001.reader-sim.md',
+      },
+      {
+        type: 'chapter_decision',
+        label: '第 1 章决策',
+        chapter: 1,
+        path: 'decisions/0001.md',
+      },
+    ]);
+  });
+});
+
 test('quality overview signals missing style binding', async () => {
   await withTempBook(async (bookDir) => {
     const state = await getProjectState(bookDir);

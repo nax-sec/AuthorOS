@@ -605,6 +605,23 @@ test('web server marks a pending memory delta as reviewed', async () => {
   });
 });
 
+test('web server exposes readable quality artifact content', async () => {
+  await withTempRoot(async (root) => {
+    await writeStyleReadyBook(root);
+    await writeFile(join(root, 'books/demo/reviews/0001.reader-sim.md'), '# 读者模拟\n\n愿意继续读。', 'utf8');
+    const server = createWebServer({ root, env: {} });
+
+    const response = await server.fetch(new Request('http://local/api/quality/artifacts/reader_sim_review/1'));
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.type, 'reader_sim_review');
+    assert.equal(body.chapter, 1);
+    assert.equal(body.path, 'reviews/0001.reader-sim.md');
+    assert.match(body.content, /愿意继续读/);
+  });
+});
+
 test('web server explains failed model jobs with readable failure details', async () => {
   await withTempRoot(async (root) => {
     await writeStyleReadyBook(root);

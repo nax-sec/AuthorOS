@@ -84,6 +84,15 @@ export interface QualityAction {
   primary?: boolean;
 }
 
+export type QualityArtifactType = 'internal_review' | 'reader_sim_review' | 'chapter_decision';
+
+export interface QualityArtifact {
+  type: QualityArtifactType;
+  label: string;
+  chapter: number;
+  path: string;
+}
+
 export interface QualitySignal {
   kind: QualitySignalKind;
   label: string;
@@ -103,6 +112,7 @@ export interface QualityOverview {
   recovery: QualityRecovery | null;
   signals: QualitySignal[];
   actions: QualityAction[];
+  artifacts: QualityArtifact[];
 }
 
 const stageLabels: Record<QualityStage['key'], string> = {
@@ -129,6 +139,7 @@ export async function getQualityOverview(
   const nextChapter = deriveNextChapter(state, memoryDeltas);
   const recovery = deriveRecovery(jobs.list());
   const actions = deriveQualityActions(state, memoryDeltas);
+  const artifacts = deriveQualityArtifacts(state);
 
   return {
     nextChapter,
@@ -139,6 +150,7 @@ export async function getQualityOverview(
     recovery,
     signals: deriveSignals({ pendingPreview, styleRewritePreview, memoryDeltas, recovery, style }),
     actions,
+    artifacts,
   };
 }
 
@@ -215,6 +227,41 @@ function deriveQualityActions(
     }
   }
   return actions.slice(0, 8);
+}
+
+function deriveQualityArtifacts(state: ProjectStateResult): QualityArtifact[] {
+  const artifacts: QualityArtifact[] = [];
+  for (const chapter of state.chapters) {
+    if (chapter.internalReview) {
+      artifacts.push(qualityArtifact('internal_review', '内评', chapter));
+    }
+    if (chapter.readerSimReview) {
+      artifacts.push(qualityArtifact('reader_sim_review', '读者模拟', chapter));
+    }
+    if (chapter.decision) {
+      artifacts.push(qualityArtifact('chapter_decision', '决策', chapter));
+    }
+  }
+  return artifacts;
+}
+
+function qualityArtifact(
+  type: QualityArtifactType,
+  label: string,
+  chapter: ChapterState,
+): QualityArtifact {
+  return {
+    type,
+    label: `第 ${chapter.chapter} 章${label}`,
+    chapter: chapter.chapter,
+    path: qualityArtifactPath(type, chapter.chapterId),
+  };
+}
+
+function qualityArtifactPath(type: QualityArtifactType, chapterId: string): string {
+  if (type === 'internal_review') return `reviews/${chapterId}.internal.md`;
+  if (type === 'reader_sim_review') return `reviews/${chapterId}.reader-sim.md`;
+  return `decisions/${chapterId}.md`;
 }
 
 function qualityAction(

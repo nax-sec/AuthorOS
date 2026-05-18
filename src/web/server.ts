@@ -139,6 +139,19 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
           content: await showMemoryDelta(join(root, book.path), name),
         });
       }
+      const qualityArtifactMatch = routePath.match(/^\/api\/quality\/artifacts\/([^/]+)\/(\d+)$/);
+      if (qualityArtifactMatch?.[1] && qualityArtifactMatch?.[2] && request.method === 'GET') {
+        const artifact = qualityArtifactPath(qualityArtifactMatch[1], Number(qualityArtifactMatch[2]));
+        if (!artifact) return json({ error: 'invalid quality artifact' }, 400);
+        const book = await getCurrentPrivateBook(root);
+        const content = await readFile(join(root, book.path, artifact.path), 'utf8');
+        return json({
+          type: artifact.type,
+          chapter: artifact.chapter,
+          path: artifact.path,
+          content: content.endsWith('\n') ? content : `${content}\n`,
+        });
+      }
       if (routePath === '/api/style/bind' && request.method === 'POST') {
         const body = await request.json() as { profileId?: unknown };
         const profileId = typeof body.profileId === 'string' ? body.profileId.trim() : '';
@@ -266,6 +279,18 @@ function createRuntimeForRoot(root: string): WebRuntime {
       onChange: (jobs) => saveWebJobHistory(root, jobs),
     }),
   };
+}
+
+function qualityArtifactPath(
+  type: string,
+  chapter: number,
+): { type: string; chapter: number; path: string } | null {
+  if (!Number.isInteger(chapter) || chapter < 1) return null;
+  const chapterId = String(chapter).padStart(4, '0');
+  if (type === 'internal_review') return { type, chapter, path: `reviews/${chapterId}.internal.md` };
+  if (type === 'reader_sim_review') return { type, chapter, path: `reviews/${chapterId}.reader-sim.md` };
+  if (type === 'chapter_decision') return { type, chapter, path: `decisions/${chapterId}.md` };
+  return null;
 }
 
 function recoverInterruptedJobs(jobs: WebJob[]): { jobs: WebJob[]; changed: boolean } {
