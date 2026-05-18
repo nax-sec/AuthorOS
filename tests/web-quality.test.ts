@@ -204,6 +204,7 @@ test('quality overview reports pending style rewrite preview metadata', async ()
     assert.equal(overview.styleRewritePreview?.profileName, '雨夜冷调');
     assert.equal(overview.styleRewritePreview?.intent, 'remove_ai_voice');
     assert.equal(overview.styleRewritePreview?.rationale, '减少模板化表达');
+    assert.equal(overview.styleRewritePreview?.previewContent, '# 第 1 章\n\n改写后的正文');
     assert.equal(overview.styleRewritePreview?.revisedCharCount, 12);
     assert.equal(
       overview.signals.some((signal) => signal.kind === 'warning' && signal.label === '第 1 章有文风改写预览待确认'),

@@ -692,10 +692,20 @@
         const styleMeta = document.createElement('div');
         styleMeta.className = 'muted';
         styleMeta.textContent = `${stylePreview.rationale || stylePreview.text} · ${stylePreview.createdAt}`;
+        const styleContentTitle = document.createElement('div');
+        styleContentTitle.className = 'muted';
+        styleContentTitle.textContent = '文风预览正文';
+        const styleContent = document.createElement('pre');
+        styleContent.id = 'styleRewritePreviewContent';
+        styleContent.className = 'memory-delta-content';
+        styleContent.textContent = stylePreview.previewContent || '这次文风预览没有正文内容。';
+        const styleStats = document.createElement('div');
+        styleStats.className = 'muted';
+        styleStats.textContent = `原文 ${stylePreview.originalCharCount || 0} 字 · 预览 ${stylePreview.revisedCharCount ?? '未知'} 字`;
         const applyButton = document.createElement('button');
         applyButton.textContent = '应用文风修改';
         applyButton.addEventListener('click', () => sendMessage('应用文风修改').catch(error => addMessage(`失败：${error.message}`, false, true)));
-        pendingPreview.append(styleTitle, styleText, styleMeta, applyButton);
+        pendingPreview.append(styleTitle, styleText, styleMeta, styleContentTitle, styleContent, styleStats, applyButton);
       }
 
       if (!quality.pendingPreview && !quality.styleRewritePreview) {

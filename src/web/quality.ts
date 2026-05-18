@@ -47,6 +47,7 @@ export interface QualityStyleRewritePreview {
   profileName: string;
   intent: QualityStyleRewriteIntent;
   text: string;
+  previewContent: string;
   instruction: string;
   createdAt: string;
   rationale: string;
@@ -453,6 +454,7 @@ async function readPendingStyleRewrite(projectDir: string): Promise<QualityStyle
     || typeof parsed.profile_name !== 'string'
     || !isStyleRewriteIntent(parsed.intent)
     || typeof parsed.text !== 'string'
+    || typeof parsed.preview_content !== 'string'
     || typeof parsed.instruction !== 'string'
     || typeof parsed.created_at !== 'string'
     || typeof parsed.rationale !== 'string'
@@ -470,6 +472,7 @@ async function readPendingStyleRewrite(projectDir: string): Promise<QualityStyle
     profileName: parsed.profile_name,
     intent: parsed.intent,
     text: parsed.text,
+    previewContent: parsed.preview_content,
     instruction: parsed.instruction,
     createdAt: parsed.created_at,
     rationale: parsed.rationale,
