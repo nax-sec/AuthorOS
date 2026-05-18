@@ -1,5 +1,6 @@
 import {
   handleAgentMessage,
+  type StyleRewriteIntent,
   type WebAgentResult,
   type WebAgentSession,
 } from './agent.ts';
@@ -20,6 +21,8 @@ type LlmAgentAction =
   | { action: 'read_chapter'; message: string }
   | { action: 'feedback_preview'; message: string; text: string }
   | { action: 'feedback_apply'; message: string }
+  | { action: 'style_rewrite_preview'; message: string; intent: StyleRewriteIntent; text: string }
+  | { action: 'style_rewrite_apply'; message: string }
   | { action: 'download_current_chapter'; message: string }
   | { action: 'download_all_chapters'; message: string }
   | { action: 'status'; message: string }
@@ -52,6 +55,8 @@ function buildAgentPrompt(message: string): string {
     '- Do not create a new book from a vague first idea unless the user explicitly asks to start directly.',
     '- Feedback preview never overwrites chapters.',
     '- Applying feedback requires explicit confirmation.',
+    '- Style rewrite preview never overwrites chapters.',
+    '- Applying style rewrite requires explicit confirmation.',
     '- Downloads are safe.',
     '',
     'Allowed actions:',
@@ -62,6 +67,8 @@ function buildAgentPrompt(message: string): string {
     '- read_chapter',
     '- feedback_preview',
     '- feedback_apply',
+    '- style_rewrite_preview: generate a bound-style rewrite preview for latest chapter. Requires intent and text.',
+    '- style_rewrite_apply: apply the saved style rewrite preview only after explicit confirmation.',
     '- download_current_chapter',
     '- download_all_chapters',
     '- status',
@@ -69,6 +76,7 @@ function buildAgentPrompt(message: string): string {
     '',
     'Output JSON only. Examples:',
     '{"action":"feedback_preview","message":"收到，我先生成修改预览。","text":"用户反馈原文或整理后的反馈"}',
+    '{"action":"style_rewrite_preview","message":"收到，我先生成文风改写预览。","intent":"remove_ai_voice","text":"用户原文"}',
     '{"action":"new_book_intake","message":"先确认几个开书问题..."}',
     '',
     `User message: ${JSON.stringify(message)}`,
@@ -102,9 +110,17 @@ function parseLlmAgentAction(raw: string): LlmAgentAction {
       if (!text) throw new Error('feedback_preview requires text.');
       return { action: parsed.action, message, text };
     }
+    case 'style_rewrite_preview': {
+      const text = 'text' in parsed && typeof parsed.text === 'string' ? parsed.text.trim() : '';
+      const intent = 'intent' in parsed && typeof parsed.intent === 'string' ? parsed.intent.trim() : '';
+      if (!text) throw new Error('style_rewrite_preview requires text.');
+      if (!isStyleRewriteIntent(intent)) throw new Error('style_rewrite_preview requires valid intent.');
+      return { action: parsed.action, message, intent, text };
+    }
     case 'continue_book':
     case 'read_chapter':
     case 'feedback_apply':
+    case 'style_rewrite_apply':
     case 'download_current_chapter':
     case 'download_all_chapters':
     case 'status':
@@ -113,6 +129,10 @@ function parseLlmAgentAction(raw: string): LlmAgentAction {
     default:
       throw new Error(`Unsupported llm agent action: ${parsed.action}`);
   }
+}
+
+function isStyleRewriteIntent(intent: string): intent is StyleRewriteIntent {
+  return intent === 'imitate_style' || intent === 'remove_ai_voice' || intent === 'style_polish';
 }
 
 function applyLlmAction(session: WebAgentSession, rawMessage: string, action: LlmAgentAction): WebAgentResult {
@@ -147,6 +167,17 @@ function applyLlmAction(session: WebAgentSession, rawMessage: string, action: Ll
   }
   if (action.action === 'feedback_apply') {
     return { kind: 'job', action: action.action, message: action.message, command: { type: 'apply' } };
+  }
+  if (action.action === 'style_rewrite_preview') {
+    return {
+      kind: 'job',
+      action: action.action,
+      message: action.message,
+      command: { type: 'style_rewrite', chapter: 'latest', intent: action.intent, text: action.text },
+    };
+  }
+  if (action.action === 'style_rewrite_apply') {
+    return { kind: 'job', action: action.action, message: action.message, command: { type: 'style_apply' } };
   }
   if (action.action === 'download_current_chapter') {
     return { kind: 'job', action: action.action, message: action.message, command: { type: 'download_chapter', chapter: 'latest' } };

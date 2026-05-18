@@ -31,6 +31,7 @@ export interface ReviseResult {
   rationale: string;
   originalCharCount: number;
   revisedCharCount: number | null;
+  previewContent: string | null;
   written: boolean;
   contextInputs: string[];
 }
@@ -75,11 +76,13 @@ export async function reviseChapter(projectDir: string, options: ReviseOptions):
 
   let written = false;
   let revisedCharCount: number | null = null;
+  let previewContent: string | null = null;
   let actualBackupPath: string | null = null;
 
   if (decision.changed && decision.newBody) {
     revisedCharCount = countChineseChars(decision.newBody);
     const newContent = wrapRevisedContent(chapter, decision.newBody, source, now, decision.rationale);
+    previewContent = newContent;
     if (options.write) {
       const backupExists = await fileExists(join(projectDir, draftBackupPath));
       if (!backupExists) {
@@ -109,6 +112,7 @@ export async function reviseChapter(projectDir: string, options: ReviseOptions):
     rationale: decision.rationale,
     originalCharCount: countChineseChars(originalBody),
     revisedCharCount,
+    previewContent,
     written,
     contextInputs: docs.filter((doc) => doc.status === 'present').map((doc) => doc.resolvedPath ?? doc.declaredPath),
   };

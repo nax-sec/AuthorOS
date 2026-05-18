@@ -81,12 +81,14 @@ import {
 } from './commands/console.ts';
 import {
   applyPrivateFeedback,
+  applyPrivateStyleRewrite,
   continuePrivateBook,
   createPrivateBook,
   getCurrentPrivateBook,
   getPrivateStatus,
   listPrivateBooks,
   previewPrivateFeedback,
+  previewPrivateStyleRewrite,
   readPrivateChapter,
   renderPrivateApplyResult,
   renderPrivateContinueResult,
@@ -96,7 +98,10 @@ import {
   renderPrivateNewResult,
   renderPrivateReadResult,
   renderPrivateStatus,
+  renderPrivateStyleApplyResult,
+  renderPrivateStyleRewriteResult,
   switchPrivateBook,
+  type PrivateStyleRewriteIntent,
 } from './commands/private.ts';
 import { createOpenAiCompatibleClientFromProject, type LlmClient } from './core/llm.ts';
 import type { EnvLike } from './core/modelConfig.ts';
@@ -1015,6 +1020,25 @@ async function runPrivate(args: string[], cwd: string, io: Io, options: RunOptio
     return 0;
   }
 
+  if (subcommand === 'style-preview') {
+    const llm = options.llm ?? await createWritingClient(await privateCurrentProjectDir(root), env);
+    io.stdout(renderPrivateStyleRewriteResult(await previewPrivateStyleRewrite(root, {
+      chapter: optionalPrivateChapter(parsed.flags.chapter),
+      intent: privateStyleRewriteIntent(stringFlag(parsed.flags.intent)),
+      text: stringFlag(parsed.flags.text) ?? parsed.positionals.join(' '),
+      llm,
+      now: options.now,
+    })));
+    return 0;
+  }
+
+  if (subcommand === 'style-apply') {
+    io.stdout(renderPrivateStyleApplyResult(await applyPrivateStyleRewrite(root, {
+      now: options.now,
+    })));
+    return 0;
+  }
+
   throw new AuthorOsError(`Unknown private subcommand: ${subcommand}`);
 }
 
@@ -1210,6 +1234,15 @@ function optionalPrivateChapter(value: string | boolean | undefined): number | '
   if (value === true) throw new AuthorOsError('--chapter requires a positive integer or "latest".');
   if (value === 'latest') return 'latest';
   return optionalPositiveIntegerFlag(value, 'chapter');
+}
+
+function privateStyleRewriteIntent(value: string | undefined): PrivateStyleRewriteIntent {
+  if (value === undefined) return 'remove_ai_voice';
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'imitate' || normalized === 'imitate-style' || normalized === 'style') return 'imitate_style';
+  if (normalized === 'anti-ai' || normalized === 'remove-ai' || normalized === 'remove-ai-voice' || normalized === '去ai味') return 'remove_ai_voice';
+  if (normalized === 'polish' || normalized === 'style-polish') return 'style_polish';
+  throw new AuthorOsError('--intent must be one of: imitate, anti-ai, polish.');
 }
 
 function resolvePrivateRoot(cwd: string, parsed: ParsedArgs, env: EnvLike): string {
@@ -1500,9 +1533,12 @@ function privateHelpText(): string {
     '  author private read [--chapter latest|N] [--root <dir>]',
     '  author private feedback --chapter latest|N --text <feedback> [--root <dir>]',
     '  author private apply [--root <dir>]',
+    '  author private style-preview [--intent imitate|anti-ai|polish] [--text <note>] [--chapter latest|N] [--root <dir>]',
+    '  author private style-apply [--root <dir>]',
     '',
     'Default root: AUTHOROS_PRIVATE_ROOT or ./private-author.',
-    'new / continue / feedback / apply require the configured model.',
+    'new / continue / feedback / apply / style-preview require the configured model.',
+    'style-apply writes the saved preview and does not call the model.',
     '',
   ].join('\n');
 }

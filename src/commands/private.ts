@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { initProject } from './init.ts';
@@ -7,6 +7,7 @@ import { renderWriteResult, createChapterDraft, type WriteResult } from './write
 import { getProjectState, renderProjectState, type ProjectStateResult } from './state.ts';
 import { renderReviseResult, reviseChapter, type ReviseResult } from './revise.ts';
 import { renderSetupResult, setupFromConcept, type SetupResult } from './setup.ts';
+import { readStyleBinding, type StyleProfile } from './style.ts';
 import type { LlmClient } from '../core/llm.ts';
 import { AuthorOsError } from '../core/schema.ts';
 import { formatChapterNumber } from '../core/paths.ts';
@@ -58,12 +59,48 @@ export interface PrivateApplyResult {
   revise: ReviseResult;
 }
 
+export type PrivateStyleRewriteIntent = 'imitate_style' | 'remove_ai_voice' | 'style_polish';
+
+export interface PrivateStyleRewriteResult {
+  book: PrivateBook;
+  chapter: number;
+  pendingPath: string;
+  profile: StyleProfile;
+  revise: ReviseResult;
+}
+
+export interface PrivateStyleApplyResult {
+  book: PrivateBook;
+  chapter: number;
+  profileId: string;
+  profileName: string;
+  chapterPath: string;
+  draftBackupPath: string | null;
+}
+
 export interface PrivatePendingFeedback {
   book_id: string;
   chapter: number;
   text: string;
   instruction: string;
   created_at: string;
+}
+
+export interface PrivatePendingStyleRewrite {
+  version: 1;
+  book_id: string;
+  chapter: number;
+  profile_id: string;
+  profile_name: string;
+  intent: PrivateStyleRewriteIntent;
+  text: string;
+  instruction: string;
+  created_at: string;
+  original_hash: string;
+  preview_content: string;
+  rationale: string;
+  original_char_count: number;
+  revised_char_count: number | null;
 }
 
 type SetupIo = { stdout: (message: string) => void };
@@ -257,6 +294,105 @@ export async function applyPrivateFeedback(root: string, opts: {
   return { book, chapter: pending.chapter, revise };
 }
 
+export async function previewPrivateStyleRewrite(root: string, opts: {
+  chapter?: number | 'latest';
+  intent: PrivateStyleRewriteIntent;
+  text?: string;
+  llm: LlmClient;
+  now?: Date;
+}): Promise<PrivateStyleRewriteResult> {
+  const resolvedRoot = resolve(root);
+  const shelf = await loadPrivateShelf(resolvedRoot);
+  const book = currentBook(shelf);
+  const projectDir = bookDir(resolvedRoot, book);
+  const style = await readStyleBinding(resolvedRoot, projectDir);
+  if (!style) throw new AuthorOsError('No style profile bound to the current private book.');
+
+  const chapter = opts.chapter === undefined || opts.chapter === 'latest'
+    ? await latestChapter(projectDir)
+    : opts.chapter;
+  const chapterId = formatChapterNumber(chapter);
+  const chapterPath = join(projectDir, 'chapters', `${chapterId}.md`);
+  const originalContent = await readFile(chapterPath, 'utf8');
+  const instruction = buildPrivateStyleRewriteInstruction(chapter, style.profile, opts.intent, opts.text ?? '');
+
+  await ensurePrivateReviewPlaceholder(projectDir, chapter, opts.now);
+  const revise = await reviseChapter(projectDir, {
+    chapter,
+    llm: opts.llm,
+    now: opts.now,
+    write: false,
+    instruction,
+  });
+  if (!revise.previewContent) {
+    throw new AuthorOsError('Style rewrite did not produce a changed preview.');
+  }
+
+  const pending: PrivatePendingStyleRewrite = {
+    version: 1,
+    book_id: book.id,
+    chapter,
+    profile_id: style.profile.id,
+    profile_name: style.profile.name,
+    intent: opts.intent,
+    text: (opts.text ?? '').trim(),
+    instruction,
+    created_at: (opts.now ?? new Date()).toISOString(),
+    original_hash: sha256(originalContent),
+    preview_content: revise.previewContent,
+    rationale: revise.rationale,
+    original_char_count: revise.originalCharCount,
+    revised_char_count: revise.revisedCharCount,
+  };
+  const pendingPath = await writePendingStyleRewrite(projectDir, pending);
+  await touchCurrentBook(resolvedRoot, shelf, book, opts.now);
+  return { book, chapter, pendingPath, profile: style.profile, revise };
+}
+
+export async function applyPrivateStyleRewrite(root: string, opts: {
+  now?: Date;
+} = {}): Promise<PrivateStyleApplyResult> {
+  const resolvedRoot = resolve(root);
+  const shelf = await loadPrivateShelf(resolvedRoot);
+  const book = currentBook(shelf);
+  const projectDir = bookDir(resolvedRoot, book);
+  const pendingPath = pendingStyleRewritePath(projectDir);
+  const pending = parsePendingStyleRewrite(await readFile(pendingPath, 'utf8'));
+  if (pending.book_id !== book.id) {
+    throw new AuthorOsError(`Pending style rewrite belongs to "${pending.book_id}", but current book is "${book.id}".`);
+  }
+
+  const chapterId = formatChapterNumber(pending.chapter);
+  const relativeChapterPath = `chapters/${chapterId}.md`;
+  const relativeBackupPath = `chapters/${chapterId}.draft.md`;
+  const chapterPath = join(projectDir, relativeChapterPath);
+  const currentContent = await readFile(chapterPath, 'utf8');
+  if (sha256(currentContent) !== pending.original_hash) {
+    throw new AuthorOsError('Current chapter has changed since the style rewrite preview was created. Generate a new style rewrite preview before applying.');
+  }
+
+  const backupPath = join(projectDir, relativeBackupPath);
+  let draftBackupPath: string | null = null;
+  if (!await fileExists(backupPath)) {
+    await mkdir(join(projectDir, chaptersDirectory()), { recursive: true });
+    await copyFile(chapterPath, backupPath);
+    draftBackupPath = relativeBackupPath;
+  } else {
+    draftBackupPath = relativeBackupPath;
+  }
+  await writeFile(chapterPath, pending.preview_content, 'utf8');
+  await unlink(pendingPath);
+  await touchCurrentBook(resolvedRoot, shelf, book, opts.now);
+  return {
+    book,
+    chapter: pending.chapter,
+    profileId: pending.profile_id,
+    profileName: pending.profile_name,
+    chapterPath: relativeChapterPath,
+    draftBackupPath,
+  };
+}
+
 export function renderPrivateNewResult(result: PrivateNewResult): string {
   return [
     `Private Author: new book ${result.book.id}`,
@@ -338,6 +474,28 @@ export function renderPrivateApplyResult(result: PrivateApplyResult): string {
     renderReviseResult(result.revise).trimEnd(),
     '',
   ].join('\n');
+}
+
+export function renderPrivateStyleRewriteResult(result: PrivateStyleRewriteResult): string {
+  return [
+    `Private Author: style rewrite preview ${result.book.id} chapter ${result.chapter}`,
+    `profile: ${result.profile.name} (${result.profile.id})`,
+    `pending: ${result.pendingPath}`,
+    '',
+    renderReviseResult(result.revise).trimEnd(),
+    '',
+  ].join('\n');
+}
+
+export function renderPrivateStyleApplyResult(result: PrivateStyleApplyResult): string {
+  const lines = [
+    `Private Author: style rewrite applied ${result.book.id} chapter ${result.chapter}`,
+    `profile: ${result.profileName} (${result.profileId})`,
+    `path: ${result.chapterPath}`,
+  ];
+  if (result.draftBackupPath) lines.push(`draft backup: ${result.draftBackupPath}`);
+  lines.push('');
+  return lines.join('\n');
 }
 
 function firstLine(value: string): string {
@@ -476,6 +634,51 @@ function buildPrivateFeedbackInstruction(chapter: number, text: string): string 
   ].join('\n');
 }
 
+function buildPrivateStyleRewriteInstruction(
+  chapter: number,
+  profile: StyleProfile,
+  intent: PrivateStyleRewriteIntent,
+  text: string,
+): string {
+  return [
+    `Private style rewrite for chapter ${chapter}:`,
+    `intent: ${intent}`,
+    `style_profile: ${profile.name} (${profile.id})`,
+    profile.description ? `style_description: ${profile.description}` : '',
+    '',
+    'style_rules:',
+    ...renderStyleRules(profile),
+    '',
+    'author_request:',
+    text.trim() || defaultStyleRewriteRequest(intent),
+    '',
+    'Rewrite the chapter as a preview only.',
+    'Preserve plot beats, canon facts, character decisions, scene order, and ending hook.',
+    'Apply only high-level style characteristics; do not copy distinctive sentences from reference text.',
+    'Remove AI-like smoothness by using concrete scene evidence, uneven human cadence, and fewer generic summaries.',
+  ].filter(Boolean).join('\n');
+}
+
+function renderStyleRules(profile: StyleProfile): string[] {
+  return [
+    ...profile.rules.sentenceRhythm.map((rule) => `- sentence rhythm: ${rule}`),
+    ...profile.rules.paragraphDensity.map((rule) => `- paragraph density: ${rule}`),
+    ...profile.rules.dialogue.map((rule) => `- dialogue: ${rule}`),
+    ...profile.rules.narrativeDistance.map((rule) => `- narrative distance: ${rule}`),
+    ...profile.rules.sensoryDetail.map((rule) => `- sensory detail: ${rule}`),
+    ...profile.rules.imagery.map((rule) => `- imagery: ${rule}`),
+    ...profile.rules.pacing.map((rule) => `- pacing: ${rule}`),
+    ...profile.rules.avoid.map((rule) => `- avoid: ${rule}`),
+    ...profile.rules.antiAiVoice.map((rule) => `- anti-AI voice: ${rule}`),
+  ];
+}
+
+function defaultStyleRewriteRequest(intent: PrivateStyleRewriteIntent): string {
+  if (intent === 'imitate_style') return 'Preserve the story content while moving the prose toward the bound style profile.';
+  if (intent === 'remove_ai_voice') return 'Remove AI-like phrasing while preserving the chapter content.';
+  return 'Polish the chapter according to the bound style profile.';
+}
+
 async function ensurePrivateReviewPlaceholder(projectDir: string, chapter: number, now?: Date): Promise<void> {
   const chapterId = formatChapterNumber(chapter);
   const reviewDir = join(projectDir, 'reviews');
@@ -505,6 +708,18 @@ function pendingFeedbackPath(projectDir: string): string {
   return join(projectDir, '.authoros/private/pending-feedback.json');
 }
 
+async function writePendingStyleRewrite(projectDir: string, pending: PrivatePendingStyleRewrite): Promise<string> {
+  const dir = join(projectDir, '.authoros/private');
+  await mkdir(dir, { recursive: true });
+  const path = pendingStyleRewritePath(projectDir);
+  await writeFile(path, `${JSON.stringify(pending, null, 2)}\n`, 'utf8');
+  return '.authoros/private/pending-style-rewrite.json';
+}
+
+function pendingStyleRewritePath(projectDir: string): string {
+  return join(projectDir, '.authoros/private/pending-style-rewrite.json');
+}
+
 function parsePendingFeedback(raw: string): PrivatePendingFeedback {
   let parsed: unknown;
   try {
@@ -527,6 +742,68 @@ function parsePendingFeedback(raw: string): PrivatePendingFeedback {
     instruction: stringField(value, 'instruction'),
     created_at: stringField(value, 'created_at'),
   };
+}
+
+function parsePendingStyleRewrite(raw: string): PrivatePendingStyleRewrite {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new AuthorOsError('Invalid pending style rewrite JSON.');
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    throw new AuthorOsError('Invalid pending style rewrite.');
+  }
+  const value = parsed as Record<string, unknown>;
+  const chapter = value.chapter;
+  const version = value.version;
+  const revisedCharCount = value.revised_char_count;
+  if (version !== 1) throw new AuthorOsError('Invalid pending style rewrite version.');
+  if (!Number.isInteger(chapter) || (chapter as number) < 1) {
+    throw new AuthorOsError('Invalid pending style rewrite chapter.');
+  }
+  if (!isStyleRewriteIntent(value.intent)) {
+    throw new AuthorOsError('Invalid pending style rewrite intent.');
+  }
+  if (revisedCharCount !== null && !Number.isInteger(revisedCharCount)) {
+    throw new AuthorOsError('Invalid pending style rewrite revised_char_count.');
+  }
+  const originalCharCount = value.original_char_count;
+  if (!Number.isInteger(originalCharCount)) {
+    throw new AuthorOsError('Invalid pending style rewrite original_char_count.');
+  }
+  const originalHash = stringField(value, 'original_hash');
+  if (!/^[a-f0-9]{64}$/.test(originalHash)) {
+    throw new AuthorOsError('Invalid pending style rewrite original_hash.');
+  }
+  return {
+    version: 1,
+    book_id: stringField(value, 'book_id'),
+    chapter: chapter as number,
+    profile_id: stringField(value, 'profile_id'),
+    profile_name: stringField(value, 'profile_name'),
+    intent: value.intent,
+    text: stringField(value, 'text'),
+    instruction: stringField(value, 'instruction'),
+    created_at: stringField(value, 'created_at'),
+    original_hash: originalHash,
+    preview_content: stringField(value, 'preview_content'),
+    rationale: stringField(value, 'rationale'),
+    original_char_count: originalCharCount as number,
+    revised_char_count: revisedCharCount as number | null,
+  };
+}
+
+function isStyleRewriteIntent(value: unknown): value is PrivateStyleRewriteIntent {
+  return value === 'imitate_style' || value === 'remove_ai_voice' || value === 'style_polish';
+}
+
+function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+function chaptersDirectory(): string {
+  return 'chapters';
 }
 
 async function fileExists(path: string): Promise<boolean> {

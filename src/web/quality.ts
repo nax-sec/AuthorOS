@@ -37,6 +37,23 @@ export interface QualityPendingPreview {
   path: string;
 }
 
+export type QualityStyleRewriteIntent = 'imitate_style' | 'remove_ai_voice' | 'style_polish';
+
+export interface QualityStyleRewritePreview {
+  kind: 'style_rewrite';
+  chapter: number;
+  profileId: string;
+  profileName: string;
+  intent: QualityStyleRewriteIntent;
+  text: string;
+  instruction: string;
+  createdAt: string;
+  rationale: string;
+  originalCharCount: number;
+  revisedCharCount: number | null;
+  path: string;
+}
+
 export interface QualityRecovery {
   jobId: string;
   action: string;
@@ -59,6 +76,7 @@ export interface QualityOverview {
   nextChapter: QualityNextChapterCard;
   chapters: QualityChapter[];
   pendingPreview: QualityPendingPreview | null;
+  styleRewritePreview: QualityStyleRewritePreview | null;
   memoryDeltas: PendingMemoryDelta[];
   recovery: QualityRecovery | null;
   signals: QualitySignal[];
@@ -82,6 +100,7 @@ export async function getQualityOverview(
   style?: QualityStyleStatus,
 ): Promise<QualityOverview> {
   const pendingPreview = await readPendingFeedback(projectDir);
+  const styleRewritePreview = await readPendingStyleRewrite(projectDir);
   const memoryDeltas = await listMemoryDeltas(projectDir);
   const chapters = state.chapters.map((chapter) => renderChapter(chapter, state, memoryDeltas));
   const nextChapter = deriveNextChapter(state, memoryDeltas);
@@ -91,9 +110,10 @@ export async function getQualityOverview(
     nextChapter,
     chapters,
     pendingPreview,
+    styleRewritePreview,
     memoryDeltas,
     recovery,
-    signals: deriveSignals({ pendingPreview, memoryDeltas, recovery, style }),
+    signals: deriveSignals({ pendingPreview, styleRewritePreview, memoryDeltas, recovery, style }),
   };
 }
 
@@ -192,6 +212,7 @@ function recoverySuggestion(action: string): string {
 
 function deriveSignals(input: {
   pendingPreview: QualityPendingPreview | null;
+  styleRewritePreview: QualityStyleRewritePreview | null;
   memoryDeltas: readonly PendingMemoryDelta[];
   recovery: QualityRecovery | null;
   style?: QualityStyleStatus;
@@ -199,6 +220,7 @@ function deriveSignals(input: {
   const signals: QualitySignal[] = [];
   if (input.recovery) signals.push({ kind: 'danger', label: `上次任务失败：${input.recovery.failedPhase}` });
   if (input.pendingPreview) signals.push({ kind: 'warning', label: `第 ${input.pendingPreview.chapter} 章有修改预览待确认` });
+  if (input.styleRewritePreview) signals.push({ kind: 'warning', label: `第 ${input.styleRewritePreview.chapter} 章有文风改写预览待确认` });
   if (input.memoryDeltas.length > 0) signals.push({ kind: 'warning', label: `记忆更新待审阅：${input.memoryDeltas.length} 个` });
   if (input.style) {
     if (input.style.binding && input.style.currentProfile) {
@@ -253,6 +275,64 @@ async function readPendingFeedback(projectDir: string): Promise<QualityPendingPr
     createdAt: parsed.created_at,
     path: '.authoros/private/pending-feedback.json',
   };
+}
+
+async function readPendingStyleRewrite(projectDir: string): Promise<QualityStyleRewritePreview | null> {
+  const path = join(projectDir, '.authoros/private/pending-style-rewrite.json');
+  let raw: string;
+  try {
+    raw = await readFile(path, 'utf8');
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('Invalid pending style rewrite JSON.');
+  }
+
+  if (
+    !isRecord(parsed)
+    || parsed.version !== 1
+    || !Number.isInteger(parsed.chapter)
+    || parsed.chapter < 1
+    || typeof parsed.profile_id !== 'string'
+    || typeof parsed.profile_name !== 'string'
+    || !isStyleRewriteIntent(parsed.intent)
+    || typeof parsed.text !== 'string'
+    || typeof parsed.instruction !== 'string'
+    || typeof parsed.created_at !== 'string'
+    || typeof parsed.rationale !== 'string'
+    || !Number.isInteger(parsed.original_char_count)
+    || parsed.original_char_count < 0
+    || !(parsed.revised_char_count === null || (Number.isInteger(parsed.revised_char_count) && parsed.revised_char_count >= 0))
+  ) {
+    throw new Error('Invalid pending style rewrite.');
+  }
+
+  return {
+    kind: 'style_rewrite',
+    chapter: parsed.chapter,
+    profileId: parsed.profile_id,
+    profileName: parsed.profile_name,
+    intent: parsed.intent,
+    text: parsed.text,
+    instruction: parsed.instruction,
+    createdAt: parsed.created_at,
+    rationale: parsed.rationale,
+    originalCharCount: parsed.original_char_count,
+    revisedCharCount: parsed.revised_char_count,
+    path: '.authoros/private/pending-style-rewrite.json',
+  };
+}
+
+function isStyleRewriteIntent(value: unknown): value is QualityStyleRewriteIntent {
+  return value === 'imitate_style' || value === 'remove_ai_voice' || value === 'style_polish';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

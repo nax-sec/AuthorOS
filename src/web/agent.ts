@@ -7,6 +7,8 @@ export type WebAgentAction =
   | 'read_chapter'
   | 'feedback_preview'
   | 'feedback_apply'
+  | 'style_rewrite_preview'
+  | 'style_rewrite_apply'
   | 'download_current_chapter'
   | 'download_all_chapters'
   | 'status'
@@ -42,9 +44,13 @@ export type WebAgentCommand =
   | { type: 'read'; chapter: 'latest' }
   | { type: 'feedback'; chapter: 'latest'; text: string }
   | { type: 'apply' }
+  | { type: 'style_rewrite'; chapter: 'latest'; intent: StyleRewriteIntent; text: string }
+  | { type: 'style_apply' }
   | { type: 'download_chapter'; chapter: 'latest' }
   | { type: 'download_all' }
   | { type: 'status' };
+
+export type StyleRewriteIntent = 'imitate_style' | 'remove_ai_voice' | 'style_polish';
 
 export function createWebAgentSession(): WebAgentSession {
   return {};
@@ -58,6 +64,18 @@ export function handleAgentMessage(session: WebAgentSession, rawMessage: string)
     return handlePendingNewBook(session, message);
   }
 
+  if (isStyleApply(message)) {
+    return job('style_rewrite_apply', '收到，我开始应用这次文风修改。会先读取待确认预览，再覆盖当前章。', { type: 'style_apply' });
+  }
+  const styleIntent = getStyleRewriteIntent(message);
+  if (styleIntent) {
+    return job('style_rewrite_preview', '收到，我先生成文风改写预览，不会直接覆盖正文。', {
+      type: 'style_rewrite',
+      chapter: 'latest',
+      intent: styleIntent,
+      text: message,
+    });
+  }
   if (isApply(message)) {
     return job('feedback_apply', '收到，我开始应用这次修改。会先读取待确认反馈，再覆盖当前章。', { type: 'apply' });
   }
@@ -163,6 +181,17 @@ function isRead(message: string): boolean {
 
 function isApply(message: string): boolean {
   return /确认应用|应用修改|覆盖吧|可以应用|确认修改/.test(message);
+}
+
+function isStyleApply(message: string): boolean {
+  return /确认应用文风修改|应用文风修改|应用这次文风/.test(message);
+}
+
+function getStyleRewriteIntent(message: string): StyleRewriteIntent | null {
+  if (/去\s*AI\s*味|去ai味|AI味/i.test(message)) return 'remove_ai_voice';
+  if (/仿写文风/.test(message)) return 'imitate_style';
+  if (/文风改写|按文风润色/.test(message)) return 'style_polish';
+  return null;
 }
 
 function isDownloadCurrent(message: string): boolean {

@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../src/cli.ts';
+import { reviseChapter } from '../src/commands/revise.ts';
 import type { LlmClient } from '../src/core/llm.ts';
 
 async function withReviewedChapter(body: (cwd: string) => Promise<void>): Promise<void> {
@@ -150,6 +151,78 @@ test('revise --instruction forces a directive-driven revision', async () => {
     const revised = await readFile(join(cwd, 'chapters/0001.md'), 'utf8');
     assert.match(revised, /精神焚烧/);
     assert.match(io.out.join(''), /changed: yes/);
+  });
+});
+
+test('revise preview exposes wrapped revised chapter without writing', async () => {
+  await withReviewedChapter(async (cwd) => {
+    const before = await readFile(join(cwd, 'chapters/0001.md'), 'utf8');
+    const reply = [
+      'REVISION_NEEDED: yes',
+      'rationale:',
+      '- 按导演席指令去掉模板腔',
+      '---',
+      '正文第一段更自然。',
+      '',
+      '正文第二段保留动作,删掉空泛总结。',
+      '',
+      '正文第三段。结尾钩子',
+    ].join('\n');
+
+    const io = silentIo();
+    assert.equal(
+      await run([
+        'revise',
+        '--chapter',
+        '1',
+        '--model',
+        '--instruction',
+        '去掉模板腔,保留剧情',
+      ], cwd, io.io, {
+        env: { OPENAI_API_KEY: 'k', AUTHOROS_MODEL: 'm' }, llm: fakeLlm(reply),
+      }),
+      0,
+      io.err.join(''),
+    );
+    const afterPreviewRun = await readFile(join(cwd, 'chapters/0001.md'), 'utf8');
+    assert.equal(afterPreviewRun, before);
+
+    const result = await reviseChapter(cwd, {
+      chapter: 1,
+      llm: fakeLlm(reply),
+      instruction: '去掉模板腔,保留剧情',
+      now: new Date('2026-05-18T00:00:00.000Z'),
+    });
+
+    assert.equal(result.written, false);
+    assert.equal(result.previewContent, [
+      '# 章节 1',
+      '',
+      '> generated: 2026-05-18T00:00:00.000Z',
+      '> agent: chief-writer (revise)',
+      '> source: model',
+      '> rationale_summary: - 按导演席指令去掉模板腔',
+      '',
+      '正文第一段更自然。',
+      '',
+      '正文第二段保留动作,删掉空泛总结。',
+      '',
+      '正文第三段。结尾钩子',
+      '',
+    ].join('\n'));
+    const afterDirectPreview = await readFile(join(cwd, 'chapters/0001.md'), 'utf8');
+    assert.equal(afterDirectPreview, before);
+
+    const writtenResult = await reviseChapter(cwd, {
+      chapter: 1,
+      llm: fakeLlm(reply),
+      instruction: '去掉模板腔,保留剧情',
+      now: new Date('2026-05-18T00:01:00.000Z'),
+      write: true,
+    });
+    const writtenChapter = await readFile(join(cwd, 'chapters/0001.md'), 'utf8');
+    assert.equal(writtenResult.written, true);
+    assert.equal(writtenResult.previewContent, writtenChapter);
   });
 });
 

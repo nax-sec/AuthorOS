@@ -65,3 +65,36 @@ test('common private author intents route to expected actions', () => {
   assert.match(feedback.command.text, /主角太冷/);
 });
 
+test('style rewrite phrases route to preview command', () => {
+  const cases = [
+    ['去 AI 味', 'remove_ai_voice'],
+    ['这章去ai味', 'remove_ai_voice'],
+    ['AI味太重了', 'remove_ai_voice'],
+    ['文风改写一下', 'style_polish'],
+    ['仿写文风处理这一章', 'imitate_style'],
+    ['按文风润色最新章', 'style_polish'],
+  ] as const;
+
+  for (const [message, intent] of cases) {
+    const result = handleAgentMessage(createWebAgentSession(), message);
+
+    assert.equal(result.kind, 'job');
+    assert.equal(result.action, 'style_rewrite_preview');
+    assert.equal(result.command.type, 'style_rewrite');
+    assert.equal(result.command.chapter, 'latest');
+    assert.equal(result.command.intent, intent);
+    assert.equal(result.command.text, message);
+  }
+});
+
+test('style apply phrases route to style apply command', () => {
+  const cases = ['确认应用文风修改', '应用文风修改', '应用这次文风'];
+
+  for (const message of cases) {
+    const result = handleAgentMessage(createWebAgentSession(), message);
+
+    assert.equal(result.kind, 'job');
+    assert.equal(result.action, 'style_rewrite_apply');
+    assert.equal(result.command.type, 'style_apply');
+  }
+});

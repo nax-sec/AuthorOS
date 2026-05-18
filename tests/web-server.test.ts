@@ -1,12 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createWebServer } from '../src/web/server.ts';
 import { saveWebJobHistory } from '../src/web/job-persistence.ts';
 import type { WebJob } from '../src/web/jobs.ts';
 import { run } from '../src/cli.ts';
+import { bindStyleProfile, createStyleProfileFromText, saveStyleProfile } from '../src/commands/style.ts';
+import type { LlmClient } from '../src/core/llm.ts';
 
 async function withTempRoot(body: (root: string) => Promise<void>): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), 'authoros-web-server-'));
@@ -21,6 +23,82 @@ async function writeInvalidJobHistory(root: string): Promise<void> {
   const dir = join(root, '.authoros', 'web');
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, 'jobs.json'), '{ invalid json', 'utf8');
+}
+
+function silentIo() {
+  const out: string[] = [];
+  const err: string[] = [];
+  return {
+    io: {
+      stdout: (message: string) => out.push(message),
+      stderr: (message: string) => err.push(message),
+    },
+    out,
+    err,
+  };
+}
+
+function fakeStyleRewriteLlm(): LlmClient {
+  return {
+    async generate(prompt) {
+      if (!prompt.includes('REVISE_CHAPTER')) throw new Error(`unexpected prompt: ${prompt.slice(0, 80)}`);
+      return [
+        'REVISION_NEEDED: yes',
+        'rationale:',
+        '- 去掉平滑总结,保留案卷冷幽默',
+        '---',
+        '陆漪坐在旧木桌前,闻到羊皮纸和冷茶混在一起。',
+        '',
+        '她翻到表格第十七页,发现茶杯竟然要签署自愿繁殖声明。',
+        '',
+        '她没有笑,只把那枚未登记签名圈了起来。',
+      ].join('\n');
+    },
+  };
+}
+
+async function writeStyleReadyBook(root: string): Promise<void> {
+  const io = silentIo();
+  assert.equal(await run(['init', 'Demo Book', '--quick', '--dir', join(root, 'books/demo')], root, io.io, { env: {} }), 0, io.err.join(''));
+  await writeFile(join(root, 'bookshelf.json'), JSON.stringify({
+    version: 1,
+    current: 'demo',
+    books: [{
+      id: 'demo',
+      title: 'Demo Book',
+      concept: 'style rewrite server test',
+      path: 'books/demo',
+      created_at: '2026-05-18T00:00:00.000Z',
+      last_active_at: '2026-05-18T00:00:00.000Z',
+    }],
+  }, null, 2), 'utf8');
+  await writeFile(join(root, 'books/demo/plans/0001.md'), '# 章节计划\n\n第 1 章。', 'utf8');
+  await writeFile(join(root, 'books/demo/chapters/0001.md'), [
+    '# 章节 1',
+    '',
+    '> generated: 2026-05-18T00:00:00.000Z',
+    '> agent: chief-writer',
+    '> source: model',
+    '',
+    '陆漪坐在旧木桌前,闻到羊皮纸和冷茶的味道。',
+    '',
+    '她翻开自动繁殖茶杯案,很快看见频率记录和魔力枯竭曲线对不上。',
+    '',
+    '她没有立刻指出问题,只是把那枚未登记签名圈了起来。',
+  ].join('\n'), 'utf8');
+  await writeFile(join(root, 'books/demo/reviews/0001.internal.md'), '# 内部评审\n\n## 编辑决议\n可按文风润色。', 'utf8');
+  const profile = createStyleProfileFromText(root, {
+    name: '雨夜冷调',
+    text: [
+      '雨从旧楼的檐角垂下来，像一串没说完的话。林岚把伞收在门外，先听见楼道深处的水声，然后才看见门缝里透出的灯。',
+      '她没有立刻敲门。她习惯先把现场的呼吸数一遍：电梯停在三楼，窗台上有半枚烟灰，墙面新刷过，却盖不住潮气。',
+      '“你迟到了。”门内的人说。',
+      '“我在等你决定要不要撒谎。”林岚回答。她的语气很轻，像把刀背放在桌上，没有声响，却让人知道刀还在那里。',
+      '房间里没有多余的家具。一张桌，一盏灯，一只杯口裂开的白瓷杯。她闻到冷茶、灰尘和某种廉价香水混在一起。',
+    ].join('\n\n'),
+  });
+  await saveStyleProfile(root, profile);
+  await bindStyleProfile(root, join(root, 'books/demo'), profile.id, new Date('2026-05-18T01:00:00Z'));
 }
 
 async function waitForJob(
@@ -277,6 +355,54 @@ test('web server exposes job history', async () => {
     assert.equal(jobs.status, 200);
     assert.equal(body.jobs.length, 1);
     assert.equal(body.jobs[0].action, 'read_chapter');
+  });
+});
+
+test('web server runs style rewrite preview and apply jobs', async () => {
+  await withTempRoot(async (root) => {
+    await writeStyleReadyBook(root);
+    const server = createWebServer({
+      root,
+      agentMode: 'rule',
+      writingLlm: fakeStyleRewriteLlm(),
+      env: { OPENAI_API_KEY: 'k', AUTHOROS_MODEL: 'm' },
+    });
+
+    const preview = await server.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '去 AI 味，保留案卷冷幽默' }),
+    }));
+    const previewBody = await preview.json();
+
+    assert.equal(preview.status, 200);
+    assert.equal(previewBody.action, 'style_rewrite_preview');
+    assert.equal(previewBody.command.type, 'style_rewrite');
+    await waitForJob(server, 'http://local/api/jobs');
+    await stat(join(root, 'books/demo/.authoros/private/pending-style-rewrite.json'));
+
+    let jobsResponse = await server.fetch(new Request('http://local/api/jobs'));
+    let jobs = await jobsResponse.json();
+    assert.equal(jobs.jobs[0].status, 'completed');
+    assert.equal(jobs.jobs[0].events.some((event: { type: string }) => event.type === 'style_check'), true);
+
+    const apply = await server.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '应用文风修改' }),
+    }));
+    const applyBody = await apply.json();
+
+    assert.equal(apply.status, 200);
+    assert.equal(applyBody.action, 'style_rewrite_apply');
+    assert.equal(applyBody.command.type, 'style_apply');
+    await waitForJob(server, 'http://local/api/jobs');
+
+    jobsResponse = await server.fetch(new Request('http://local/api/jobs'));
+    jobs = await jobsResponse.json();
+    assert.equal(jobs.jobs[0].status, 'completed');
+    assert.equal(jobs.jobs[0].events.some((event: { type: string }) => event.type === 'style_apply'), true);
+    const chapter = await readFile(join(root, 'books/demo/chapters/0001.md'), 'utf8');
+    assert.match(chapter, /自愿繁殖声明/);
+    await assert.rejects(() => stat(join(root, 'books/demo/.authoros/private/pending-style-rewrite.json')));
   });
 });
 

@@ -11,12 +11,14 @@ import { buildChaptersZip, readChapterDownload, type DownloadResult } from './do
 import { handleAgentMessageWithLlm, type WebAgentMode } from './agent-llm.ts';
 import {
   applyPrivateFeedback,
+  applyPrivateStyleRewrite,
   continuePrivateBook,
   createPrivateBook,
   getCurrentPrivateBook,
   getPrivateStatus,
   listPrivateBooks,
   previewPrivateFeedback,
+  previewPrivateStyleRewrite,
   readPrivateChapter,
   switchPrivateBook,
   type PrivateShelf,
@@ -35,6 +37,7 @@ export interface CreateWebServerOptions {
   privateApi?: PrivateWebApi;
   agentMode?: WebAgentMode;
   agentLlm?: LlmClient;
+  writingLlm?: LlmClient;
 }
 
 interface WebRoom {
@@ -110,7 +113,7 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
         const result = await resolveAgentMessage({ ...options, root }, runtime.session, body.message ?? '', env);
         if (result.kind === 'reply') return json(result);
         const job = runtime.jobs.createJob(result.action, result.message);
-        void runCommandJob(root, result.command, runtime.jobs, job.id, env);
+        void runCommandJob(root, result.command, runtime.jobs, job.id, env, options.writingLlm);
         return json({ ...result, jobId: job.id });
       }
       const jobEventsMatch = routePath.match(/^\/api\/jobs\/([^/]+)\/events$/);
@@ -264,6 +267,7 @@ async function runCommandJob(
   jobs: ReturnType<typeof createJobStore>,
   jobId: string,
   env: EnvLike,
+  writingLlm?: LlmClient,
 ): Promise<void> {
   try {
     if (command.type === 'new_book') {
@@ -292,16 +296,34 @@ async function runCommandJob(
     }
     if (command.type === 'feedback') {
       jobs.append(jobId, 'revision_preview', '正在生成修改预览');
-      const llm = await createClientForCurrentBook(root, env);
+      const llm = writingLlm ?? await createClientForCurrentBook(root, env);
       const result = await previewPrivateFeedback(root, { chapter: command.chapter, text: command.text, llm });
       jobs.complete(jobId, { book: result.book, chapter: result.chapter, pending: result.pendingPath });
       return;
     }
     if (command.type === 'apply') {
       jobs.append(jobId, 'applying', '正在应用待确认修改');
-      const llm = await createClientForCurrentBook(root, env);
+      const llm = writingLlm ?? await createClientForCurrentBook(root, env);
       const result = await applyPrivateFeedback(root, { llm });
       jobs.complete(jobId, { book: result.book, chapter: result.chapter });
+      return;
+    }
+    if (command.type === 'style_rewrite') {
+      jobs.append(jobId, 'style_check', '正在生成文风改写预览');
+      const llm = writingLlm ?? await createClientForCurrentBook(root, env);
+      const result = await previewPrivateStyleRewrite(root, {
+        chapter: command.chapter,
+        intent: command.intent,
+        text: command.text,
+        llm,
+      });
+      jobs.complete(jobId, { book: result.book, chapter: result.chapter, pending: result.pendingPath, profile: result.profile.id });
+      return;
+    }
+    if (command.type === 'style_apply') {
+      jobs.append(jobId, 'style_apply', '正在应用文风改写预览');
+      const result = await applyPrivateStyleRewrite(root);
+      jobs.complete(jobId, { book: result.book, chapter: result.chapter, profile: result.profileId });
       return;
     }
     if (command.type === 'read') {

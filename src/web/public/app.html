@@ -336,7 +336,25 @@
         previewMeta.className = 'muted';
         previewMeta.textContent = `${quality.pendingPreview.instruction} · ${quality.pendingPreview.createdAt}`;
         pendingPreview.append(previewTitle, previewText, previewMeta);
-      } else {
+      }
+
+      if (quality.styleRewritePreview) {
+        const stylePreview = quality.styleRewritePreview;
+        const styleTitle = document.createElement('div');
+        styleTitle.className = 'book-title';
+        styleTitle.textContent = `第 ${stylePreview.chapter} 章文风改写预览`;
+        const styleText = document.createElement('div');
+        styleText.textContent = `${stylePreview.profileName} · ${styleRewriteIntentLabel(stylePreview.intent)}`;
+        const styleMeta = document.createElement('div');
+        styleMeta.className = 'muted';
+        styleMeta.textContent = `${stylePreview.rationale || stylePreview.text} · ${stylePreview.createdAt}`;
+        const applyButton = document.createElement('button');
+        applyButton.textContent = '应用文风修改';
+        applyButton.addEventListener('click', () => sendMessage('应用文风修改').catch(error => addMessage(`失败：${error.message}`, false, true)));
+        pendingPreview.append(styleTitle, styleText, styleMeta, applyButton);
+      }
+
+      if (!quality.pendingPreview && !quality.styleRewritePreview) {
         pendingPreview.textContent = '没有待确认预览。';
       }
 
@@ -411,12 +429,23 @@
       return '查看失败原因后，重新执行上一步。';
     }
 
+    function styleRewriteIntentLabel(intent) {
+      const labels = {
+        imitate_style: '仿写文风',
+        remove_ai_voice: '去 AI 味',
+        style_polish: '文风润色',
+      };
+      return labels[intent] || '文风改写';
+    }
+
     function jobActionLabel(action) {
       const labels = {
         read_chapter: '读取章节',
         continue_book: '继续写作',
         feedback_preview: '生成修改预览',
         feedback_apply: '应用修改',
+        style_rewrite_preview: '生成文风改写预览',
+        style_rewrite_apply: '应用文风修改',
         new_book_confirmed: '创建新书',
         create_book_and_continue: '创建并续写',
         download_current_chapter: '下载当前章',
@@ -434,6 +463,8 @@
         failed: '失败',
         revision_preview: '生成修改预览',
         applying: '应用修改',
+        style_check: '生成文风改写预览',
+        style_apply: '应用文风修改',
         interrupted: '任务中断',
       };
       return labels[phase] || phase;

@@ -105,6 +105,44 @@ test('quality overview reports pending feedback preview without applying it', as
   });
 });
 
+test('quality overview reports pending style rewrite preview metadata', async () => {
+  await withTempBook(async (bookDir) => {
+    await writeFile(join(bookDir, 'plans/0001.md'), 'plan one', 'utf8');
+    await writeFile(join(bookDir, 'chapters/0001.md'), 'draft one', 'utf8');
+    await mkdir(join(bookDir, '.authoros/private'), { recursive: true });
+    await writeFile(join(bookDir, '.authoros/private/pending-style-rewrite.json'), JSON.stringify({
+      version: 1,
+      book_id: 'demo',
+      chapter: 1,
+      profile_id: 'rain-night-12345678',
+      profile_name: '雨夜冷调',
+      intent: 'remove_ai_voice',
+      text: '去掉 AI 味',
+      instruction: 'remove ai voice for chapter 1',
+      created_at: '2026-05-18T08:00:00.000Z',
+      original_hash: 'abc123',
+      preview_content: '# 第 1 章\n\n改写后的正文',
+      rationale: '减少模板化表达',
+      original_char_count: 9,
+      revised_char_count: 12,
+    }), 'utf8');
+    const state = await getProjectState(bookDir);
+
+    const overview = await getQualityOverview(bookDir, state, createJobStore());
+
+    assert.equal(overview.styleRewritePreview?.kind, 'style_rewrite');
+    assert.equal(overview.styleRewritePreview?.chapter, 1);
+    assert.equal(overview.styleRewritePreview?.profileName, '雨夜冷调');
+    assert.equal(overview.styleRewritePreview?.intent, 'remove_ai_voice');
+    assert.equal(overview.styleRewritePreview?.rationale, '减少模板化表达');
+    assert.equal(overview.styleRewritePreview?.revisedCharCount, 12);
+    assert.equal(
+      overview.signals.some((signal) => signal.kind === 'warning' && signal.label === '第 1 章有文风改写预览待确认'),
+      true,
+    );
+  });
+});
+
 test('quality overview rejects invalid pending feedback JSON distinctly', async () => {
   await withTempBook(async (bookDir) => {
     await mkdir(join(bookDir, '.authoros/private'), { recursive: true });

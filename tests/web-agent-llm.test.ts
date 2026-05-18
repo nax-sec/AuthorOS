@@ -64,6 +64,57 @@ test('llm agent can route vague feedback into feedback preview', async () => {
   assert.match(result.command.text, /不够有趣/);
 });
 
+test('llm prompt lists style rewrite actions', async () => {
+  let prompt = '';
+  const llm: LlmClient = {
+    async generate(input) {
+      prompt = input;
+      return JSON.stringify({
+        action: 'unknown',
+        message: '我不确定你要我做什么。',
+      });
+    },
+  };
+
+  await handleAgentMessageWithLlm(createWebAgentSession(), '看看状态', { mode: 'llm', llm });
+
+  assert.match(prompt, /style_rewrite_preview/);
+  assert.match(prompt, /style_rewrite_apply/);
+});
+
+test('llm agent can route style rewrite preview', async () => {
+  const result = await handleAgentMessageWithLlm(createWebAgentSession(), '去 AI 味', {
+    mode: 'llm',
+    llm: llmReturning(JSON.stringify({
+      action: 'style_rewrite_preview',
+      message: '收到，我先生成文风改写预览。',
+      intent: 'remove_ai_voice',
+      text: '去 AI 味',
+    })),
+  });
+
+  assert.equal(result.kind, 'job');
+  assert.equal(result.action, 'style_rewrite_preview');
+  assert.equal(result.command.type, 'style_rewrite');
+  assert.equal(result.command.chapter, 'latest');
+  assert.equal(result.command.intent, 'remove_ai_voice');
+  assert.equal(result.command.text, '去 AI 味');
+});
+
+test('llm agent can route style rewrite apply', async () => {
+  const result = await handleAgentMessageWithLlm(createWebAgentSession(), '确认应用文风修改', {
+    mode: 'llm',
+    llm: llmReturning(JSON.stringify({
+      action: 'style_rewrite_apply',
+      message: '收到，我应用这次文风修改。',
+    })),
+  });
+
+  assert.equal(result.kind, 'job');
+  assert.equal(result.action, 'style_rewrite_apply');
+  assert.equal(result.command.type, 'style_apply');
+});
+
 test('llm agent falls back to rules when model returns invalid json', async () => {
   const result = await handleAgentMessageWithLlm(createWebAgentSession(), '读最新章', {
     mode: 'llm',

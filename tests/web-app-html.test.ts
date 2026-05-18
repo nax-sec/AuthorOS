@@ -15,6 +15,9 @@ test('private web app exposes personal cockpit regions', async () => {
   assert.match(html, /data-testid="pending-preview"/);
   assert.match(html, /data-testid="chapter-reader"/);
   assert.match(html, /data-testid="assistant-chat"/);
+  assert.match(html, /styleRewritePreview/);
+  assert.match(html, /文风改写预览/);
+  assert.match(html, /应用文风修改/);
   assert.match(html, /当前章节/);
   assert.match(html, /质量环路/);
   assert.match(html, /loadCockpit/);

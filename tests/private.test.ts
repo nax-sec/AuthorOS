@@ -1,10 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../src/cli.ts';
+import {
+  applyPrivateStyleRewrite,
+  previewPrivateStyleRewrite,
+} from '../src/commands/private.ts';
+import {
+  bindStyleProfile,
+  createStyleProfileFromText,
+  saveStyleProfile,
+} from '../src/commands/style.ts';
 import type { LlmClient } from '../src/core/llm.ts';
 
 async function withTempRoot(body: (root: string) => Promise<void>): Promise<void> {
@@ -29,9 +38,10 @@ function silentIo() {
   };
 }
 
-function fakePrivateLlm(): LlmClient {
+function fakePrivateLlm(capture?: (prompt: string) => void): LlmClient {
   return {
     async generate(prompt) {
+      capture?.(prompt);
       if (prompt.includes('SETUP_STRATEGY')) {
         return JSON.stringify({
           base: 'none',
@@ -92,6 +102,35 @@ function fakePrivateLlm(): LlmClient {
       throw new Error(`unexpected prompt: ${prompt.slice(0, 80)}`);
     },
   };
+}
+
+async function createBookWithChapter(root: string, llm: LlmClient = fakePrivateLlm()): Promise<void> {
+  assert.equal(await run(['private', 'new', '--title', 'HP Audit', '--concept', 'HP', '--root', root], root, silentIo().io, {
+    env: { OPENAI_API_KEY: 'k', AUTHOROS_MODEL: 'm' },
+    llm,
+  }), 0);
+  assert.equal(await run(['private', 'continue', '--root', root], root, silentIo().io, {
+    env: { OPENAI_API_KEY: 'k', AUTHOROS_MODEL: 'm' },
+    llm,
+  }), 0);
+}
+
+async function bindTestStyle(root: string): Promise<string> {
+  const projectDir = join(root, 'books/hp-audit');
+  const profile = createStyleProfileFromText(root, {
+    name: '雨夜冷调',
+    text: [
+      '雨从旧楼的檐角垂下来，像一串没说完的话。林岚把伞收在门外，先听见楼道深处的水声，然后才看见门缝里透出的灯。',
+      '她没有立刻敲门。她习惯先把现场的呼吸数一遍：电梯停在三楼，窗台上有半枚烟灰，墙面新刷过，却盖不住潮气。',
+      '“你迟到了。”门内的人说。',
+      '“我在等你决定要不要撒谎。”林岚回答。她的语气很轻，像把刀背放在桌上，没有声响，却让人知道刀还在那里。',
+      '房间里没有多余的家具。一张桌，一盏灯，一只杯口裂开的白瓷杯。她闻到冷茶、灰尘和某种廉价香水混在一起。',
+    ].join('\n\n'),
+    now: new Date('2026-05-18T00:00:00Z'),
+  });
+  await saveStyleProfile(root, profile);
+  await bindStyleProfile(root, projectDir, profile.id, new Date('2026-05-18T01:00:00Z'));
+  return profile.id;
 }
 
 test('private new creates a bookshelf and selects the new book', async () => {
@@ -267,4 +306,142 @@ test('private feedback previews a chapter revision and apply writes it', async (
     assert.match(after, /自愿繁殖声明/);
     await assert.rejects(() => stat(join(root, 'books/hp-audit/.authoros/private/pending-feedback.json')));
   });
+});
+
+test('private style rewrite preview requires a bound style profile', async () => {
+  await withTempRoot(async (root) => {
+    const llm = fakePrivateLlm();
+    await createBookWithChapter(root, llm);
+
+    await assert.rejects(
+      () => previewPrivateStyleRewrite(root, {
+        chapter: 'latest',
+        intent: 'remove_ai_voice',
+        text: '去掉 AI 味',
+        llm,
+      }),
+      /No style profile bound/,
+    );
+  });
+});
+
+test('private style rewrite previews saved content and apply writes the saved preview', async () => {
+  await withTempRoot(async (root) => {
+    let captured = '';
+    const llm = fakePrivateLlm((prompt) => {
+      if (prompt.includes('REVISE_CHAPTER')) captured = prompt;
+    });
+    await createBookWithChapter(root, llm);
+    const profileId = await bindTestStyle(root);
+    const chapterPath = join(root, 'books/hp-audit/chapters/0001.md');
+    const before = await readFile(chapterPath, 'utf8');
+
+    const preview = await previewPrivateStyleRewrite(root, {
+      chapter: 'latest',
+      intent: 'remove_ai_voice',
+      text: '去掉 AI 味，保留案卷冷幽默。',
+      llm,
+      now: new Date('2026-05-18T02:00:00Z'),
+    });
+
+    assert.equal(preview.book.id, 'hp-audit');
+    assert.equal(preview.chapter, 1);
+    assert.equal(preview.profile.id, profileId);
+    assert.equal(preview.pendingPath, '.authoros/private/pending-style-rewrite.json');
+    assert.match(captured, /Private style rewrite for chapter 1/);
+    assert.match(captured, /intent: remove_ai_voice/);
+    assert.match(captured, /雨夜冷调/);
+
+    const afterPreview = await readFile(chapterPath, 'utf8');
+    assert.equal(afterPreview, before);
+
+    const pending = JSON.parse(await readFile(join(root, 'books/hp-audit/.authoros/private/pending-style-rewrite.json'), 'utf8'));
+    assert.equal(pending.version, 1);
+    assert.equal(pending.profile_id, profileId);
+    assert.equal(pending.profile_name, '雨夜冷调');
+    assert.equal(pending.intent, 'remove_ai_voice');
+    assert.equal(pending.text, '去掉 AI 味，保留案卷冷幽默。');
+    assert.match(pending.preview_content, /自愿繁殖声明/);
+    assert.match(pending.original_hash, /^[a-f0-9]{64}$/);
+
+    const applied = await applyPrivateStyleRewrite(root, { now: new Date('2026-05-18T03:00:00Z') });
+    assert.equal(applied.book.id, 'hp-audit');
+    assert.equal(applied.chapter, 1);
+    assert.equal(applied.profileId, profileId);
+
+    const draftBackup = await readFile(join(root, 'books/hp-audit/chapters/0001.draft.md'), 'utf8');
+    assert.equal(draftBackup, before);
+    const afterApply = await readFile(chapterPath, 'utf8');
+    assert.match(afterApply, /自愿繁殖声明/);
+    await assert.rejects(() => stat(join(root, 'books/hp-audit/.authoros/private/pending-style-rewrite.json')));
+  });
+});
+
+test('private style rewrite apply rejects if the chapter changed after preview', async () => {
+  await withTempRoot(async (root) => {
+    const llm = fakePrivateLlm();
+    await createBookWithChapter(root, llm);
+    await bindTestStyle(root);
+    const chapterPath = join(root, 'books/hp-audit/chapters/0001.md');
+
+    await previewPrivateStyleRewrite(root, {
+      chapter: 'latest',
+      intent: 'style_polish',
+      text: '按绑定文风润色。',
+      llm,
+      now: new Date('2026-05-18T02:00:00Z'),
+    });
+    await writeFile(chapterPath, '# 章节 1\n\n正文已经被手动改过。', 'utf8');
+
+    await assert.rejects(
+      () => applyPrivateStyleRewrite(root),
+      /changed since the style rewrite preview was created/,
+    );
+    const after = await readFile(chapterPath, 'utf8');
+    assert.match(after, /手动改过/);
+    await stat(join(root, 'books/hp-audit/.authoros/private/pending-style-rewrite.json'));
+  });
+});
+
+test('private style-preview and style-apply are available from the CLI', async () => {
+  await withTempRoot(async (root) => {
+    const llm = fakePrivateLlm();
+    await createBookWithChapter(root, llm);
+    await bindTestStyle(root);
+
+    const previewIo = silentIo();
+    assert.equal(await run([
+      'private',
+      'style-preview',
+      '--intent',
+      'anti-ai',
+      '--text',
+      '去掉 AI 味',
+      '--root',
+      root,
+    ], root, previewIo.io, {
+      env: { OPENAI_API_KEY: 'k', AUTHOROS_MODEL: 'm' },
+      llm,
+      now: new Date('2026-05-18T02:00:00Z'),
+    }), 0, previewIo.err.join(''));
+    assert.match(previewIo.out.join(''), /Private Author: style rewrite preview/);
+    await stat(join(root, 'books/hp-audit/.authoros/private/pending-style-rewrite.json'));
+
+    const applyIo = silentIo();
+    assert.equal(await run(['private', 'style-apply', '--root', root], root, applyIo.io, {
+      env: {},
+      now: new Date('2026-05-18T03:00:00Z'),
+    }), 0, applyIo.err.join(''));
+    assert.match(applyIo.out.join(''), /Private Author: style rewrite applied/);
+
+    const after = await readFile(join(root, 'books/hp-audit/chapters/0001.md'), 'utf8');
+    assert.match(after, /自愿繁殖声明/);
+  });
+});
+
+test('private help mentions style rewrite commands', async () => {
+  const io = silentIo();
+  assert.equal(await run(['private', '--help'], process.cwd(), io.io, { env: {} }), 0, io.err.join(''));
+  assert.match(io.out.join(''), /style-preview/);
+  assert.match(io.out.join(''), /style-apply/);
 });
