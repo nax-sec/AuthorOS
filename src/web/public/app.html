@@ -8,30 +8,32 @@
   <style>
     :root {
       color-scheme: light;
-      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
-      --bg: #f4f6f8;
-      --panel: #ffffff;
-      --panel-soft: #f8faf9;
-      --ink: #182230;
-      --muted: #667085;
-      --line: #d8dee8;
-      --line-soft: #e7ebf0;
-      --accent: #2457d6;
-      --accent-soft: #edf3ff;
-      --teal: #0f766e;
-      --teal-soft: #eaf8f5;
-      --amber: #a15c07;
-      --amber-soft: #fff6e6;
-      --danger: #b42318;
-      --danger-soft: #fff0ef;
+      font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      --bg: #eef0ec;
+      --panel: #fffdf8;
+      --panel-soft: #f7f5ee;
+      --ink: #17201d;
+      --muted: #68706c;
+      --line: #d8d2c4;
+      --line-soft: #e8e2d5;
+      --accent: #8f3f2e;
+      --accent-soft: #fff0ec;
+      --teal: #126c67;
+      --teal-soft: #e7f4ef;
+      --amber: #8a5a10;
+      --amber-soft: #fff5dc;
+      --danger: #a02b23;
+      --danger-soft: #fff0ed;
+      --shadow: 0 18px 48px rgba(33, 37, 31, .09);
     }
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
-    body { margin: 0; background: var(--bg); color: var(--ink); }
+    body { margin: 0; background: linear-gradient(90deg, rgba(23, 32, 29, .035) 1px, transparent 1px), linear-gradient(180deg, rgba(23, 32, 29, .035) 1px, transparent 1px), var(--bg); background-size: 28px 28px; color: var(--ink); }
     body.desk-shell { min-height: 100vh; overflow-x: hidden; }
     .app-header { position: sticky; top: 0; z-index: 20; display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); align-items: center; gap: 16px; min-height: 72px; padding: 10px 18px; border-bottom: 1px solid var(--line); background: rgba(255, 255, 255, .96); backdrop-filter: blur(12px); }
-    h1 { margin: 0; font-size: 24px; line-height: 1.1; }
-    h2 { margin: 0; font-size: 16px; line-height: 1.25; }
+    h1, h2, h3 { font-family: "Songti SC", "STSong", "Noto Serif SC", serif; letter-spacing: 0; }
+    h1 { margin: 0; font-size: 25px; line-height: 1.1; }
+    h2 { margin: 0; font-size: 17px; line-height: 1.25; }
     h3 { margin: 0; font-size: 14px; line-height: 1.25; }
     button, textarea, input { font: inherit; }
     button { border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 7px; padding: 8px 12px; cursor: pointer; font-weight: 700; }
@@ -135,11 +137,201 @@
     .recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .recovery-actions button { min-height: 34px; }
     .rail-utilities { display: grid; gap: 12px; }
+    .current-book {
+      position: relative;
+      padding: 16px;
+      border: 1px solid #cfc6b4;
+      border-radius: 8px;
+      background:
+        linear-gradient(135deg, rgba(18, 108, 103, .09), transparent 42%),
+        var(--panel);
+      box-shadow: var(--shadow);
+    }
+    .workspace-nav {
+      position: sticky;
+      top: 86px;
+      z-index: 8;
+      display: block;
+      padding: 7px;
+      border-color: #d4c8b5;
+      background: rgba(255, 253, 248, .94);
+    }
+    .mode-switcher {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 6px;
+    }
+    .mode-tab {
+      min-height: 38px;
+      border-color: transparent;
+      background: transparent;
+      color: var(--muted);
+      border-radius: 7px;
+      box-shadow: none;
+    }
+    .mode-tab:hover {
+      border-color: #d7b8ad;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .mode-tab.active {
+      border-color: #9f4a38;
+      background: #9f4a38;
+      color: #fffdf8;
+    }
+    .mode-anchor-fallback {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+    .main-stage {
+      min-height: calc(100vh - 226px);
+      padding: 14px;
+      border: 1px solid #d6cdbc;
+      border-radius: 8px;
+      background:
+        linear-gradient(180deg, rgba(255, 253, 248, .92), rgba(247, 245, 238, .78)),
+        var(--panel);
+      box-shadow: var(--shadow);
+    }
+    .stage-panel {
+      display: grid;
+      gap: 14px;
+      min-height: 100%;
+      animation: stageIn .18s ease-out;
+    }
+    .stage-panel[hidden] { display: none; }
+    .stage-headline {
+      display: grid;
+      gap: 4px;
+      padding: 4px 2px 0;
+    }
+    .production-dashboard {
+      display: grid;
+      grid-template-columns: minmax(260px, 1.15fr) minmax(240px, .85fr);
+      gap: 10px;
+      align-items: stretch;
+    }
+    .quality-support-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .chapter-panel {
+      min-height: calc(100vh - 370px);
+      background: #fffefa;
+    }
+    .chapter {
+      min-height: 520px;
+      max-height: calc(100vh - 430px);
+      background:
+        linear-gradient(90deg, rgba(18, 108, 103, .04) 1px, transparent 1px),
+        #fffefa;
+      background-size: 32px 32px;
+      font-family: "Songti SC", "STSong", "Noto Serif SC", serif;
+      font-size: 16px;
+    }
+    .assistant-panel {
+      grid-template-rows: auto minmax(0, 1fr);
+      max-height: calc(100vh - 104px);
+      border-color: #d3c6b2;
+      background: #fffdf8;
+      box-shadow: var(--shadow);
+    }
+    .assistant-body {
+      display: grid;
+      grid-template-rows: minmax(160px, 1fr) auto auto;
+      gap: 10px;
+      min-height: 0;
+    }
+    .dock-toggle {
+      min-width: 54px;
+      padding: 7px 9px;
+    }
+    body.assistant-collapsed .cockpit {
+      grid-template-columns: 248px minmax(0, 1fr) 82px;
+    }
+    .desk-rail[data-assistant-collapsed="true"] {
+      overflow: visible;
+    }
+    .desk-rail[data-assistant-collapsed="true"] .assistant-body,
+    .desk-rail[data-assistant-collapsed="true"] .rail-utilities {
+      display: none;
+    }
+    .desk-rail[data-assistant-collapsed="true"] .assistant-panel {
+      padding: 12px 8px;
+      justify-items: center;
+    }
+    .desk-rail[data-assistant-collapsed="true"] .assistant-panel .section-head {
+      display: grid;
+      justify-items: center;
+      margin: 0;
+    }
+    .desk-rail[data-assistant-collapsed="true"] .assistant-panel h2,
+    .desk-rail[data-assistant-collapsed="true"] .assistant-panel .panel-subtitle {
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+    }
+    .desk-rail[data-assistant-collapsed="true"] .dock-toggle {
+      min-width: 44px;
+      padding: 7px 6px;
+    }
+    .utility-drawer {
+      border: 1px solid #d8d0c0;
+      border-radius: 8px;
+      background: rgba(255, 253, 248, .94);
+      overflow: hidden;
+    }
+    .utility-drawer summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 42px;
+      padding: 10px 12px;
+      cursor: pointer;
+      font-weight: 800;
+    }
+    .utility-drawer summary::-webkit-details-marker { display: none; }
+    .utility-drawer summary::before {
+      content: "+";
+      display: inline-grid;
+      place-items: center;
+      width: 18px;
+      height: 18px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      color: var(--teal);
+      font-size: 13px;
+      line-height: 1;
+    }
+    .utility-drawer[open] summary::before { content: "-"; }
+    .drawer-cue {
+      margin-left: auto;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .utility-content {
+      display: grid;
+      gap: 10px;
+      padding: 0 12px 12px;
+    }
+    @keyframes stageIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
     @media (max-width: 1180px) {
-      header { align-items: flex-start; grid-template-columns: 1fr; }
-      .resident-shell { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .resident-heading { grid-column: 1 / -1; }
-      .cockpit { grid-template-columns: 1fr; padding: 14px; }
+      .app-header { position: static; align-items: flex-start; grid-template-columns: 1fr; gap: 10px; min-height: auto; padding: 12px; }
+      .resident-shell { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .resident-heading { display: none; }
+      .cockpit { grid-template-columns: 1fr; gap: 10px; padding: 10px; }
+      .desk-main { order: 1; }
+      .desk-sidebar { order: 2; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      .desk-rail { order: 3; }
       .workspace-nav { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .comparison-grid { grid-template-columns: 1fr; }
       .commitment-grid { grid-template-columns: 1fr; }
@@ -147,6 +339,24 @@
       .assistant-dock { position: static; }
       .assistant-panel { max-height: none; }
       .chapter, .chat-log { max-height: none; }
+      body.assistant-collapsed .cockpit { grid-template-columns: 1fr; }
+      .production-dashboard, .quality-support-grid { grid-template-columns: 1fr; }
+      .main-stage { min-height: auto; padding: 10px; }
+      .chapter { min-height: 360px; }
+      .mode-switcher { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .desk-rail[data-assistant-collapsed="true"] .assistant-body,
+      .desk-rail[data-assistant-collapsed="true"] .rail-utilities {
+        display: grid;
+      }
+      .desk-rail[data-assistant-collapsed="true"] .assistant-panel h2,
+      .desk-rail[data-assistant-collapsed="true"] .assistant-panel .panel-subtitle {
+        writing-mode: horizontal-tb;
+      }
+    }
+    @media (max-width: 720px) {
+      .resident-shell { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .desk-sidebar { grid-template-columns: 1fr; }
+      .context-actions button { flex: 1 1 150px; }
     }
   </style>
 </head>
@@ -218,7 +428,7 @@
 
     <section class="workspace desk-main" data-testid="desk-main">
       <div class="cockpit-center" data-testid="cockpit-center">
-        <section class="panel current-book book-context-card" data-testid="book-context-card">
+        <section class="current-book book-context-card" data-testid="book-context-card">
           <div class="context-copy">
             <span class="panel-subtitle">今日写作台</span>
             <h2>创作现场</h2>
@@ -233,59 +443,87 @@
           </div>
         </section>
         <nav class="workspace-nav" data-testid="focus-nav" aria-label="写作焦点">
-          <a href="#chapterPanel">正文</a>
-          <a href="#qualityWorkbench">生产线</a>
-          <a href="#previewWorkbench">预览</a>
-          <a href="#memoryWorkbench">记忆</a>
+          <div class="mode-switcher" data-testid="mode-switcher" role="tablist" aria-label="工作模式">
+            <button type="button" class="mode-tab active" data-mode-target="chapter" role="tab" aria-selected="true">正文</button>
+            <button type="button" class="mode-tab" data-mode-target="production" role="tab" aria-selected="false">生产线</button>
+            <button type="button" class="mode-tab" data-mode-target="preview" role="tab" aria-selected="false">预览</button>
+            <button type="button" class="mode-tab" data-mode-target="memory" role="tab" aria-selected="false">记忆</button>
+          </div>
+          <div class="mode-anchor-fallback" aria-hidden="true">
+            <a href="#chapterPanel">正文</a>
+            <a href="#qualityWorkbench">生产线</a>
+            <a href="#previewWorkbench">预览</a>
+            <a href="#memoryWorkbench">记忆</a>
+          </div>
         </nav>
-        <section class="panel stack" data-testid="book-commitment-card" aria-label="书籍承诺">
-          <div class="section-head">
-            <div>
-              <span class="panel-subtitle">承诺</span>
-              <h2>书籍承诺</h2>
+        <section class="main-stage" data-testid="main-stage" aria-live="polite">
+          <section class="stage-panel active" data-stage-panel="chapter" data-testid="stage-panel-chapter">
+            <section class="panel stack" data-testid="book-commitment-card" aria-label="书籍承诺">
+              <div class="section-head">
+                <div>
+                  <span class="panel-subtitle">承诺</span>
+                  <h2>书籍承诺</h2>
+                </div>
+                <div id="commitmentConfidence" class="muted">检查中</div>
+              </div>
+              <div id="commitmentGrid" class="commitment-grid"></div>
+            </section>
+            <section id="chapterPanel" class="panel chapter-panel">
+              <div class="section-head chapter-head">
+                <div>
+                  <span class="panel-subtitle">正文</span>
+                  <h2>当前章节</h2>
+                </div>
+              </div>
+              <div class="chapter-workbench">
+                <div class="muted">章节工作台</div>
+                <div id="chapterList" class="chapter-list" data-testid="chapter-list">还没有已起草章节。</div>
+              </div>
+              <article class="chapter" id="chapter" data-testid="chapter-reader">还没有读取章节。</article>
+            </section>
+          </section>
+          <section class="stage-panel" data-stage-panel="production" data-testid="stage-panel-production" hidden>
+            <section id="qualityWorkbench" class="panel quality-loop" data-testid="quality-loop" aria-label="质量环路">
+              <div class="section-head">
+                <div>
+                  <span class="panel-subtitle">章节生产线</span>
+                  <h2>质量环路</h2>
+                </div>
+                <div id="qualitySignal" class="muted">加载质量环路...</div>
+              </div>
+              <div class="production-dashboard">
+                <div id="nextChapterCard" class="next-chapter-card" data-testid="next-chapter-card"></div>
+                <div id="qualityStages" class="stage-grid"></div>
+              </div>
+              <div id="chapterProductionLine" class="preview-card production-line" data-testid="chapter-production-line"></div>
+              <div class="quality-support-grid">
+                <div id="qualityActions" class="preview-card quality-actions" data-testid="quality-actions"></div>
+                <div id="qualityArtifacts" class="preview-card" data-testid="quality-artifacts"></div>
+              </div>
+              <div id="recoveryHint" class="preview-card"></div>
+            </section>
+          </section>
+          <section id="previewWorkbench" class="stage-panel" data-stage-panel="preview" data-testid="stage-panel-preview" hidden>
+            <div class="stage-headline">
+              <span class="panel-subtitle">修改预览</span>
+              <h2>预览与确认</h2>
             </div>
-            <div id="commitmentConfidence" class="muted">检查中</div>
-          </div>
-          <div id="commitmentGrid" class="commitment-grid"></div>
-        </section>
-        <section id="chapterPanel" class="panel chapter-panel">
-          <div class="section-head chapter-head">
-            <div>
-              <span class="panel-subtitle">正文</span>
-              <h2>当前章节</h2>
+            <div id="previewComparison" class="preview-card" data-testid="preview-comparison"></div>
+            <div id="pendingPreview" class="preview-card" data-testid="pending-preview"></div>
+          </section>
+          <section id="memoryWorkbench" class="stage-panel" data-stage-panel="memory" data-testid="stage-panel-memory" hidden>
+            <div class="stage-headline">
+              <span class="panel-subtitle">长期记忆</span>
+              <h2>记忆复核</h2>
             </div>
-          </div>
-          <div class="chapter-workbench">
-            <div class="muted">章节工作台</div>
-            <div id="chapterList" class="chapter-list" data-testid="chapter-list">还没有已起草章节。</div>
-          </div>
-          <article class="chapter" id="chapter" data-testid="chapter-reader">还没有读取章节。</article>
-        </section>
-        <section id="qualityWorkbench" class="panel quality-loop" data-testid="quality-loop" aria-label="质量环路">
-          <div class="section-head">
-            <div>
-              <span class="panel-subtitle">章节生产线</span>
-              <h2>质量环路</h2>
-          </div>
-          <div id="qualitySignal" class="muted">加载质量环路...</div>
-        </div>
-          <div id="nextChapterCard" class="next-chapter-card" data-testid="next-chapter-card"></div>
-          <div id="chapterProductionLine" class="preview-card production-line" data-testid="chapter-production-line"></div>
-          <div id="qualityStages" class="stage-grid"></div>
-          <div id="qualityActions" class="preview-card quality-actions" data-testid="quality-actions"></div>
-          <div id="qualityArtifacts" class="preview-card" data-testid="quality-artifacts"></div>
-          <div id="previewWorkbench" class="workbench-anchor" aria-hidden="true"></div>
-          <div id="previewComparison" class="preview-card" data-testid="preview-comparison"></div>
-          <div id="pendingPreview" class="preview-card" data-testid="pending-preview"></div>
-          <div id="memoryWorkbench" class="workbench-anchor" aria-hidden="true"></div>
-          <div id="memoryReviewCards" class="preview-card memory-review-cards" data-testid="memory-review-cards"></div>
-          <div id="memoryReview" class="preview-card" data-testid="memory-review"></div>
-          <div id="recoveryHint" class="preview-card"></div>
+            <div id="memoryReviewCards" class="preview-card memory-review-cards" data-testid="memory-review-cards"></div>
+            <div id="memoryReview" class="preview-card" data-testid="memory-review"></div>
+          </section>
         </section>
       </div>
     </section>
 
-    <aside class="desk-rail stack" data-testid="desk-rail">
+    <aside class="desk-rail stack" data-testid="desk-rail" data-assistant-collapsed="false">
       <div class="assistant-dock" data-testid="assistant-dock">
         <section class="panel assistant-panel stack" data-testid="assistant-panel" aria-label="作者助理">
           <div class="section-head">
@@ -293,98 +531,90 @@
               <span class="panel-subtitle">常驻搭档</span>
               <h2>作者助理</h2>
             </div>
+            <button class="secondary dock-toggle" id="assistantDrawerToggle" data-testid="assistant-drawer-toggle" type="button" aria-expanded="true">收起</button>
           </div>
-          <div id="chatLog" class="chat-log" data-testid="assistant-chat"></div>
-          <div class="assistant-quick-actions" data-testid="assistant-quick-actions" aria-label="作者助理快捷动作">
-            <button class="quick-action" type="button" data-message="帮我继续推进当前书">继续推进</button>
-            <button class="quick-action" type="button" data-message="读最新章">读最新章</button>
-            <button class="quick-action" type="button" data-message="帮这一章去 AI 味">去 AI 味</button>
-            <button class="quick-action" type="button" data-message="仿写文风处理这一章">仿写文风</button>
-          </div>
-          <div class="assistant-quick-actions" data-testid="rewrite-intent-panel" aria-label="改写意图">
-            <button class="quick-action" type="button" data-message="去 AI 味">去 AI 味</button>
-            <button class="quick-action" type="button" data-message="仿写文风">仿写文风</button>
-            <button class="quick-action" type="button" data-message="文风润色">文风润色</button>
-            <button class="quick-action" type="button" data-message="强化开头">强化开头</button>
-            <button class="quick-action" type="button" data-message="强化章尾钩子">强化章尾钩子</button>
-            <button class="quick-action" type="button" data-message="减少解释">减少解释</button>
-            <button class="quick-action" type="button" data-message="增加压迫感">增加压迫感</button>
-            <button class="quick-action" type="button" data-message="对白瘦身">对白瘦身</button>
-            <button class="quick-action" type="button" data-message="保留剧情换文风">保留剧情换文风</button>
-          </div>
-          <div class="assistant-input">
-            <textarea id="message" placeholder="开一本新书、继续写、读最新章，或直接说哪里要改"></textarea>
-            <button id="send">发送</button>
+          <div class="assistant-body" data-testid="assistant-body">
+            <div id="chatLog" class="chat-log" data-testid="assistant-chat"></div>
+            <div class="assistant-quick-actions" data-testid="assistant-quick-actions" aria-label="作者助理快捷动作">
+              <button class="quick-action" type="button" data-message="帮我继续推进当前书">继续推进</button>
+              <button class="quick-action" type="button" data-message="读最新章">读最新章</button>
+              <button class="quick-action" type="button" data-message="帮这一章去 AI 味">去 AI 味</button>
+              <button class="quick-action" type="button" data-message="仿写文风处理这一章">仿写文风</button>
+            </div>
+            <div class="assistant-quick-actions" data-testid="rewrite-intent-panel" aria-label="改写意图">
+              <button class="quick-action" type="button" data-message="去 AI 味">去 AI 味</button>
+              <button class="quick-action" type="button" data-message="仿写文风">仿写文风</button>
+              <button class="quick-action" type="button" data-message="文风润色">文风润色</button>
+              <button class="quick-action" type="button" data-message="强化开头">强化开头</button>
+              <button class="quick-action" type="button" data-message="强化章尾钩子">强化章尾钩子</button>
+              <button class="quick-action" type="button" data-message="减少解释">减少解释</button>
+              <button class="quick-action" type="button" data-message="增加压迫感">增加压迫感</button>
+              <button class="quick-action" type="button" data-message="对白瘦身">对白瘦身</button>
+              <button class="quick-action" type="button" data-message="保留剧情换文风">保留剧情换文风</button>
+            </div>
+            <div class="assistant-input">
+              <textarea id="message" placeholder="开一本新书、继续写、读最新章，或直接说哪里要改"></textarea>
+              <button id="send">发送</button>
+            </div>
           </div>
         </section>
       </div>
       <div class="rail-utilities" data-testid="rail-utilities">
-      <section class="panel model-config" data-testid="model-config" aria-label="模型配置">
-        <div class="section-head">
-          <div>
-            <span class="panel-subtitle">模型</span>
-            <h2>模型配置</h2>
-          </div>
-        </div>
-        <div id="modelConfigStatus" class="book-title">正在检查模型配置</div>
-        <div id="modelConfigScope" class="muted"></div>
-        <div class="model-config-grid">
-          <input id="modelName" placeholder="模型名，例如 gpt-4.1 或 deepseek-chat">
-          <input id="modelBaseUrl" placeholder="Base URL，例如 https://api.openai.com/v1">
-          <input id="modelApiKeyEnv" placeholder="API Key 环境变量名，例如 OPENAI_API_KEY">
-          <input id="modelApiKey" type="password" autocomplete="off" placeholder="粘贴 API Key，留空则不修改">
-        </div>
-        <div class="row">
-          <button id="saveModelConfig">保存模型配置</button>
-          <button class="secondary" id="checkModelConfig">检查</button>
-          <button class="secondary" id="resetModelConfig">重置</button>
-        </div>
-        <div id="modelConfigHint" class="muted">Key 会保存在本机配置文件中，页面不会回显明文。</div>
-      </section>
-      <section class="panel style-profile" data-testid="style-profile" aria-label="文风档案">
-        <div class="section-head">
-          <div>
-            <span class="panel-subtitle">文风档案</span>
+        <details class="utility-drawer" data-testid="utility-drawer-model">
+          <summary><span>模型配置</span><span class="drawer-cue">本机 Key</span></summary>
+          <section class="model-config utility-content" data-testid="model-config" aria-label="模型配置">
+            <div id="modelConfigStatus" class="book-title">正在检查模型配置</div>
+            <div id="modelConfigScope" class="muted"></div>
+            <div class="model-config-grid">
+              <input id="modelName" placeholder="模型名，例如 gpt-4.1 或 deepseek-chat">
+              <input id="modelBaseUrl" placeholder="Base URL，例如 https://api.openai.com/v1">
+              <input id="modelApiKeyEnv" placeholder="API Key 环境变量名，例如 OPENAI_API_KEY">
+              <input id="modelApiKey" type="password" autocomplete="off" placeholder="粘贴 API Key，留空则不修改">
+            </div>
+            <div class="row">
+              <button id="saveModelConfig">保存模型配置</button>
+              <button class="secondary" id="checkModelConfig">检查</button>
+              <button class="secondary" id="resetModelConfig">重置</button>
+            </div>
+            <div id="modelConfigHint" class="muted">Key 会保存在本机配置文件中，页面不会回显明文。</div>
+          </section>
+        </details>
+        <details class="utility-drawer" data-testid="utility-drawer-style">
+          <summary><span>文风档案</span><span class="drawer-cue">提炼 / 仿写</span></summary>
+          <section class="style-profile utility-content" data-testid="style-profile" aria-label="文风档案">
             <h2>文风与资产</h2>
-          </div>
-        </div>
-        <div id="styleProfileStatus" class="book-title">尚未绑定文风</div>
-        <div id="styleGenerationStatus" class="muted">生成接入：检查中...</div>
-        <div id="styleGenerationDetail" class="muted"></div>
-        <div id="styleProfileMeta" class="muted">档案数量：0</div>
-        <div id="styleProfileDetail" class="muted">还没有可用文风档案。</div>
-        <div class="style-extract">
-          <h3>提炼文风</h3>
-          <input id="styleProfileName" placeholder="文风名称">
-          <textarea id="styleReferenceText" placeholder="粘贴样文"></textarea>
-          <div class="row">
-            <button id="extractStyleAndBind">提炼并绑定</button>
-            <button class="secondary" id="extractStyleOnly">仅提炼</button>
-          </div>
-          <div id="styleExtractHint" class="muted"></div>
-        </div>
-        <div id="styleProfileActions" class="style-actions"></div>
-      </section>
-      <section class="panel asset-panel" data-testid="asset-panel" aria-label="写作资产">
-        <div class="section-head">
-          <div>
-            <span class="panel-subtitle">资产</span>
-            <h2>写作资产</h2>
-          </div>
-        </div>
-        <div id="assetSummary" class="muted">正在读取资产...</div>
-        <div id="assetList" class="asset-list"></div>
-        <pre id="assetPreview" class="memory-delta-content">选择一个资产查看内容。</pre>
-      </section>
-      <section class="panel stack">
-        <div class="section-head">
-          <div>
-            <span class="panel-subtitle">运行记录</span>
-            <h2>任务中心</h2>
-          </div>
-        </div>
-        <div id="taskCenter" class="stack muted" data-testid="task-center">还没有任务。</div>
-      </section>
+            <div id="styleProfileStatus" class="book-title">尚未绑定文风</div>
+            <div id="styleGenerationStatus" class="muted">生成接入：检查中...</div>
+            <div id="styleGenerationDetail" class="muted"></div>
+            <div id="styleProfileMeta" class="muted">档案数量：0</div>
+            <div id="styleProfileDetail" class="muted">还没有可用文风档案。</div>
+            <div class="style-extract">
+              <h3>提炼文风</h3>
+              <input id="styleProfileName" placeholder="文风名称">
+              <textarea id="styleReferenceText" placeholder="粘贴样文"></textarea>
+              <div class="row">
+                <button id="extractStyleAndBind">提炼并绑定</button>
+                <button class="secondary" id="extractStyleOnly">仅提炼</button>
+              </div>
+              <div id="styleExtractHint" class="muted"></div>
+            </div>
+            <div id="styleProfileActions" class="style-actions"></div>
+          </section>
+        </details>
+        <details class="utility-drawer" data-testid="utility-drawer-assets">
+          <summary><span>写作资产</span><span class="drawer-cue">设定 / 规则</span></summary>
+          <section class="asset-panel utility-content" data-testid="asset-panel" aria-label="写作资产">
+            <div id="assetSummary" class="muted">正在读取资产...</div>
+            <div id="assetList" class="asset-list"></div>
+            <pre id="assetPreview" class="memory-delta-content">选择一个资产查看内容。</pre>
+          </section>
+        </details>
+        <details class="utility-drawer" data-testid="utility-drawer-tasks">
+          <summary><span>任务中心</span><span class="drawer-cue">运行记录</span></summary>
+          <section class="utility-content stack" aria-label="运行记录">
+            <div id="taskCenter" class="stack muted" data-testid="task-center">还没有任务。</div>
+          </section>
+        </details>
       </div>
     </aside>
   </main>
@@ -445,6 +675,10 @@
     const modelApiKeyEnv = document.querySelector('#modelApiKeyEnv');
     const modelApiKey = document.querySelector('#modelApiKey');
     const messageInput = document.querySelector('#message');
+    const deskRail = document.querySelector('[data-testid="desk-rail"]');
+    const assistantDrawerToggle = document.querySelector('#assistantDrawerToggle');
+    const stagePanels = Array.from(document.querySelectorAll('[data-stage-panel]'));
+    const modeTabs = Array.from(document.querySelectorAll('[data-mode-target]'));
     const roomPrefix = (location.pathname.match(/^\/room\/[^/]+/) || [''])[0];
     const tokenKey = `authoros_token:${roomPrefix || 'single'}`;
     const activeStyleHintPrefix = '下一章将使用文风';
@@ -490,6 +724,50 @@
 
     function quickActionMessage(button) {
       return button.dataset.message || button.textContent.trim();
+    }
+
+    function modeFromHash(hash = location.hash) {
+      const modes = {
+        '#chapterPanel': 'chapter',
+        '#qualityWorkbench': 'production',
+        '#previewWorkbench': 'preview',
+        '#memoryWorkbench': 'memory',
+      };
+      return modes[hash] || '';
+    }
+
+    function setWorkbenchMode(mode, options = {}) {
+      const nextMode = stagePanels.some(panel => panel.dataset.stagePanel === mode) ? mode : 'chapter';
+      for (const panel of stagePanels) {
+        const active = panel.dataset.stagePanel === nextMode;
+        panel.hidden = !active;
+        panel.classList.toggle('active', active);
+      }
+      for (const tab of modeTabs) {
+        const active = tab.dataset.modeTarget === nextMode;
+        tab.classList.toggle('active', active);
+        tab.setAttribute('aria-selected', active ? 'true' : 'false');
+      }
+      document.body.dataset.workbenchMode = nextMode;
+      if (options.scroll !== false) {
+        document.querySelector('[data-testid="main-stage"]').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    function toggleAssistantDock(forceCollapsed) {
+      const collapsed = typeof forceCollapsed === 'boolean'
+        ? forceCollapsed
+        : deskRail.dataset.assistantCollapsed !== 'true';
+      deskRail.dataset.assistantCollapsed = collapsed ? 'true' : 'false';
+      document.body.classList.toggle('assistant-collapsed', collapsed);
+      assistantDrawerToggle.textContent = collapsed ? '展开' : '收起';
+      assistantDrawerToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    }
+
+    function openUtilityDrawer(testId) {
+      const drawer = document.querySelector(`[data-testid="${testId}"]`);
+      if (drawer && 'open' in drawer) drawer.open = true;
+      return drawer;
     }
 
     async function loginIfNeeded() {
@@ -2070,6 +2348,14 @@
     }
 
     document.querySelector('#send').addEventListener('click', send);
+    for (const tab of modeTabs) {
+      tab.addEventListener('click', () => setWorkbenchMode(tab.dataset.modeTarget));
+    }
+    assistantDrawerToggle.addEventListener('click', () => toggleAssistantDock());
+    window.addEventListener('hashchange', () => {
+      const mode = modeFromHash();
+      if (mode) setWorkbenchMode(mode, { scroll: false });
+    });
     for (const button of document.querySelectorAll('[data-message]')) {
       button.addEventListener('click', () => {
         sendMessage(quickActionMessage(button)).catch(error => addMessage(`失败：${error.message}`, false, true));
@@ -2077,7 +2363,9 @@
     }
     resumeSession.addEventListener('click', () => resumeCurrentSession().catch(error => addMessage(`恢复失败：${error.message}`, false, true)));
     modelHealthAction.addEventListener('click', () => {
-      document.querySelector('[data-testid="model-config"]').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      toggleAssistantDock(false);
+      const drawer = openUtilityDrawer('utility-drawer-model');
+      (drawer || document.querySelector('[data-testid="model-config"]')).scrollIntoView({ behavior: 'smooth', block: 'start' });
       modelApiKey.focus();
     });
     dailySessionAction.addEventListener('click', () => {
@@ -2099,6 +2387,7 @@
     document.querySelector('#checkModelConfig').addEventListener('click', () => checkModelConfig().catch(error => addMessage(`检查模型配置失败：${error.message}`, false, true)));
     document.querySelector('#extractStyleAndBind').addEventListener('click', () => extractStyleFromCockpit(true));
     document.querySelector('#extractStyleOnly').addEventListener('click', () => extractStyleFromCockpit(false));
+    setWorkbenchMode(modeFromHash() || 'chapter', { scroll: false });
     loginIfNeeded()
       .then(ready => {
         if (!ready) return undefined;
