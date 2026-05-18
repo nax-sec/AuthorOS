@@ -52,6 +52,8 @@ export interface CockpitDailySession {
   lastCompleted: CockpitSessionTask | null;
   chaptersTouched: number[];
   nextRecommendedAction: { label: string; message: string };
+  resumeText: string;
+  lastCompletedActionLabel: string;
 }
 
 export interface CockpitSessionTask {
@@ -241,7 +243,20 @@ function deriveDailySession(
     lastCompleted,
     chaptersTouched,
     nextRecommendedAction: { label: nextAction.label, message: nextAction.message },
+    resumeText: dailyResumeText(book, lastCompleted, chaptersTouched),
+    lastCompletedActionLabel: lastCompleted?.label ?? '暂无已完成动作',
   };
+}
+
+function dailyResumeText(
+  book: PrivateBook | null,
+  lastCompleted: CockpitSessionTask | null,
+  chaptersTouched: readonly number[],
+): string {
+  if (!book) return '还没有当前书，先开一本新书。';
+  if (lastCompleted && chaptersTouched[0]) return `上次停在${lastCompleted.label}，涉及第 ${chaptersTouched[0]} 章。`;
+  if (lastCompleted) return `上次完成：${lastCompleted.label}。`;
+  return `可以继续推进《${book.title}》。`;
 }
 
 function sessionTask(job: WebJob): CockpitSessionTask {

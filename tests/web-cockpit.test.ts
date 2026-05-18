@@ -138,6 +138,22 @@ test('cockpit overview includes model health and daily resume cues', async () =>
   });
 });
 
+test('daily session summarizes recent completed actions and touched chapters', async () => {
+  await withTempRoot(async (root) => {
+    await writeBook(root);
+    const jobs = createJobStore({ now: () => new Date('2026-05-19T10:00:00.000Z') });
+    const job = jobs.createJob('chapter_decision', '生成第 2 章决策');
+    jobs.complete(job.id, { chapter: 2 });
+
+    const overview = await getCockpitOverview(root, {}, jobs);
+
+    assert.equal(overview.session.daily.lastCompleted?.label, '生成创作决策');
+    assert.deepEqual(overview.session.daily.chaptersTouched, [2]);
+    assert.match(overview.session.daily.resumeText, /第 2 章/);
+    assert.equal(overview.session.daily.lastCompletedActionLabel, '生成创作决策');
+  });
+});
+
 test('cockpit overview reports missing style binding for the current book', async () => {
   await withTempRoot(async (root) => {
     await writeBook(root);

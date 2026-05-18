@@ -730,12 +730,12 @@
       dailySessionDetail.textContent = daily && daily.currentTask
         ? `正在：${daily.currentTask.label} · ${daily.currentTask.detail}`
         : daily && daily.lastCompleted
-        ? `最近完成：${daily.lastCompleted.label} · ${daily.lastCompleted.detail}`
+        ? `${daily.resumeText || `最近完成：${daily.lastCompleted.label}`} · ${daily.lastCompleted.detail}`
         : '打开一本书后，这里会显示最近动作。';
       const chapters = daily && Array.isArray(daily.chaptersTouched) ? daily.chaptersTouched : [];
       dailySessionChapters.textContent = chapters.length > 0
         ? `最近触达：${chapters.map((item) => `第 ${item} 章`).join('、')}`
-        : '最近触达：暂无章节记录';
+        : `最近完成：${daily?.lastCompletedActionLabel || '暂无已完成动作'}`;
       const next = daily && daily.nextRecommendedAction ? daily.nextRecommendedAction : null;
       dailySessionAction.textContent = next ? next.label : '继续写';
       dailySessionAction.dataset.message = next ? next.message : '';
