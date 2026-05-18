@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { parse as parseYaml } from 'yaml';
 import { run } from '../src/cli.ts';
 import { listMemoryDeltas, markMemoryDeltaReviewed, mergeMemoryDelta, previewMemoryDeltaMerge } from '../src/commands/memory.ts';
 
@@ -142,6 +143,9 @@ test('merging a memory delta splits sections into memory files and archives the 
     const characterState = await readFile(join(bookDir, 'memory/character_state.yaml'), 'utf8');
     const style = await readFile(join(bookDir, 'memory/style.md'), 'utf8');
     const pending = await listMemoryDeltas(bookDir);
+    const foreshadowingDoc = parseYaml(foreshadowing) as { hooks: Array<{ id: string; status: string }> };
+    const plotThreadsDoc = parseYaml(plotThreads) as { threads: Array<{ id: string; current_stage: string }> };
+    const characterStateDoc = parseYaml(characterState) as { protagonist: { ability_state: string } };
 
     assert.equal(result.alreadyMerged, false);
     assert.deepEqual(result.changedFiles, [
@@ -161,10 +165,12 @@ test('merging a memory delta splits sections into memory files and archives the 
     assert.match(canon, /## 已确认设定[\s\S]*- 能力代价已确认[\s\S]*## 待确认设定/);
     assert.match(canon, /## 变更记录[\s\S]*- merged: chapter-0001\.delta\.md at 2026-05-19T10:00:00\.000Z/);
     assert.match(canon, /### chapter-0001\.delta\.md[\s\S]*```markdown[\s\S]*## character_state \(变化\)/);
-    assert.match(foreshadowing, /# merged: chapter-0001\.delta\.md at 2026-05-19T10:00:00\.000Z/);
-    assert.match(foreshadowing, /# - H001\.status -> advanced/);
-    assert.match(plotThreads, /# - T001\.current_stage -> 初次觉醒/);
-    assert.match(characterState, /# - protagonist\.ability_state -> 初次觉醒/);
+    assert.equal(foreshadowingDoc.hooks.find((hook) => hook.id === 'H001')?.status, 'advanced');
+    assert.equal(plotThreadsDoc.threads.find((thread) => thread.id === 'T001')?.current_stage, '初次觉醒');
+    assert.equal(characterStateDoc.protagonist.ability_state, '初次觉醒');
+    assert.doesNotMatch(foreshadowing, /# - H001\.status -> advanced/);
+    assert.doesNotMatch(plotThreads, /# - T001\.current_stage -> 初次觉醒/);
+    assert.doesNotMatch(characterState, /# - protagonist\.ability_state -> 初次觉醒/);
     assert.match(style, /## 变更记录[\s\S]*- merged: chapter-0001\.delta\.md at 2026-05-19T10:00:00\.000Z[\s\S]*  - 避免章尾总结式抒情/);
     assert.equal(pending.some((delta) => delta.name === 'chapter-0001.delta.md'), false);
 
@@ -175,6 +181,30 @@ test('merging a memory delta splits sections into memory files and archives the 
 
     assert.equal(second.alreadyMerged, true);
     assert.equal((canonAfterSecondMerge.match(/- merged: chapter-0001\.delta\.md/g) ?? []).length, 1);
+  });
+});
+
+test('merging a memory delta keeps unsupported YAML updates as comments', async () => {
+  await withBook(async (bookDir) => {
+    await mkdir(join(bookDir, 'memory'), { recursive: true });
+    await writeFile(join(bookDir, 'memory/chapter-0001.delta.md'), [
+      '# 章节 1 记忆更新建议',
+      '',
+      '## foreshadowing (新增 / 推进 / 回收)',
+      '- H999.status -> missing hook',
+      '- 新增一个尚未结构化的伏笔',
+      '',
+    ].join('\n'), 'utf8');
+
+    await mergeMemoryDelta(bookDir, 'chapter-0001.delta.md', {
+      now: new Date('2026-05-19T10:05:00Z'),
+    });
+    const foreshadowing = await readFile(join(bookDir, 'memory/foreshadowing.yaml'), 'utf8');
+    const foreshadowingDoc = parseYaml(foreshadowing) as { hooks: Array<{ id: string; status: string }> };
+
+    assert.equal(foreshadowingDoc.hooks.find((hook) => hook.id === 'H001')?.status, 'open');
+    assert.match(foreshadowing, /# - H999\.status -> missing hook/);
+    assert.match(foreshadowing, /# - 新增一个尚未结构化的伏笔/);
   });
 });
 

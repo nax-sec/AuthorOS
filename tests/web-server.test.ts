@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { parse as parseYaml } from 'yaml';
 import { createWebServer } from '../src/web/server.ts';
 import { saveWebJobHistory } from '../src/web/job-persistence.ts';
 import type { WebJob } from '../src/web/jobs.ts';
@@ -638,7 +639,11 @@ test('web server merges a pending memory delta into memory files', async () => {
     const cockpitBody = await cockpit.json();
     const canon = await readFile(join(root, 'books/demo/memory/canon.md'), 'utf8');
     const foreshadowing = await readFile(join(root, 'books/demo/memory/foreshadowing.yaml'), 'utf8');
+    const plotThreads = await readFile(join(root, 'books/demo/memory/plot_threads.yaml'), 'utf8');
+    const characterState = await readFile(join(root, 'books/demo/memory/character_state.yaml'), 'utf8');
     const style = await readFile(join(root, 'books/demo/memory/style.md'), 'utf8');
+    const foreshadowingDoc = parseYaml(foreshadowing) as { hooks: Array<{ id: string; status: string }> };
+    const plotThreadsDoc = parseYaml(plotThreads) as { threads: Array<{ id: string; current_stage: string }> };
 
     assert.equal(response.status, 200);
     assert.equal(body.ok, true);
@@ -653,7 +658,9 @@ test('web server merges a pending memory delta into memory files', async () => {
     ]);
     assert.match(canon, /- 茶杯案确认进入第二阶段/);
     assert.match(canon, /- merged: chapter-0001\.delta\.md/);
-    assert.match(foreshadowing, /# - H001\.status -> advanced/);
+    assert.equal(foreshadowingDoc.hooks.find((hook) => hook.id === 'H001')?.status, 'advanced');
+    assert.equal(plotThreadsDoc.threads.find((thread) => thread.id === 'T001')?.current_stage, '追查茶杯');
+    assert.match(characterState, /# - protagonist\.known_information \+= 茶杯线索/);
     assert.match(style, /  - 保持案卷冷幽默/);
     assert.equal(cockpitBody.quality.memoryDeltas.some((delta: { name: string }) => delta.name === 'chapter-0001.delta.md'), false);
   });

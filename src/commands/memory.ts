@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import {
   assembleAgentContext,
   assertNoRequiredMissing,
@@ -504,7 +505,7 @@ async function appendYamlMemoryDeltaSection(
   if (items.length === 0) return;
   const path = join(memoryDir, file);
   const existing = await readOptional(path) ?? defaultYamlMemoryContent(file);
-  await writeFile(path, appendYamlCommentBlock(existing, section, items, safeName, mergedAt), 'utf8');
+  await writeFile(path, applyYamlMemoryDeltaItems(existing, file, section, items, safeName, mergedAt), 'utf8');
   changedFiles.push(`memory/${file}`);
 }
 
@@ -513,6 +514,124 @@ function defaultYamlMemoryContent(file: string): string {
   if (file === 'plot_threads.yaml') return 'threads: []\n';
   if (file === 'character_state.yaml') return 'protagonist: {}\n';
   return '';
+}
+
+function applyYamlMemoryDeltaItems(
+  content: string,
+  file: string,
+  section: MemoryDeltaSectionKey,
+  items: readonly string[],
+  safeName: string,
+  mergedAt: string,
+): string {
+  const split = splitYamlMemoryContent(content);
+  const doc = parseYamlObject(split.yaml, file);
+  if (!doc) {
+    return appendYamlCommentBlock(content, section, items, safeName, mergedAt);
+  }
+
+  const unsupported: string[] = [];
+  for (const item of items) {
+    if (!applyStructuredYamlDelta(doc, file, item)) {
+      unsupported.push(item);
+    }
+  }
+
+  let next = renderYamlObjectWithComments(doc, split.comments);
+  if (unsupported.length > 0) {
+    next = appendYamlCommentBlock(next, section, unsupported, safeName, mergedAt);
+  }
+  return next;
+}
+
+function splitYamlMemoryContent(content: string): { yaml: string; comments: string } {
+  const normalized = content.replace(/\r\n?/g, '\n').trimEnd();
+  const match = normalized.match(/\n\n# merged: /);
+  if (!match || match.index === undefined) {
+    return { yaml: normalized, comments: '' };
+  }
+  return {
+    yaml: normalized.slice(0, match.index),
+    comments: normalized.slice(match.index).trim(),
+  };
+}
+
+function parseYamlObject(content: string, file: string): Record<string, unknown> | null {
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(content || '{}') ?? {};
+  } catch {
+    return null;
+  }
+  return isPlainObject(parsed) ? parsed : file === 'character_state.yaml' ? { protagonist: {} } : null;
+}
+
+function applyStructuredYamlDelta(doc: Record<string, unknown>, file: string, item: string): boolean {
+  const parsed = parseYamlFieldAssignment(item);
+  if (!parsed) return false;
+
+  if (file === 'foreshadowing.yaml') {
+    return updateYamlArrayItemById(doc, 'hooks', parsed.target, parsed.fieldPath, parsed.value);
+  }
+  if (file === 'plot_threads.yaml') {
+    return updateYamlArrayItemById(doc, 'threads', parsed.target, parsed.fieldPath, parsed.value);
+  }
+  if (file === 'character_state.yaml') {
+    return updateYamlObjectPath(doc, [parsed.target, ...parsed.fieldPath], parsed.value);
+  }
+  return false;
+}
+
+function parseYamlFieldAssignment(item: string): { target: string; fieldPath: string[]; value: string } | null {
+  const match = item.match(/^([A-Za-z0-9_-]+)\.([A-Za-z0-9_.-]+)\s*(?:->|=>|=)\s*(.+)$/);
+  if (!match?.[1] || !match?.[2] || !match?.[3]) return null;
+  const value = match[3].trim();
+  if (!value) return null;
+  return {
+    target: match[1],
+    fieldPath: match[2].split('.').filter(Boolean),
+    value,
+  };
+}
+
+function updateYamlArrayItemById(
+  doc: Record<string, unknown>,
+  arrayKey: string,
+  id: string,
+  fieldPath: readonly string[],
+  value: string,
+): boolean {
+  const array = doc[arrayKey];
+  if (!Array.isArray(array)) return false;
+  const item = array.find((entry) => isPlainObject(entry) && String(entry.id ?? '') === id);
+  if (!isPlainObject(item)) return false;
+  return updateYamlObjectPath(item, fieldPath, value);
+}
+
+function updateYamlObjectPath(doc: Record<string, unknown>, path: readonly string[], value: string): boolean {
+  if (path.length === 0) return false;
+  let current: unknown = doc;
+  for (const part of path.slice(0, -1)) {
+    if (!isPlainObject(current) || !isPlainObject(current[part])) return false;
+    current = current[part];
+  }
+  if (!isPlainObject(current)) return false;
+  const finalKey = path[path.length - 1]!;
+  if (!Object.hasOwn(current, finalKey)) return false;
+  current[finalKey] = coerceYamlScalar(value);
+  return true;
+}
+
+function coerceYamlScalar(value: string): string | number | boolean {
+  if (/^-?\d+(\.\d+)?$/.test(value)) return Number(value);
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return value;
+}
+
+function renderYamlObjectWithComments(doc: Record<string, unknown>, comments: string): string {
+  const rendered = stringifyYaml(doc, { lineWidth: 0 }).trimEnd();
+  return `${rendered}${comments ? `\n\n${comments}` : ''}\n`;
 }
 
 function appendYamlCommentBlock(
@@ -533,6 +652,10 @@ function appendYamlCommentBlock(
 
 function yamlCommentText(value: string): string {
   return value.replace(/\r?\n/g, ' ').trim();
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 async function generateMemoryDeltaWithModel(
