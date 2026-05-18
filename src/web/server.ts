@@ -23,7 +23,7 @@ import {
   switchPrivateBook,
   type PrivateShelf,
 } from '../commands/private.ts';
-import { bindStyleProfile } from '../commands/style.ts';
+import { bindStyleProfile, createStyleProfileFromText, saveStyleProfile } from '../commands/style.ts';
 import { createOpenAiCompatibleClientFromProject, type LlmClient } from '../core/llm.ts';
 import type { EnvLike } from '../core/modelConfig.ts';
 
@@ -115,6 +115,30 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
         const book = await getCurrentPrivateBook(root);
         const binding = await bindStyleProfile(root, join(root, book.path), profileId);
         return json({ ok: true, binding });
+      }
+      if (routePath === '/api/style/extract' && request.method === 'POST') {
+        const body = await request.json() as { name?: unknown; text?: unknown; bind?: unknown };
+        const name = typeof body.name === 'string' ? body.name.trim() : '';
+        const text = typeof body.text === 'string' ? body.text : '';
+        const shouldBind = body.bind === true;
+        if (!name) return json({ error: 'name is required' }, 400);
+        if (!text.trim()) return json({ error: 'text is required' }, 400);
+        const profile = createStyleProfileFromText(root, {
+          name,
+          text,
+          sourceNote: 'web cockpit sample',
+        });
+        const path = await saveStyleProfile(root, profile);
+        let binding = null;
+        if (shouldBind) {
+          try {
+            const book = await getCurrentPrivateBook(root);
+            binding = await bindStyleProfile(root, join(root, book.path), profile.id);
+          } catch (error) {
+            if (!(error instanceof Error && /No current private book/.test(error.message))) throw error;
+          }
+        }
+        return json({ ok: true, profile, path, binding });
       }
       if (routePath === '/api/chat' && request.method === 'POST') {
         const runtime = runtimeForRoute(roomRoute, () => singleRuntime ??= createRuntimeForRoot(options.root), roomRuntimes);

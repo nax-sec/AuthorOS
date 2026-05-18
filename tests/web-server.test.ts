@@ -101,6 +101,17 @@ async function writeStyleReadyBook(root: string): Promise<void> {
   await bindStyleProfile(root, join(root, 'books/demo'), profile.id, new Date('2026-05-18T01:00:00Z'));
 }
 
+function referenceStyleText(): string {
+  return [
+    '雨从旧楼的檐角垂下来，像一串没说完的话。林岚把伞收在门外，先听见楼道深处的水声，然后才看见门缝里透出的灯。',
+    '她没有立刻敲门。她习惯先把现场的呼吸数一遍：电梯停在三楼，窗台上有半枚烟灰，墙面新刷过，却盖不住潮气。',
+    '“你迟到了。”门内的人说。',
+    '“我在等你决定要不要撒谎。”林岚回答。她的语气很轻，像把刀背放在桌上，没有声响，却让人知道刀还在那里。',
+    '房间里没有多余的家具。一张桌，一盏灯，一只杯口裂开的白瓷杯。她闻到冷茶、灰尘和某种廉价香水混在一起。',
+    '每个段落都往前挪一点，不急着解释，也不急着审判。人物先观察，再开口；线索先落地，再变成判断。',
+  ].join('\n\n');
+}
+
 async function waitForJob(
   server: ReturnType<typeof createWebServer>,
   url: string,
@@ -427,6 +438,50 @@ test('web server binds a style profile and refreshes the book generation snapsho
     const binding = JSON.parse(await readFile(join(root, 'books/demo/.authoros/private/style-binding.json'), 'utf8'));
     assert.equal(binding.profileId, existing.profileId);
     assert.equal(binding.profile.name, '雨夜冷调');
+  });
+});
+
+test('web server extracts a style profile from pasted prose and binds it to the current book', async () => {
+  await withTempRoot(async (root) => {
+    await writeStyleReadyBook(root);
+    const server = createWebServer({
+      root,
+      env: {},
+    });
+
+    const response = await server.fetch(new Request('http://local/api/style/extract', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: '雨夜提炼',
+        text: referenceStyleText(),
+        bind: true,
+      }),
+    }));
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.profile.name, '雨夜提炼');
+    assert.equal(body.binding.profileId, body.profile.id);
+    await stat(join(root, '.authoros/styles/profiles', `${body.profile.id}.json`));
+    const binding = JSON.parse(await readFile(join(root, 'books/demo/.authoros/private/style-binding.json'), 'utf8'));
+    assert.equal(binding.profileId, body.profile.id);
+    assert.equal(binding.profile.name, '雨夜提炼');
+  });
+});
+
+test('web server rejects style extraction without a name', async () => {
+  await withTempRoot(async (root) => {
+    const server = createWebServer({ root, env: {} });
+
+    const response = await server.fetch(new Request('http://local/api/style/extract', {
+      method: 'POST',
+      body: JSON.stringify({ name: ' ', text: referenceStyleText() }),
+    }));
+    const body = await response.json();
+
+    assert.equal(response.status, 400);
+    assert.match(body.error, /name is required/);
   });
 });
 

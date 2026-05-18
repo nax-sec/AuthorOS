@@ -13,10 +13,11 @@
     h1 { margin: 0; font-size: 22px; line-height: 1.2; }
     h2 { margin: 0 0 12px; font-size: 16px; }
     h3 { margin: 0 0 8px; font-size: 14px; }
-    button, textarea { font: inherit; }
+    button, textarea, input { font: inherit; }
     button { border: 1px solid #1f5eff; background: #1f5eff; color: #fff; border-radius: 7px; padding: 8px 12px; cursor: pointer; }
     button:disabled { cursor: not-allowed; opacity: .55; }
     button.secondary { background: #fff; color: #1d2430; border-color: #b9c2d0; }
+    input { width: 100%; border: 1px solid #b9c2d0; border-radius: 7px; padding: 8px 10px; background: #fff; color: inherit; }
     textarea { width: 100%; min-height: 92px; resize: vertical; border: 1px solid #b9c2d0; border-radius: 8px; padding: 10px; background: #fff; color: inherit; }
     .muted { color: #667085; font-size: 13px; }
     .cockpit { display: grid; grid-template-columns: 240px minmax(0, 1fr) 300px; gap: 16px; max-width: 1440px; margin: 0 auto; padding: 16px 24px 24px; }
@@ -32,6 +33,7 @@
     .quality-loop { display: grid; gap: 12px; }
     .next-chapter-card, .preview-card { display: grid; gap: 8px; padding: 12px; border: 1px solid #d9dee7; border-radius: 7px; background: #fafbfc; }
     .style-profile { display: grid; gap: 8px; }
+    .style-extract { display: grid; gap: 8px; padding-top: 8px; border-top: 1px solid #e5e9f0; }
     .style-actions { display: grid; gap: 8px; }
     .profile-option { display: grid; gap: 6px; padding: 10px; border: 1px solid #e5e9f0; border-radius: 7px; background: #fafbfc; }
     .stage-grid { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -113,6 +115,16 @@
         <div id="styleGenerationDetail" class="muted"></div>
         <div id="styleProfileMeta" class="muted">档案数量：0</div>
         <div id="styleProfileDetail" class="muted">还没有可用文风档案。</div>
+        <div class="style-extract">
+          <h3>提炼文风</h3>
+          <input id="styleProfileName" placeholder="文风名称">
+          <textarea id="styleReferenceText" placeholder="粘贴样文"></textarea>
+          <div class="row">
+            <button id="extractStyleAndBind">提炼并绑定</button>
+            <button class="secondary" id="extractStyleOnly">仅提炼</button>
+          </div>
+          <div id="styleExtractHint" class="muted"></div>
+        </div>
         <div id="styleProfileActions" class="style-actions"></div>
       </section>
       <section class="panel stack">
@@ -149,6 +161,9 @@
     const styleProfileMeta = document.querySelector('#styleProfileMeta');
     const styleProfileDetail = document.querySelector('#styleProfileDetail');
     const styleProfileActions = document.querySelector('#styleProfileActions');
+    const styleProfileName = document.querySelector('#styleProfileName');
+    const styleReferenceText = document.querySelector('#styleReferenceText');
+    const styleExtractHint = document.querySelector('#styleExtractHint');
     const messageInput = document.querySelector('#message');
     const roomPrefix = (location.pathname.match(/^\/room\/[^/]+/) || [''])[0];
     const tokenKey = `authoros_token:${roomPrefix || 'single'}`;
@@ -346,6 +361,30 @@
         await loadCockpit();
       } catch (error) {
         addMessage(`文风绑定失败：${error.message}`, false, true);
+      }
+    }
+
+    async function extractStyleFromCockpit(bind) {
+      const name = styleProfileName.value.trim();
+      const text = styleReferenceText.value.trim();
+      if (!name || !text) {
+        styleExtractHint.textContent = '需要填写名称和样文。';
+        return;
+      }
+      styleExtractHint.textContent = '正在提炼文风...';
+      try {
+        const result = await api('/api/style/extract', {
+          method: 'POST',
+          body: JSON.stringify({ name, text, bind }),
+        });
+        styleProfileName.value = '';
+        styleReferenceText.value = '';
+        styleExtractHint.textContent = result.binding ? '已提炼并绑定。' : '已提炼。';
+        addMessage(result.binding ? '文风已提炼并绑定到当前书。' : '文风已提炼，开书后可绑定。');
+        await loadCockpit();
+      } catch (error) {
+        styleExtractHint.textContent = `提炼失败：${error.message}`;
+        addMessage(`提炼文风失败：${error.message}`, false, true);
       }
     }
 
@@ -653,6 +692,8 @@
     document.querySelector('#readLatest').addEventListener('click', () => loadLatestChapter(true));
     document.querySelector('#downloadChapter').addEventListener('click', () => location.href = `${roomPrefix}/download/chapter/latest?token=${encodeURIComponent(token)}`);
     document.querySelector('#downloadAll').addEventListener('click', () => location.href = `${roomPrefix}/download/chapters.zip?token=${encodeURIComponent(token)}`);
+    document.querySelector('#extractStyleAndBind').addEventListener('click', () => extractStyleFromCockpit(true));
+    document.querySelector('#extractStyleOnly').addEventListener('click', () => extractStyleFromCockpit(false));
     loginIfNeeded()
       .then(ready => ready ? loadCockpit() : undefined)
       .catch(error => {

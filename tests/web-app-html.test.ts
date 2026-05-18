@@ -32,6 +32,12 @@ test('private web app exposes personal cockpit regions', async () => {
   assert.match(html, /绑定到当前书/);
   assert.match(html, /renderStyleGeneration/);
   assert.match(html, /api\('\/api\/style\/bind'/);
+  assert.match(html, /提炼文风/);
+  assert.match(html, /styleProfileName/);
+  assert.match(html, /styleReferenceText/);
+  assert.match(html, /提炼并绑定/);
+  assert.match(html, /仅提炼/);
+  assert.match(html, /api\('\/api\/style\/extract'/);
   assert.match(html, /deriveBooklessRecovery/);
   assert.match(html, /确认已有正文后，再读取最新章。/);
   assert.match(html, /jobActionLabel/);
