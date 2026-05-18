@@ -56,6 +56,15 @@ test('job store lists newest jobs first', () => {
   assert.deepEqual(jobs.list().map((job) => job.id), [second.id, first.id]);
 });
 
+test('job store lists same-timestamp jobs newest first by id', () => {
+  const jobs = createJobStore({ now: () => new Date('2026-05-14T10:00:00Z') });
+
+  const first = jobs.createJob('continue_book', '开始写下一章');
+  const second = jobs.createJob('feedback_preview', '生成修改预览');
+
+  assert.deepEqual(jobs.list().map((job) => job.id), [second.id, first.id]);
+});
+
 test('job store hydrates existing jobs and continues ids', () => {
   const jobs = createJobStore({
     now: () => new Date('2026-05-14T11:00:00Z'),
@@ -121,5 +130,18 @@ test('job store mutation methods return clones', () => {
     'planning',
     'completed',
     'failed',
+  ]);
+});
+
+test('job store listEvents returns cloned events', () => {
+  const jobs = createJobStore({ now: () => new Date('2026-05-14T10:00:00Z') });
+  const job = jobs.createJob('continue_book', '开始写下一章');
+
+  const events = jobs.listEvents(job.id);
+  events[0]!.type = 'fake';
+  events[0]!.message = 'should not leak';
+
+  assert.deepEqual(jobs.listEvents(job.id).map((event) => `${event.type}:${event.message}`), [
+    'received:开始写下一章',
   ]);
 });

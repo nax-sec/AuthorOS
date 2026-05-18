@@ -117,10 +117,10 @@ export function createJobStore(opts: CreateJobStoreOptions = {}): JobStore {
       return job ? cloneJob(job) : undefined;
     },
     list() {
-      return snapshot().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      return snapshot().sort(compareJobsNewestFirst);
     },
     listEvents(id, after = 0) {
-      return requireJob(id).events.slice(after);
+      return requireJob(id).events.slice(after).map((event) => ({ ...event }));
     },
     subscribe(id, listener) {
       requireJob(id);
@@ -140,4 +140,22 @@ function cloneJob(job: WebJob): WebJob {
     ...job,
     events: job.events.map((event) => ({ ...event })),
   };
+}
+
+function compareJobsNewestFirst(a: WebJob, b: WebJob): number {
+  const byCreatedAt = b.createdAt.localeCompare(a.createdAt);
+  if (byCreatedAt !== 0) return byCreatedAt;
+
+  const aSequence = jobSequence(a.id);
+  const bSequence = jobSequence(b.id);
+  if (aSequence !== undefined && bSequence !== undefined) {
+    return bSequence - aSequence;
+  }
+
+  return b.id.localeCompare(a.id);
+}
+
+function jobSequence(id: string): number | undefined {
+  const match = id.match(/^job-(\d+)$/);
+  return match ? Number(match[1]) : undefined;
 }
