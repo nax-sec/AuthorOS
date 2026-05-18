@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createWebAgentSession, handleAgentMessage, type WebAgentCommand } from './agent.ts';
 import { createJobStore } from './jobs.ts';
+import { loadWebJobHistory, saveWebJobHistory } from './job-persistence.ts';
 import { isAuthorized } from './auth.ts';
 import { buildChaptersZip, readChapterDownload, type DownloadResult } from './downloads.ts';
 import { handleAgentMessageWithLlm, type WebAgentMode } from './agent-llm.ts';
@@ -56,7 +57,7 @@ const appHtmlUrl = new URL('./public/app.html', import.meta.url);
 export function createWebServer(options: CreateWebServerOptions): AuthorWebServer {
   const env = options.env ?? process.env;
   const rooms = parseRooms(options.root, env.AUTHOROS_WEB_ROOMS);
-  const singleRuntime: WebRuntime = { session: createWebAgentSession(), jobs: createJobStore() };
+  const singleRuntime = createRuntimeForRoot(options.root);
   const roomRuntimes = new Map<string, WebRuntime>();
 
   async function fetchHandler(request: Request): Promise<Response> {
@@ -85,7 +86,7 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
       const routePath = roomRoute?.path ?? url.pathname;
       const root = roomRoute?.room.root ?? options.root;
       const token = roomRoute?.room.token ?? options.token;
-      const runtime = roomRoute?.room ? runtimeForRoom(roomRuntimes, roomRoute.room.id) : singleRuntime;
+      const runtime = roomRoute?.room ? runtimeForRoom(roomRuntimes, roomRoute.room) : singleRuntime;
       if ((routePath.startsWith('/api/') || routePath.startsWith('/download/')) && !isAuthorized(request, token)) {
         return json({ error: 'access token required' }, 401);
       }
@@ -94,6 +95,9 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
       }
       if (routePath === '/api/status' && request.method === 'GET') {
         return json(await getPrivateStatus(root));
+      }
+      if (routePath === '/api/jobs' && request.method === 'GET') {
+        return json({ jobs: runtime.jobs.list() });
       }
       if (routePath === '/api/chat' && request.method === 'POST') {
         const body = await request.json() as { message?: string };
@@ -178,11 +182,21 @@ function resolveRoomRoute(pathname: string, rooms: WebRoom[]): { room: WebRoom; 
   return { room, path: rest === '/index.html' ? '/' : rest, page: rest === '/' || rest === '/index.html' };
 }
 
-function runtimeForRoom(runtimes: Map<string, WebRuntime>, id: string): WebRuntime {
-  const existing = runtimes.get(id);
+function createRuntimeForRoot(root: string): WebRuntime {
+  return {
+    session: createWebAgentSession(),
+    jobs: createJobStore({
+      initialJobs: loadWebJobHistory(root),
+      onChange: (jobs) => saveWebJobHistory(root, jobs),
+    }),
+  };
+}
+
+function runtimeForRoom(runtimes: Map<string, WebRuntime>, room: WebRoom): WebRuntime {
+  const existing = runtimes.get(room.id);
   if (existing) return existing;
-  const runtime = { session: createWebAgentSession(), jobs: createJobStore() };
-  runtimes.set(id, runtime);
+  const runtime = createRuntimeForRoot(room.root);
+  runtimes.set(room.id, runtime);
   return runtime;
 }
 

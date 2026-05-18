@@ -1,7 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createWebServer } from '../src/web/server.ts';
 import { run } from '../src/cli.ts';
+
+async function withTempRoot(body: (root: string) => Promise<void>): Promise<void> {
+  const root = await mkdtemp(join(tmpdir(), 'authoros-web-server-'));
+  try {
+    await body(root);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
 
 test('web server blocks API requests when token is configured', async () => {
   const server = createWebServer({ root: 'D:\\tmp\\missing', token: 'secret' });
@@ -41,107 +53,117 @@ test('web server serves the browser shell', async () => {
 });
 
 test('web server chat returns immediate agent reply for new book intake', async () => {
-  const server = createWebServer({ root: 'D:\\tmp\\missing' });
+  await withTempRoot(async (root) => {
+    const server = createWebServer({ root });
 
-  const response = await server.fetch(new Request('http://local/api/chat', {
-    method: 'POST',
-    body: JSON.stringify({ message: '我想看一本赛博香港侦探小说' }),
-  }));
-  const body = await response.json();
+    const response = await server.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '我想看一本赛博香港侦探小说' }),
+    }));
+    const body = await response.json();
 
-  assert.equal(response.status, 200);
-  assert.equal(body.action, 'new_book_intake');
-  assert.match(body.message, /先确认几个开书问题/);
+    assert.equal(response.status, 200);
+    assert.equal(body.action, 'new_book_intake');
+    assert.match(body.message, /先确认几个开书问题/);
+  });
 });
 
 test('web server can use llm agent mode for vague messages', async () => {
-  const server = createWebServer({
-    root: 'D:\\tmp\\missing',
-    agentMode: 'llm',
-    agentLlm: {
-      async generate() {
-        return JSON.stringify({
-          action: 'feedback_preview',
-          message: '收到，我先生成修改预览。',
-          text: '这一章节奏有点散，需要更集中。',
-        });
+  await withTempRoot(async (root) => {
+    const server = createWebServer({
+      root,
+      agentMode: 'llm',
+      agentLlm: {
+        async generate() {
+          return JSON.stringify({
+            action: 'feedback_preview',
+            message: '收到，我先生成修改预览。',
+            text: '这一章节奏有点散，需要更集中。',
+          });
+        },
       },
-    },
+    });
+
+    const response = await server.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '感觉这章有点散' }),
+    }));
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.action, 'feedback_preview');
+    assert.equal(body.command.type, 'feedback');
   });
-
-  const response = await server.fetch(new Request('http://local/api/chat', {
-    method: 'POST',
-    body: JSON.stringify({ message: '感觉这章有点散' }),
-  }));
-  const body = await response.json();
-
-  assert.equal(response.status, 200);
-  assert.equal(body.action, 'feedback_preview');
-  assert.equal(body.command.type, 'feedback');
 });
 
 test('web server hybrid mode calls receptionist before rule routing', async () => {
-  let called = false;
-  const server = createWebServer({
-    root: 'D:\\tmp\\missing',
-    agentMode: 'hybrid',
-    agentLlm: {
-      async generate() {
-        called = true;
-        return JSON.stringify({
-          action: 'new_book_intake',
-          message: '我先接待，再决定是否建书。',
-        });
+  await withTempRoot(async (root) => {
+    let called = false;
+    const server = createWebServer({
+      root,
+      agentMode: 'hybrid',
+      agentLlm: {
+        async generate() {
+          called = true;
+          return JSON.stringify({
+            action: 'new_book_intake',
+            message: '我先接待，再决定是否建书。',
+          });
+        },
       },
-    },
+    });
+
+    const response = await server.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '我也不知道写什么，你随便写一本书' }),
+    }));
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(called, true);
+    assert.equal(body.action, 'new_book_intake');
+    assert.equal(body.message, '我先接待，再决定是否建书。');
   });
-
-  const response = await server.fetch(new Request('http://local/api/chat', {
-    method: 'POST',
-    body: JSON.stringify({ message: '我也不知道写什么，你随便写一本书' }),
-  }));
-  const body = await response.json();
-
-  assert.equal(response.status, 200);
-  assert.equal(called, true);
-  assert.equal(body.action, 'new_book_intake');
-  assert.equal(body.message, '我先接待，再决定是否建书。');
 });
 
 test('web server hybrid chat falls back to rules when receptionist client is unavailable', async () => {
-  const server = createWebServer({
-    root: 'D:\\tmp\\missing',
-    agentMode: 'hybrid',
-    env: {},
+  await withTempRoot(async (root) => {
+    const server = createWebServer({
+      root,
+      agentMode: 'hybrid',
+      env: {},
+    });
+
+    const response = await server.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '继续写' }),
+    }));
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.action, 'continue_book');
+    assert.equal(body.command.type, 'continue');
   });
-
-  const response = await server.fetch(new Request('http://local/api/chat', {
-    method: 'POST',
-    body: JSON.stringify({ message: '继续写' }),
-  }));
-  const body = await response.json();
-
-  assert.equal(response.status, 200);
-  assert.equal(body.action, 'continue_book');
-  assert.equal(body.command.type, 'continue');
 });
 
 test('web server hybrid chat falls back to rules when receptionist model is unavailable', async () => {
-  const server = createWebServer({
-    root: 'D:\\tmp\\missing',
-    agentMode: 'hybrid',
-    env: {},
+  await withTempRoot(async (root) => {
+    const server = createWebServer({
+      root,
+      agentMode: 'hybrid',
+      env: {},
+    });
+
+    const response = await server.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '继续写' }),
+    }));
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.action, 'continue_book');
+    assert.equal(body.command.type, 'continue');
   });
-
-  const response = await server.fetch(new Request('http://local/api/chat', {
-    method: 'POST',
-    body: JSON.stringify({ message: '继续写' }),
-  }));
-  const body = await response.json();
-
-  assert.equal(response.status, 200);
-  assert.equal(body.action, 'continue_book');
-  assert.equal(body.command.type, 'continue');
 });
 
 test('web server maps access codes to fixed room URLs', async () => {
@@ -205,4 +227,70 @@ test('web command help is available from the CLI', async () => {
   assert.equal(code, 0, err.join(''));
   assert.match(out.join(''), /author web/);
   assert.match(out.join(''), /--port/);
+});
+
+test('web server exposes job history', async () => {
+  await withTempRoot(async (root) => {
+    const server = createWebServer({
+      root,
+      agentMode: 'rule',
+      env: {},
+    });
+
+    const chat = await server.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '读最新章' }),
+    }));
+    assert.equal(chat.status, 200);
+
+    const jobs = await server.fetch(new Request('http://local/api/jobs'));
+    const body = await jobs.json();
+
+    assert.equal(jobs.status, 200);
+    assert.equal(body.jobs.length, 1);
+    assert.equal(body.jobs[0].action, 'read_chapter');
+  });
+});
+
+test('web server persists job history across server instances', async () => {
+  await withTempRoot(async (root) => {
+    const first = createWebServer({ root, agentMode: 'rule', env: {} });
+    await first.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '继续写' }),
+    }));
+
+    const second = createWebServer({ root, agentMode: 'rule', env: {} });
+    const response = await second.fetch(new Request('http://local/api/jobs'));
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.jobs[0].action, 'continue_book');
+  });
+});
+
+test('web server keeps room job history isolated', async () => {
+  await withTempRoot(async (root) => {
+    const server = createWebServer({
+      root,
+      env: { AUTHOROS_WEB_ROOMS: '1,2' },
+      agentMode: 'rule',
+    });
+
+    await server.fetch(new Request('http://local/room/room1/api/chat', {
+      method: 'POST',
+      headers: { authorization: 'Bearer 1' },
+      body: JSON.stringify({ message: '读最新章' }),
+    }));
+
+    const room1 = await server.fetch(new Request('http://local/room/room1/api/jobs', {
+      headers: { authorization: 'Bearer 1' },
+    }));
+    const room2 = await server.fetch(new Request('http://local/room/room2/api/jobs', {
+      headers: { authorization: 'Bearer 2' },
+    }));
+
+    assert.equal((await room1.json()).jobs.length, 1);
+    assert.equal((await room2.json()).jobs.length, 0);
+  });
 });
