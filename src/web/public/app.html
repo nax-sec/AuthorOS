@@ -250,7 +250,7 @@
     function renderQuality(quality, jobs = []) {
       const booklessRecovery = quality ? null : deriveBooklessRecovery(jobs);
       const signal = booklessRecovery
-        ? { kind: 'danger', label: `上次任务失败：${booklessRecovery.failedPhase}` }
+        ? { kind: 'danger', label: `上次任务失败：${jobPhaseLabel(booklessRecovery.failedPhase)}` }
         : quality && quality.signals && quality.signals.length > 0
         ? quality.signals[0]
         : { kind: 'ok', label: '没有当前书' };
@@ -337,7 +337,7 @@
     function renderRecovery(recovery) {
       const title = document.createElement('div');
       title.className = 'book-title';
-      title.textContent = `失败恢复：${recovery.action} · ${recovery.failedPhase}`;
+      title.textContent = `失败恢复：${jobActionLabel(recovery.action)} · ${jobPhaseLabel(recovery.failedPhase)}`;
       const message = document.createElement('div');
       message.textContent = recovery.message;
       const suggestion = document.createElement('div');
@@ -381,6 +381,34 @@
       if (action === 'read_chapter') return '确认已有正文后，再读取最新章。';
       if (action === 'continue_book') return '检查模型配置后，可以再次发送“继续写”。';
       return '查看失败原因后，重新执行上一步。';
+    }
+
+    function jobActionLabel(action) {
+      const labels = {
+        read_chapter: '读取章节',
+        continue_book: '继续写作',
+        feedback_preview: '生成修改预览',
+        feedback_apply: '应用修改',
+        new_book_confirmed: '创建新书',
+        create_book_and_continue: '创建并续写',
+        download_current_chapter: '下载当前章',
+        download_all_chapters: '下载全部章节',
+      };
+      return labels[action] || action;
+    }
+
+    function jobPhaseLabel(phase) {
+      const labels = {
+        received: '接收任务',
+        setup: '建立设定',
+        planning: '规划章节',
+        completed: '已完成',
+        failed: '失败',
+        revision_preview: '生成修改预览',
+        applying: '应用修改',
+        interrupted: '任务中断',
+      };
+      return labels[phase] || phase;
     }
 
     function renderStagePill(stage) {
