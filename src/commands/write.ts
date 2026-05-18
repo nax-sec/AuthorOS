@@ -11,6 +11,7 @@ import type { LlmClient } from '../core/llm.ts';
 import { formatChapterNumber } from '../core/paths.ts';
 import { computeChapterLengthSpec, readProjectConfig, type ChapterLengthSpec } from '../core/projectConfig.ts';
 import { AuthorOsError } from '../core/schema.ts';
+import { readBookStyleProfile, type StyleProfile } from './style.ts';
 
 export interface WriteOptions {
   chapter?: number;
@@ -40,6 +41,7 @@ export interface WriteResult {
 const chiefWriterAgent = 'chief-writer';
 const chaptersDirectory = 'chapters';
 const plansDirectory = 'plans';
+const styleBindingRelativePath = '.authoros/private/style-binding.json';
 
 export async function createChapterDraft(projectDir: string, options: WriteOptions): Promise<WriteResult> {
   const chapter = await resolveChapterNumber(projectDir, options);
@@ -53,8 +55,9 @@ export async function createChapterDraft(projectDir: string, options: WriteOptio
   assertNoRequiredMissing(chiefWriterAgent, docs);
 
   const profile = await readAgentProfile(projectDir, chiefWriterAgent);
+  const boundStyle = await readBookStyleProfile(projectDir);
   const body = options.llm
-    ? await generateDraftWithModel(options.llm, chapter, profile, docs, lengthSpec)
+    ? await generateDraftWithModel(options.llm, chapter, profile, docs, lengthSpec, boundStyle)
     : renderDraftScaffold(chapter);
 
   const source: 'model' | 'scaffold' = options.llm ? 'model' : 'scaffold';
@@ -69,6 +72,10 @@ export async function createChapterDraft(projectDir: string, options: WriteOptio
   }
 
   const actualCharCount = countChineseChars(body);
+  const contextInputs = docs
+    .filter((doc) => doc.status === 'present')
+    .map((doc) => doc.resolvedPath ?? doc.declaredPath);
+  if (boundStyle) contextInputs.push(styleBindingRelativePath);
 
   return {
     chapter,
@@ -79,7 +86,7 @@ export async function createChapterDraft(projectDir: string, options: WriteOptio
     body,
     content,
     written,
-    contextInputs: docs.filter((doc) => doc.status === 'present').map((doc) => doc.resolvedPath ?? doc.declaredPath),
+    contextInputs,
     contextMissing: docs.filter((doc) => doc.status === 'optional-missing').map((doc) => doc.resolvedPath ?? doc.declaredPath),
     targetCharCount: lengthSpec.target,
     actualCharCount,
@@ -157,7 +164,9 @@ async function generateDraftWithModel(
   profile: string,
   docs: readonly ContextDoc[],
   length: ChapterLengthSpec,
+  boundStyle: StyleProfile | null,
 ): Promise<string> {
+  const boundStyleBlock = boundStyle ? ['', renderBoundStyleProfile(boundStyle), ''] : [];
   const prompt = [
     'WRITE_CHAPTER',
     `chapter: ${chapter}`,
@@ -167,7 +176,7 @@ async function generateDraftWithModel(
     '',
     'agent_context:',
     renderContextBlock(docs),
-    '',
+    ...boundStyleBlock,
     'task:',
     `Draft chapter ${chapter} as continuous Chinese prose in Markdown.`,
     '',
@@ -182,6 +191,7 @@ async function generateDraftWithModel(
     `- Follow the chapter plan in plans/${formatChapterNumber(chapter)}.md exactly: goal, conflict, 爽点, hook, information release, character moves, foreshadowing.`,
     '- Respect canon and the precedence: canon > author profile > product positioning > the chapter plan.',
     '- Match the style rules in memory/style.md.',
+    '- If bound_style_profile is present, treat it as the active prose style guide for rhythm, density, imagery, pacing, and anti-AI voice.',
     '- Do not add commentary, meta sections, or headings other than chapter section breaks if natural.',
     '- End with a hook (emotion / information / situation), as required by the plan.',
   ].join('\n');
@@ -199,6 +209,42 @@ async function generateDraftWithModel(
     throw new AuthorOsError('Chapter write model returned empty content.');
   }
   return trimmed;
+}
+
+function renderBoundStyleProfile(profile: StyleProfile): string {
+  const ruleSections: Array<[keyof StyleProfile['rules'], string]> = [
+    ['sentenceRhythm', 'sentenceRhythm'],
+    ['paragraphDensity', 'paragraphDensity'],
+    ['dialogue', 'dialogue'],
+    ['narrativeDistance', 'narrativeDistance'],
+    ['sensoryDetail', 'sensoryDetail'],
+    ['imagery', 'imagery'],
+    ['pacing', 'pacing'],
+    ['avoid', 'avoid'],
+    ['antiAiVoice', 'antiAiVoice'],
+  ];
+  const lines = [
+    'bound_style_profile:',
+    `id: ${profile.id}`,
+    `name: ${profile.name}`,
+    `description: ${profile.description}`,
+    'rules:',
+  ];
+
+  for (const [key, label] of ruleSections) {
+    lines.push(`- ${label}:`);
+    for (const rule of profile.rules[key]) {
+      lines.push(`  - ${rule}`);
+    }
+  }
+
+  lines.push(
+    'usage_guardrails:',
+    '- Apply the high-level style rules only to prose rhythm, density, imagery, pacing, and anti-AI voice.',
+    '- Do not copy source expression, source sentences, signature phrases, or plot material from any reference.',
+    '- Preserve canon, chapter plan, character intent, and established memory above style imitation.',
+  );
+  return lines.join('\n');
 }
 
 function countChineseChars(text: string): number {

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../src/cli.ts';
@@ -40,6 +40,29 @@ function fakeLlm(reply: string, capture?: (prompt: string) => void): LlmClient {
     async generate(prompt) {
       capture?.(prompt);
       return reply;
+    },
+  };
+}
+
+function makeStyleProfileFixture() {
+  return {
+    version: 1,
+    id: 'test-style-12345678',
+    name: 'Test Style',
+    description: 'fixture style profile',
+    createdAt: '2026-05-18T01:00:00.000Z',
+    sourceNote: 'fixture',
+    sourceHash: 'a'.repeat(64),
+    rules: {
+      sentenceRhythm: ['Use uneven sentence rhythm with short aftershocks.'],
+      paragraphDensity: ['Keep paragraphs compact and scene-driven.'],
+      dialogue: ['Let dialogue imply pressure instead of explaining it.'],
+      narrativeDistance: ['Stay close to perception and judgment.'],
+      sensoryDetail: ['Anchor emotion in concrete objects.'],
+      imagery: ['Use images from the immediate setting.'],
+      pacing: ['Move through observation, pressure, and consequence.'],
+      avoid: ['Do not copy sentences or signature phrasings from the reference text.'],
+      antiAiVoice: ['Preserve human cadence with small contradictions and delayed answers.'],
     },
   };
 }
@@ -247,5 +270,40 @@ test('write injects previous chapter when available', async () => {
     );
     assert.match(captured, /\[chapters\/0001\.md\]/);
     assert.match(captured, /previous chapter content/);
+  });
+});
+
+test('write injects bound style profile snapshot into model prompt', async () => {
+  await withProjectWithPlan(async (cwd) => {
+    const profile = makeStyleProfileFixture();
+    await mkdir(join(cwd, '.authoros/private'), { recursive: true });
+    await writeFile(
+      join(cwd, '.authoros/private/style-binding.json'),
+      `${JSON.stringify({
+        version: 1,
+        profileId: profile.id,
+        boundAt: '2026-05-18T01:00:00.000Z',
+        profile,
+      }, null, 2)}\n`,
+      'utf8',
+    );
+
+    let captured = '';
+    const llm = fakeLlm('正文。', (p) => { captured = p; });
+    const io = silentIo();
+    assert.equal(
+      await run(['write', '--chapter', '1', '--model'], cwd, io.io, {
+        env: { OPENAI_API_KEY: 'k', AUTHOROS_MODEL: 'm' }, llm,
+      }),
+      0,
+      io.err.join(''),
+    );
+
+    assert.match(captured, /bound_style_profile:/);
+    assert.match(captured, /name: Test Style/);
+    assert.match(captured, /human cadence/);
+    assert.match(captured, /Do not copy sentences/);
+    assert.match(captured, /do not copy source expression/i);
+    assert.match(io.out.join(''), /\.authoros\/private\/style-binding\.json/);
   });
 });

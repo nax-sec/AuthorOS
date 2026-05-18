@@ -8,6 +8,7 @@ import {
   createStyleProfileFromText,
   listStyleProfiles,
   loadStyleProfile,
+  readBookStyleProfile,
   readStyleBinding,
   saveStyleProfile,
 } from '../src/commands/style.ts';
@@ -167,6 +168,21 @@ test('bindStyleProfile writes a book-local binding after verifying the profile e
   });
 });
 
+test('bindStyleProfile stores a validated book-local profile snapshot', async () => {
+  await withTempRoot(async (root) => {
+    const projectDir = join(root, 'books/mara');
+    const profile = createStyleProfileFromText(root, { name: 'Mara Noir', text: referenceText });
+    await saveStyleProfile(root, profile);
+
+    await bindStyleProfile(root, projectDir, profile.id, new Date('2026-05-18T01:00:00Z'));
+
+    const stored = JSON.parse(await readFile(join(projectDir, '.authoros/private/style-binding.json'), 'utf8'));
+    assert.equal(stored.profile.id, profile.id);
+    assert.equal(stored.profile.name, 'Mara Noir');
+    assert.deepEqual(stored.profile.rules.antiAiVoice, profile.rules.antiAiVoice);
+  });
+});
+
 test('bindStyleProfile rejects missing profiles', async () => {
   await withTempRoot(async (root) => {
     await assert.rejects(
@@ -179,6 +195,37 @@ test('bindStyleProfile rejects missing profiles', async () => {
 test('readStyleBinding returns null when no binding exists', async () => {
   await withTempRoot(async (root) => {
     assert.equal(await readStyleBinding(root, join(root, 'books/mara')), null);
+  });
+});
+
+test('readBookStyleProfile returns null when no embedded snapshot exists', async () => {
+  await withTempRoot(async (root) => {
+    const projectDir = join(root, 'books/mara');
+    assert.equal(await readBookStyleProfile(projectDir), null);
+
+    await mkdir(join(projectDir, '.authoros/private'), { recursive: true });
+    await writeFile(
+      join(projectDir, '.authoros/private/style-binding.json'),
+      JSON.stringify({ version: 1, profileId: 'mara-noir', boundAt: '2026-05-18T01:00:00.000Z' }),
+      'utf8',
+    );
+
+    assert.equal(await readBookStyleProfile(projectDir), null);
+  });
+});
+
+test('readBookStyleProfile returns the embedded style profile snapshot', async () => {
+  await withTempRoot(async (root) => {
+    const projectDir = join(root, 'books/mara');
+    const profile = createStyleProfileFromText(root, { name: 'Mara Noir', text: referenceText });
+    await saveStyleProfile(root, profile);
+    await bindStyleProfile(root, projectDir, profile.id);
+
+    const result = await readBookStyleProfile(projectDir);
+
+    assert.equal(result?.id, profile.id);
+    assert.equal(result?.name, 'Mara Noir');
+    assert.deepEqual(result?.rules.antiAiVoice, profile.rules.antiAiVoice);
   });
 });
 

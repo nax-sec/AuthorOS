@@ -41,6 +41,10 @@ export interface StyleBinding {
   boundAt: string;
 }
 
+export interface BookStyleBindingSnapshot extends StyleBinding {
+  profile?: StyleProfile;
+}
+
 export interface StyleBindingResult {
   binding: StyleBinding;
   profile: StyleProfile;
@@ -237,9 +241,30 @@ export async function bindStyleProfile(
     profileId: profile.id,
     boundAt: (now ?? new Date()).toISOString(),
   };
+  const snapshot: BookStyleBindingSnapshot = { ...binding, profile };
   await mkdir(styleBindingDir(projectDir), { recursive: true });
-  await writeFile(styleBindingPath(projectDir), `${JSON.stringify(binding, null, 2)}\n`, 'utf8');
+  await writeFile(styleBindingPath(projectDir), `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8');
   return binding;
+}
+
+export async function readBookStyleProfile(projectDir: string): Promise<StyleProfile | null> {
+  const path = styleBindingPath(projectDir);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(path, 'utf8'));
+  } catch (error) {
+    if (isMissingFileError(error)) return null;
+    if (error instanceof SyntaxError) throw new AuthorOsError(`Invalid JSON in style binding: ${path}`);
+    throw error;
+  }
+
+  const binding = parseStyleBinding(parsed, `style binding: ${path}`);
+  if (!isRecord(parsed) || parsed.profile === undefined) return null;
+  const profile = parseStyleProfile(parsed.profile, `style binding profile snapshot: ${path}`);
+  if (profile.id !== binding.profileId) {
+    throw new AuthorOsError(`Style binding snapshot profile id does not match binding: ${binding.profileId}`);
+  }
+  return profile;
 }
 
 export async function readStyleBinding(root: string, projectDir: string): Promise<StyleBindingResult | null> {
