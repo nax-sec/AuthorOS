@@ -40,3 +40,58 @@ test('job store notifies subscribers when new events are appended', () => {
 
   assert.deepEqual(seen, ['planning']);
 });
+
+test('job store lists newest jobs first', () => {
+  const dates = [
+    new Date('2026-05-14T10:00:00Z'),
+    new Date('2026-05-14T10:01:00Z'),
+    new Date('2026-05-14T10:02:00Z'),
+  ];
+  let index = 0;
+  const jobs = createJobStore({ now: () => dates[index++] ?? dates.at(-1)! });
+
+  const first = jobs.createJob('continue_book', '开始写下一章');
+  const second = jobs.createJob('feedback_preview', '生成修改预览');
+
+  assert.deepEqual(jobs.list().map((job) => job.id), [second.id, first.id]);
+});
+
+test('job store hydrates existing jobs and continues ids', () => {
+  const jobs = createJobStore({
+    now: () => new Date('2026-05-14T11:00:00Z'),
+    initialJobs: [{
+      id: 'job-7',
+      action: 'continue_book',
+      status: 'completed',
+      createdAt: '2026-05-14T10:00:00.000Z',
+      updatedAt: '2026-05-14T10:05:00.000Z',
+      events: [{
+        type: 'completed',
+        message: '完成',
+        at: '2026-05-14T10:05:00.000Z',
+      }],
+      result: { chapter: 1 },
+    }],
+  });
+
+  const next = jobs.createJob('read_chapter', '读取最新章');
+
+  assert.equal(next.id, 'job-8');
+  assert.equal(jobs.get('job-7')?.status, 'completed');
+});
+
+test('job store calls onChange after mutations', () => {
+  const snapshots: string[][] = [];
+  const jobs = createJobStore({
+    now: () => new Date('2026-05-14T10:00:00Z'),
+    onChange: (items) => snapshots.push(items.map((job) => `${job.id}:${job.status}`)),
+  });
+
+  const job = jobs.createJob('continue_book', '开始写下一章');
+  jobs.complete(job.id, { chapter: 1 });
+
+  assert.deepEqual(snapshots, [
+    ['job-1:running'],
+    ['job-1:completed'],
+  ]);
+});

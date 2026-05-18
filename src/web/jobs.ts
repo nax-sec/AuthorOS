@@ -24,15 +24,28 @@ export interface JobStore {
   complete(id: string, result?: unknown): WebJob;
   fail(id: string, message: string): WebJob;
   get(id: string): WebJob | undefined;
+  list(): WebJob[];
   listEvents(id: string, after?: number): WebJobEvent[];
   subscribe(id: string, listener: (event: WebJobEvent) => void): () => void;
 }
 
-export function createJobStore(opts: { now?: () => Date } = {}): JobStore {
+export interface CreateJobStoreOptions {
+  now?: () => Date;
+  initialJobs?: WebJob[];
+  onChange?: (jobs: WebJob[]) => void;
+}
+
+export function createJobStore(opts: CreateJobStoreOptions = {}): JobStore {
   const now = opts.now ?? (() => new Date());
   const jobs = new Map<string, WebJob>();
   const listeners = new Map<string, Set<(event: WebJobEvent) => void>>();
   let nextId = 1;
+
+  for (const job of opts.initialJobs ?? []) {
+    jobs.set(job.id, cloneJob(job));
+    const match = job.id.match(/^job-(\d+)$/);
+    if (match) nextId = Math.max(nextId, Number(match[1]) + 1);
+  }
 
   function timestamp(): string {
     return now().toISOString();
@@ -54,6 +67,14 @@ export function createJobStore(opts: { now?: () => Date } = {}): JobStore {
     return job;
   }
 
+  function snapshot(): WebJob[] {
+    return [...jobs.values()].map(cloneJob);
+  }
+
+  function notifyChange(): void {
+    opts.onChange?.(snapshot());
+  }
+
   return {
     createJob(action, message) {
       const at = timestamp();
@@ -67,25 +88,36 @@ export function createJobStore(opts: { now?: () => Date } = {}): JobStore {
       };
       jobs.set(job.id, job);
       push(job, 'received', message);
+      notifyChange();
       return job;
     },
     append(id, type, message, data) {
-      return push(requireJob(id), type, message, data);
+      const job = push(requireJob(id), type, message, data);
+      notifyChange();
+      return job;
     },
     complete(id, result) {
       const job = requireJob(id);
       job.status = 'completed';
       job.result = result;
-      return push(job, 'completed', '完成', result);
+      push(job, 'completed', '完成', result);
+      notifyChange();
+      return job;
     },
     fail(id, message) {
       const job = requireJob(id);
       job.status = 'failed';
       job.error = message;
-      return push(job, 'failed', message);
+      push(job, 'failed', message);
+      notifyChange();
+      return job;
     },
     get(id) {
-      return jobs.get(id);
+      const job = jobs.get(id);
+      return job ? cloneJob(job) : undefined;
+    },
+    list() {
+      return snapshot().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     },
     listEvents(id, after = 0) {
       return requireJob(id).events.slice(after);
@@ -100,5 +132,12 @@ export function createJobStore(opts: { now?: () => Date } = {}): JobStore {
         if (set.size === 0) listeners.delete(id);
       };
     },
+  };
+}
+
+function cloneJob(job: WebJob): WebJob {
+  return {
+    ...job,
+    events: job.events.map((event) => ({ ...event })),
   };
 }
