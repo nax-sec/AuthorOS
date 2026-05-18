@@ -29,6 +29,17 @@
     .next-action { display: grid; gap: 8px; }
     .workspace { display: grid; gap: 16px; }
     .current-book { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .quality-loop { display: grid; gap: 12px; }
+    .next-chapter-card, .preview-card { display: grid; gap: 8px; padding: 12px; border: 1px solid #d9dee7; border-radius: 7px; background: #fafbfc; }
+    .stage-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+    .stage-pill { display: inline-flex; align-items: center; border: 1px solid #d9dee7; border-radius: 999px; padding: 5px 9px; background: #fff; color: #344054; font-size: 12px; font-weight: 600; }
+    .stage-pill.done { border-color: #98d7aa; background: #edf8f0; color: #176b37; }
+    .stage-pill.next { border-color: #91b5ff; background: #eef4ff; color: #1f4fbf; }
+    .stage-pill.missing { border-color: #f2b3b3; background: #fff1f1; color: #9a2a2a; }
+    .stage-pill.optional { border-color: #d9dee7; background: #f5f7fb; color: #667085; }
+    .signal-danger { color: #9a2a2a; font-weight: 700; }
+    .signal-warning { color: #946200; font-weight: 700; }
+    .signal-ok { color: #176b37; font-weight: 700; }
     .chapter { min-height: 280px; max-height: 58vh; overflow: auto; white-space: pre-wrap; line-height: 1.7; }
     .chat-log { min-height: 260px; max-height: 44vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; white-space: pre-wrap; }
     .msg { padding: 10px 12px; border: 1px solid #d9dee7; border-radius: 8px; background: #fff; }
@@ -76,6 +87,17 @@
           <button class="secondary" id="downloadAll">下载全部章节</button>
         </div>
       </div>
+      <section class="panel quality-loop" data-testid="quality-loop" aria-label="Quality Loop">
+        <div>
+          <h2>Quality Loop</h2>
+          <div id="qualitySignal" class="muted">加载质量环路...</div>
+        </div>
+        <div id="nextChapterCard" class="next-chapter-card" data-testid="next-chapter-card"></div>
+        <div id="qualityStages" class="stage-grid"></div>
+        <div id="pendingPreview" class="preview-card" data-testid="pending-preview"></div>
+        <div id="memoryReview" class="preview-card"></div>
+        <div id="recoveryHint" class="preview-card"></div>
+      </section>
       <h2>当前章节</h2>
       <article class="panel chapter" id="chapter" data-testid="chapter-reader">还没有读取章节。</article>
     </section>
@@ -103,6 +125,12 @@
     const nextActionHint = document.querySelector('#nextActionHint');
     const currentBookTitle = document.querySelector('#currentBookTitle');
     const currentBookMeta = document.querySelector('#currentBookMeta');
+    const qualitySignal = document.querySelector('#qualitySignal');
+    const nextChapterCard = document.querySelector('#nextChapterCard');
+    const qualityStages = document.querySelector('#qualityStages');
+    const pendingPreview = document.querySelector('#pendingPreview');
+    const memoryReview = document.querySelector('#memoryReview');
+    const recoveryHint = document.querySelector('#recoveryHint');
     const messageInput = document.querySelector('#message');
     const roomPrefix = (location.pathname.match(/^\/room\/[^/]+/) || [''])[0];
     const tokenKey = `authoros_token:${roomPrefix || 'single'}`;
@@ -216,6 +244,102 @@
         nextAction.disabled = true;
         nextActionHint.textContent = '刷新后再看看。';
       }
+      renderQuality(data.quality);
+    }
+
+    function renderQuality(quality) {
+      const signal = quality && quality.signals && quality.signals.length > 0
+        ? quality.signals[0]
+        : { kind: 'ok', label: '没有当前书' };
+      qualitySignal.className = `signal-${signal.kind || 'ok'}`;
+      qualitySignal.textContent = signal.label || '质量环路暂无阻塞';
+
+      nextChapterCard.innerHTML = '';
+      qualityStages.innerHTML = '';
+      pendingPreview.innerHTML = '';
+      memoryReview.innerHTML = '';
+      recoveryHint.innerHTML = '';
+
+      if (!quality) {
+        const title = document.createElement('div');
+        title.className = 'book-title';
+        title.textContent = '没有当前书';
+        const meta = document.createElement('div');
+        meta.className = 'muted';
+        meta.textContent = '开一本新书后，这里会显示下一章生产线。';
+        nextChapterCard.append(title, meta);
+        pendingPreview.textContent = '没有待确认预览。';
+        memoryReview.textContent = '没有记忆更新。';
+        recoveryHint.textContent = '没有失败恢复。';
+        return;
+      }
+
+      const next = quality.nextChapter;
+      if (next) {
+        const label = document.createElement('div');
+        label.className = 'book-title';
+        label.textContent = next.label || `第 ${next.chapter} 章生产线`;
+        const state = document.createElement('div');
+        state.className = 'muted';
+        state.textContent = next.blockers && next.blockers.length > 0 ? next.blockers.join('；') : '可继续';
+        nextChapterCard.append(label, state);
+
+        for (const stage of next.stages || []) {
+          qualityStages.appendChild(renderStagePill(stage));
+        }
+      } else {
+        nextChapterCard.textContent = '没有当前书。';
+      }
+
+      if (quality.pendingPreview) {
+        const previewTitle = document.createElement('div');
+        previewTitle.className = 'book-title';
+        previewTitle.textContent = `第 ${quality.pendingPreview.chapter} 章待确认预览`;
+        const previewText = document.createElement('div');
+        previewText.textContent = quality.pendingPreview.text;
+        const previewMeta = document.createElement('div');
+        previewMeta.className = 'muted';
+        previewMeta.textContent = `${quality.pendingPreview.instruction} · ${quality.pendingPreview.createdAt}`;
+        pendingPreview.append(previewTitle, previewText, previewMeta);
+      } else {
+        pendingPreview.textContent = '没有待确认预览。';
+      }
+
+      if (quality.memoryDeltas && quality.memoryDeltas.length > 0) {
+        const title = document.createElement('div');
+        title.className = 'book-title';
+        title.textContent = '记忆更新待审阅';
+        memoryReview.appendChild(title);
+        for (const delta of quality.memoryDeltas) {
+          const item = document.createElement('div');
+          item.className = 'muted';
+          item.textContent = `${delta.name} · ${delta.description}`;
+          memoryReview.appendChild(item);
+        }
+      } else {
+        memoryReview.textContent = '没有记忆更新。';
+      }
+
+      if (quality.recovery) {
+        const title = document.createElement('div');
+        title.className = 'book-title';
+        title.textContent = `失败恢复：${quality.recovery.failedPhase}`;
+        const message = document.createElement('div');
+        message.textContent = quality.recovery.message;
+        const suggestion = document.createElement('div');
+        suggestion.className = 'muted';
+        suggestion.textContent = quality.recovery.suggestion;
+        recoveryHint.append(title, message, suggestion);
+      } else {
+        recoveryHint.textContent = '没有失败恢复。';
+      }
+    }
+
+    function renderStagePill(stage) {
+      const pill = document.createElement('span');
+      pill.className = `stage-pill ${stage.status}`;
+      pill.textContent = `${stage.label} · ${stage.status}`;
+      return pill;
     }
 
     async function refreshJobs() {
