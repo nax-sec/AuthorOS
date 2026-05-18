@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
+function countMatches(text: string, pattern: RegExp): number {
+  return [...text.matchAll(pattern)].length;
+}
+
 test('private web app exposes personal cockpit regions', async () => {
   const html = await readFile(new URL('../src/web/public/app.html', import.meta.url), 'utf8');
 
@@ -201,7 +205,12 @@ test('private web app exposes personal cockpit regions', async () => {
   assert.match(html, /quickActionMessage/);
   assert.match(html, /我在这儿，直接说你想推进哪一步。/);
   assert.match(html, /帮我继续推进当前书/);
-  assert.match(html, /帮这一章去 AI 味/);
+  assert.match(html, /data-direct-action="read-latest"/);
+  assert.match(html, /function handleDirectQuickAction/);
+  assert.match(html, /result\.action === 'read_chapter'/);
+  assert.equal(countMatches(html, /<button class="quick-action" type="button" data-message="[^"]+">去 AI 味<\/button>/g), 1);
+  assert.equal(countMatches(html, /<button class="quick-action" type="button" data-message="[^"]+">仿写文风<\/button>/g), 1);
+  assert.match(html, /data-message="去 AI 味"/);
   assert.match(html, /强化章尾钩子/);
   assert.match(html, /保留剧情换文风/);
   assert.match(html, /今日写作台/);

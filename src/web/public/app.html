@@ -537,9 +537,7 @@
             <div id="chatLog" class="chat-log" data-testid="assistant-chat"></div>
             <div class="assistant-quick-actions" data-testid="assistant-quick-actions" aria-label="作者助理快捷动作">
               <button class="quick-action" type="button" data-message="帮我继续推进当前书">继续推进</button>
-              <button class="quick-action" type="button" data-message="读最新章">读最新章</button>
-              <button class="quick-action" type="button" data-message="帮这一章去 AI 味">去 AI 味</button>
-              <button class="quick-action" type="button" data-message="仿写文风处理这一章">仿写文风</button>
+              <button class="quick-action" type="button" data-direct-action="read-latest">读最新章</button>
             </div>
             <div class="assistant-quick-actions" data-testid="rewrite-intent-panel" aria-label="改写意图">
               <button class="quick-action" type="button" data-message="去 AI 味">去 AI 味</button>
@@ -768,6 +766,16 @@
       const drawer = document.querySelector(`[data-testid="${testId}"]`);
       if (drawer && 'open' in drawer) drawer.open = true;
       return drawer;
+    }
+
+    async function handleDirectQuickAction(action) {
+      if (action === 'read-latest') {
+        setWorkbenchMode('chapter');
+        addMessage('我切到正文并读取最新章。');
+        await loadLatestChapter(true);
+        return true;
+      }
+      return false;
     }
 
     async function loginIfNeeded() {
@@ -2270,6 +2278,10 @@
         watchedJobActions.set(result.jobId, result.action);
         watchJob(result.jobId);
       }
+      if (result.action === 'read_chapter') {
+        setWorkbenchMode('chapter');
+        await loadLatestChapter(true);
+      }
       await refreshJobs();
     }
 
@@ -2356,8 +2368,12 @@
       const mode = modeFromHash();
       if (mode) setWorkbenchMode(mode, { scroll: false });
     });
-    for (const button of document.querySelectorAll('[data-message]')) {
+    for (const button of document.querySelectorAll('[data-message], [data-direct-action]')) {
       button.addEventListener('click', () => {
+        if (button.dataset.directAction) {
+          handleDirectQuickAction(button.dataset.directAction).catch(error => addMessage(`失败：${error.message}`, false, true));
+          return;
+        }
         sendMessage(quickActionMessage(button)).catch(error => addMessage(`失败：${error.message}`, false, true));
       });
     }
