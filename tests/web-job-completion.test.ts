@@ -24,3 +24,19 @@ test('withJobCompletion keeps style previews explicitly preview-first', () => {
   assert.match(result.completion.detail, /正文还没有被覆盖/);
   assert.match(result.completion.next, /应用文风修改/);
 });
+
+test('withJobCompletion points quality jobs to the opened artifact panel', () => {
+  const review = withJobCompletion('reader_sim_review', {
+    chapter: 1,
+    artifacts: ['reviews/0001.reader-sim.md'],
+  });
+  const memory = withJobCompletion('memory_update', {
+    chapter: 1,
+    path: 'memory/chapter-0001.delta.md',
+  });
+
+  assert.match(review.completion.detail, /质量产物面板/);
+  assert.match(review.completion.next, /查看产物/);
+  assert.match(memory.completion.detail, /记忆更新面板/);
+  assert.match(memory.completion.next, /审阅记忆更新/);
+});

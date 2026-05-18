@@ -86,28 +86,28 @@ function completionCopy(command: CompletedCommandType, result: Record<string, un
   if (command === 'internal_review') {
     return {
       title: chapter ? `第 ${chapter} 章内评已生成。` : '内评已生成。',
-      detail: '内部顾问和编辑决议已经写入 reviews。',
-      next: '可以继续生成读者模拟，或进入章节决策。',
+      detail: '内部顾问和编辑决议已经写入 reviews，并会在质量产物面板打开。',
+      next: '查看产物，继续生成读者模拟，或进入章节决策。',
     };
   }
   if (command === 'reader_sim_review') {
     return {
       title: chapter ? `第 ${chapter} 章读者模拟已生成。` : '读者模拟已生成。',
-      detail: '模拟读者反馈已经写入 reviews。',
-      next: '如果内评也已完成，可以生成章节决策。',
+      detail: '模拟读者反馈已经写入 reviews，并会在质量产物面板打开。',
+      next: '查看产物；如果内评也已完成，可以生成章节决策。',
     };
   }
   if (command === 'chapter_decision') {
     return {
       title: chapter ? `第 ${chapter} 章创作决策已生成。` : '创作决策已生成。',
-      detail: '本章后的取舍、采纳反馈和下一章策略已经写入 decisions。',
-      next: '生成记忆更新，或按决策继续写下一章。',
+      detail: '本章后的取舍、采纳反馈和下一章策略已经写入 decisions，并会在质量产物面板打开。',
+      next: '查看产物，生成记忆更新，或按决策继续写下一章。',
     };
   }
   if (command === 'memory_update') {
     return {
       title: chapter ? `第 ${chapter} 章记忆更新已生成。` : '记忆更新已生成。',
-      detail: '记忆增量已经写入 memory，等待你审阅后合并。',
+      detail: '记忆增量已经写入 memory，并会在记忆更新面板打开。',
       next: '审阅记忆更新，或继续写下一章。',
     };
   }

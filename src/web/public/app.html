@@ -848,6 +848,76 @@
       content.textContent = result.content || '这个质量产物为空。';
     }
 
+    async function previewCompletedJobArtifact(event, action) {
+      const memoryDeltaName = memoryDeltaNameFromCompletedJob(event, action);
+      if (memoryDeltaName) {
+        await loadMemoryDelta(memoryDeltaName);
+        return;
+      }
+      const artifact = qualityArtifactFromCompletedJob(event, action);
+      if (artifact) await loadQualityArtifact(artifact);
+    }
+
+    function qualityArtifactFromCompletedJob(event, action) {
+      const data = completedJobData(event);
+      const chapter = data.chapter;
+      if (!Number.isInteger(chapter) || chapter < 1) return null;
+      const path = completedJobPath(data);
+      const type = qualityArtifactType(action, path);
+      if (!type) return null;
+      return {
+        type,
+        chapter,
+        label: qualityArtifactLabel(type, chapter),
+        path: path || qualityArtifactDefaultPath(type, chapter),
+      };
+    }
+
+    function memoryDeltaNameFromCompletedJob(event, action) {
+      if (action !== 'memory_update') return '';
+      const data = completedJobData(event);
+      const path = typeof data.path === 'string' ? data.path : '';
+      const match = path.match(/(?:^|\/)(chapter-\d{4}\.delta\.md)$/);
+      return match ? match[1] : '';
+    }
+
+    function completedJobData(event) {
+      return event && event.data && typeof event.data === 'object' && !Array.isArray(event.data)
+        ? event.data
+        : {};
+    }
+
+    function completedJobPath(data) {
+      if (typeof data.path === 'string') return data.path;
+      if (Array.isArray(data.artifacts)) {
+        return data.artifacts.find(item => typeof item === 'string') || '';
+      }
+      return '';
+    }
+
+    function qualityArtifactType(action, path) {
+      if (action === 'internal_review' || /\.internal\.md$/.test(path)) return 'internal_review';
+      if (action === 'reader_sim_review' || /\.reader-sim\.md$/.test(path)) return 'reader_sim_review';
+      if (action === 'chapter_decision' || /^decisions\/\d{4}\.md$/.test(path)) return 'chapter_decision';
+      return '';
+    }
+
+    function qualityArtifactLabel(type, chapter) {
+      const labels = {
+        internal_review: '内评',
+        reader_sim_review: '读者模拟',
+        chapter_decision: '决策',
+      };
+      return `第 ${chapter} 章${labels[type] || '质量产物'}`;
+    }
+
+    function qualityArtifactDefaultPath(type, chapter) {
+      const id = String(chapter).padStart(4, '0');
+      if (type === 'internal_review') return `reviews/${id}.internal.md`;
+      if (type === 'reader_sim_review') return `reviews/${id}.reader-sim.md`;
+      return `decisions/${id}.md`;
+    }
+
     function normalizeQualityAction(action) {
       if (!action || typeof action !== 'object') return null;
       if (typeof action.message !== 'string' || !action.message.trim()) return null;
@@ -1340,23 +1410,37 @@
       document.querySelector('.workspace').scrollIntoView({ block: 'start' });
     }
 
+    async function handleWatchedJobEvent(id, events, event) {
+      const data = JSON.parse(event.data);
+      refreshJobs().catch(() => {});
+      if (data.type === 'completed' || data.type === 'failed') {
+        events.close();
+        const refreshed = await loadCockpit()
+          .then(() => true)
+          .catch(error => {
+            addMessage(`刷新失败：${error.message}`, false, true);
+            return false;
+          });
+        if (data.type === 'completed') {
+          announceJobCompletion(data);
+          loadLatestChapter(false).catch(() => {});
+          if (refreshed) {
+            await previewCompletedJobArtifact(data, watchedJobActions.get(id))
+              .catch(error => addMessage(`读取产物失败：${error.message}`, false, true));
+          }
+        } else {
+          announceJobFailure(data);
+        }
+        watchedJobActions.delete(id);
+      } else {
+        announceJobProgress(id, data, watchedJobActions.get(id));
+      }
+    }
+
     function watchJob(id) {
       const events = new EventSource(`${roomPrefix}/api/jobs/${id}/events?token=${encodeURIComponent(token)}`);
       events.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        refreshJobs().catch(() => {});
-        if (data.type === 'completed' || data.type === 'failed') {
-          events.close();
-          loadCockpit().catch(error => addMessage(`刷新失败：${error.message}`, false, true));
-          if (data.type === 'completed') {
-            announceJobCompletion(data);
-            loadLatestChapter(false).catch(() => {});
-          } else {
-            announceJobFailure(data);
-          }
-        } else {
-          announceJobProgress(id, data, watchedJobActions.get(id));
-        }
+        handleWatchedJobEvent(id, events, event).catch(error => addMessage(`任务事件处理失败：${error.message}`, false, true));
       };
       events.onerror = () => events.close();
     }
