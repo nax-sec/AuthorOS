@@ -123,6 +123,15 @@
     .chapter { min-height: 460px; max-height: 64vh; overflow: auto; white-space: pre-wrap; line-height: 1.78; padding: 18px; font-size: 15px; }
     .assistant-dock { position: sticky; top: 0; z-index: 6; }
     .assistant-panel { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; height: min(var(--assistant-dock-max), calc(100vh - 102px)); max-height: var(--assistant-dock-max); overflow: hidden; border-color: #cbd8f5; box-shadow: 0 12px 30px rgba(24, 34, 48, .08); }
+    .assistant-compose { position: relative; display: grid; gap: 8px; }
+    .assistant-tools-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .assistant-tools-copy { overflow: hidden; color: var(--muted); font-size: 12px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+    .assistant-tools-toggle { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; min-width: 34px; padding: 0; border-radius: 50%; font-size: 18px; line-height: 1; }
+    .assistant-tools-toggle[aria-expanded="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
+    .assistant-tools-drawer { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); z-index: 12; display: grid; gap: 10px; max-height: min(280px, 40vh); overflow: auto; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255, 253, 248, .98); box-shadow: 0 18px 44px rgba(33, 37, 31, .16); }
+    .assistant-tools-drawer[hidden] { display: none; }
+    .assistant-tools-group { display: grid; gap: 7px; }
+    .assistant-tools-label { color: var(--muted); font-size: 11px; font-weight: 800; }
     .assistant-input { display: grid; gap: 8px; }
     .assistant-quick-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     .quick-action { min-height: 34px; padding: 7px 9px; border-color: #b8c3d2; background: #fff; color: var(--ink); font-size: 12px; }
@@ -246,7 +255,7 @@
     }
     .assistant-body {
       display: grid;
-      grid-template-rows: minmax(var(--assistant-chat-min), 1fr) auto auto;
+      grid-template-rows: minmax(var(--assistant-chat-min), 1fr) auto;
       gap: 10px;
       min-height: 0;
       overflow: hidden;
@@ -532,24 +541,38 @@
           </div>
           <div class="assistant-body" data-testid="assistant-body">
             <div id="chatLog" class="chat-log" data-testid="assistant-chat"></div>
-            <div class="assistant-quick-actions" data-testid="assistant-quick-actions" aria-label="作者助理快捷动作">
-              <button class="quick-action" type="button" data-message="帮我继续推进当前书">继续推进</button>
-              <button class="quick-action" type="button" data-direct-action="read-latest">读最新章</button>
-            </div>
-            <div class="assistant-quick-actions" data-testid="rewrite-intent-panel" aria-label="改写意图">
-              <button class="quick-action" type="button" data-message="去 AI 味">去 AI 味</button>
-              <button class="quick-action" type="button" data-message="仿写文风">仿写文风</button>
-              <button class="quick-action" type="button" data-message="文风润色">文风润色</button>
-              <button class="quick-action" type="button" data-message="强化开头">强化开头</button>
-              <button class="quick-action" type="button" data-message="强化章尾钩子">强化章尾钩子</button>
-              <button class="quick-action" type="button" data-message="减少解释">减少解释</button>
-              <button class="quick-action" type="button" data-message="增加压迫感">增加压迫感</button>
-              <button class="quick-action" type="button" data-message="对白瘦身">对白瘦身</button>
-              <button class="quick-action" type="button" data-message="保留剧情换文风">保留剧情换文风</button>
-            </div>
-            <div class="assistant-input">
-              <textarea id="message" placeholder="开一本新书、继续写、读最新章，或直接说哪里要改"></textarea>
-              <button id="send">发送</button>
+            <div class="assistant-compose" data-testid="assistant-compose">
+              <div class="assistant-tools-bar">
+                <button class="secondary assistant-tools-toggle" id="quickActionsToggle" data-testid="assistant-tools-toggle" type="button" aria-label="打开快捷动作" aria-controls="assistantToolsDrawer" aria-expanded="false" title="快捷动作">+</button>
+                <span class="assistant-tools-copy">快捷动作</span>
+              </div>
+              <div id="assistantToolsDrawer" class="assistant-tools-drawer" data-testid="assistant-tools-drawer" hidden>
+                <div class="assistant-tools-group">
+                  <div class="assistant-tools-label">常用</div>
+                  <div class="assistant-quick-actions" data-testid="assistant-quick-actions" aria-label="作者助理快捷动作">
+                    <button class="quick-action" type="button" data-message="帮我继续推进当前书">继续推进</button>
+                    <button class="quick-action" type="button" data-direct-action="read-latest">读最新章</button>
+                  </div>
+                </div>
+                <div class="assistant-tools-group">
+                  <div class="assistant-tools-label">改写</div>
+                  <div class="assistant-quick-actions" data-testid="rewrite-intent-panel" aria-label="改写意图">
+                    <button class="quick-action" type="button" data-message="去 AI 味">去 AI 味</button>
+                    <button class="quick-action" type="button" data-message="仿写文风">仿写文风</button>
+                    <button class="quick-action" type="button" data-message="文风润色">文风润色</button>
+                    <button class="quick-action" type="button" data-message="强化开头">强化开头</button>
+                    <button class="quick-action" type="button" data-message="强化章尾钩子">强化章尾钩子</button>
+                    <button class="quick-action" type="button" data-message="减少解释">减少解释</button>
+                    <button class="quick-action" type="button" data-message="增加压迫感">增加压迫感</button>
+                    <button class="quick-action" type="button" data-message="对白瘦身">对白瘦身</button>
+                    <button class="quick-action" type="button" data-message="保留剧情换文风">保留剧情换文风</button>
+                  </div>
+                </div>
+              </div>
+              <div class="assistant-input">
+                <textarea id="message" placeholder="开一本新书、继续写、读最新章，或直接说哪里要改"></textarea>
+                <button id="send">发送</button>
+              </div>
             </div>
           </div>
         </section>
@@ -673,6 +696,8 @@
     const messageInput = document.querySelector('#message');
     const deskRail = document.querySelector('[data-testid="desk-rail"]');
     const assistantDrawerToggle = document.querySelector('#assistantDrawerToggle');
+    const quickActionsToggle = document.querySelector('#quickActionsToggle');
+    const assistantToolsDrawer = document.querySelector('#assistantToolsDrawer');
     const stagePanels = Array.from(document.querySelectorAll('[data-stage-panel]'));
     const modeTabs = Array.from(document.querySelectorAll('[data-mode-target]'));
     const roomPrefix = (location.pathname.match(/^\/room\/[^/]+/) || [''])[0];
@@ -819,6 +844,15 @@
       document.body.classList.toggle('assistant-collapsed', collapsed);
       assistantDrawerToggle.textContent = collapsed ? '展开' : '收起';
       assistantDrawerToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      if (collapsed) toggleAssistantTools(false);
+    }
+
+    function toggleAssistantTools(forceOpen) {
+      const open = typeof forceOpen === 'boolean' ? forceOpen : assistantToolsDrawer.hidden;
+      assistantToolsDrawer.hidden = !open;
+      quickActionsToggle.textContent = open ? '-' : '+';
+      quickActionsToggle.setAttribute('aria-label', open ? '收起快捷动作' : '打开快捷动作');
+      quickActionsToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     }
 
     function openUtilityDrawer(testId) {
@@ -2453,12 +2487,14 @@
       tab.addEventListener('click', () => setWorkbenchMode(tab.dataset.modeTarget));
     }
     assistantDrawerToggle.addEventListener('click', () => toggleAssistantDock());
+    quickActionsToggle.addEventListener('click', () => toggleAssistantTools());
     window.addEventListener('hashchange', () => {
       const mode = modeFromHash();
       if (mode) setWorkbenchMode(mode, { scroll: false });
     });
     for (const button of document.querySelectorAll('[data-message], [data-direct-action]')) {
       button.addEventListener('click', () => {
+        if (button.closest('#assistantToolsDrawer')) toggleAssistantTools(false);
         if (button.dataset.directAction) {
           handleDirectQuickAction(button.dataset.directAction).catch(error => addMessage(`失败：${error.message}`, false, true));
           return;

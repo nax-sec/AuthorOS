@@ -241,11 +241,28 @@ test('assistant chat keeps long replies readable in an expanded dock', async () 
   assert.match(html, /--assistant-dock-max:\s*clamp\(520px,\s*calc\(100vh - 104px\),\s*820px\);/);
   assert.match(html, /--assistant-chat-min:\s*clamp\(180px,\s*30vh,\s*300px\);/);
   assert.match(html, /\.assistant-panel\s*\{[^}]*height:\s*min\(var\(--assistant-dock-max\),\s*calc\(100vh - 102px\)\);/s);
-  assert.match(html, /\.assistant-body\s*\{[^}]*grid-template-rows:\s*minmax\(var\(--assistant-chat-min\),\s*1fr\) auto auto;[^}]*overflow:\s*hidden;/s);
+  assert.match(html, /\.assistant-body\s*\{[^}]*grid-template-rows:\s*minmax\(var\(--assistant-chat-min\),\s*1fr\) auto;[^}]*overflow:\s*hidden;/s);
   assert.match(html, /\.chat-log\s*\{[^}]*max-height:\s*none;/s);
   assert.match(html, /\.chat-log\s*\{[^}]*position:\s*relative;/s);
   assert.match(html, /function scrollChatToMessage\(element, own\)/);
   assert.match(html, /scrollChatToMessage\(div, own\);/);
+});
+
+test('assistant quick actions collapse behind a compact tools toggle', async () => {
+  const html = await readFile(new URL('../src/web/public/app.html', import.meta.url), 'utf8');
+
+  assert.match(html, /data-testid="assistant-tools-toggle"/);
+  assert.match(html, /data-testid="assistant-tools-drawer"/);
+  assert.match(html, /id="assistantToolsDrawer"[^>]*hidden/);
+  assert.match(html, /\.assistant-compose\s*\{[^}]*position:\s*relative;/s);
+  assert.match(html, /\.assistant-tools-drawer\s*\{[^}]*position:\s*absolute;[^}]*bottom:\s*calc\(100% \+ 8px\);/s);
+  assert.match(html, /\.assistant-tools-drawer\[hidden\]\s*\{\s*display:\s*none;\s*\}/);
+  assert.match(html, /const quickActionsToggle = document\.querySelector\('#quickActionsToggle'\);/);
+  assert.match(html, /const assistantToolsDrawer = document\.querySelector\('#assistantToolsDrawer'\);/);
+  assert.match(html, /function toggleAssistantTools\(forceOpen\)/);
+  assert.match(html, /quickActionsToggle\.setAttribute\('aria-expanded', open \? 'true' : 'false'\);/);
+  assert.match(html, /quickActionsToggle\.addEventListener\('click', \(\) => toggleAssistantTools\(\)\);/);
+  assert.match(html, /toggleAssistantTools\(false\);/);
 });
 
 test('assistant chat restores local conversation history after refresh', async () => {
