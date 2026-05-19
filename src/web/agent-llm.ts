@@ -71,8 +71,10 @@ function buildAgentPrompt(session: WebAgentSession, message: string): string {
     'Safety rules:',
     '- Do not create a new book from a vague first idea unless the user explicitly asks to start directly.',
     '- If the user is vague about a new book, use new_book_intake and ask compact creative questions.',
-    '- If pendingNewBook.stage is "intake" and the user supplies book details, use new_book_confirm with a complete concept and ask for final confirmation.',
-    '- If pendingNewBook.stage is "confirm" and the user confirms, use new_book_confirmed with the full concept from session state.',
+    '- If pendingNewBook.stage is "intake" and the user supplies book details, use new_book_confirm with a complete concept, show it visibly, and ask 2-4 compact setup questions before final creation.',
+    '- If pendingNewBook.stage is "confirm" and the user asks to see, organize, preview, or review the concept, use new_book_confirm again and show the concept. Do not create the book.',
+    '- If pendingNewBook.stage is "confirm" and the user answers setup questions, use new_book_confirm again with the updated concept. Do not create unless the user explicitly confirms creation.',
+    '- If pendingNewBook.stage is "confirm" and the user explicitly confirms creation or explicitly authorizes you to fill remaining questions, use new_book_confirmed with the full concept from session state.',
     '- If the user is generally stuck, prefer unknown with a useful next-step message, unless a concrete route is clear.',
     '- Feedback preview never overwrites chapters.',
     '- Craft rewrite intents also produce feedback_preview first: 强化开头, 强化章尾钩子, 减少解释, 增加压迫感, 对白瘦身.',
@@ -85,7 +87,7 @@ function buildAgentPrompt(session: WebAgentSession, message: string): string {
     '',
     'Allowed actions:',
     '- new_book_intake: ask compact setup questions before creating a book.',
-    '- new_book_confirm: summarize the proposed book concept and ask the user to confirm before creating it. Requires concept.',
+    '- new_book_confirm: summarize the proposed book concept visibly in message, ask compact setup questions, and ask the user to confirm before creating it. Requires concept.',
     '- new_book_confirmed: create a book only if explicit direct-start/confirmation is present.',
     '- create_book_and_continue: create a book and immediately plan/write chapter 1 unless the user asked to only create setup.',
     '- continue_book',
@@ -193,9 +195,12 @@ function applyLlmAction(session: WebAgentSession, rawMessage: string, action: Ll
       seed: session.pendingNewBook?.seed ?? rawMessage,
       brief: action.concept,
     };
-    return { kind: 'reply', action: action.action, message: action.message };
+    return { kind: 'reply', action: action.action, message: formatNewBookConceptPreview(action) };
   }
   if (action.action === 'new_book_confirmed') {
+    if (!canCreateNewBookFromMessage(rawMessage)) {
+      return holdNewBookForVisibleConfirmation(session, rawMessage, action);
+    }
     session.pendingNewBook = undefined;
     return {
       kind: 'job',
@@ -205,6 +210,9 @@ function applyLlmAction(session: WebAgentSession, rawMessage: string, action: Ll
     };
   }
   if (action.action === 'create_book_and_continue') {
+    if (!canCreateNewBookFromMessage(rawMessage)) {
+      return holdNewBookForVisibleConfirmation(session, rawMessage, action);
+    }
     session.pendingNewBook = undefined;
     return {
       kind: 'job',
@@ -268,4 +276,54 @@ function applyLlmAction(session: WebAgentSession, rawMessage: string, action: Ll
     return { kind: 'job', action: action.action, message: action.message, command: { type: 'status' } };
   }
   return { kind: 'reply', action: 'unknown', message: action.message };
+}
+
+function holdNewBookForVisibleConfirmation(
+  session: WebAgentSession,
+  rawMessage: string,
+  action: Extract<LlmAgentAction, { action: 'new_book_confirmed' | 'create_book_and_continue' }>,
+): WebAgentResult {
+  const concept = action.concept || session.pendingNewBook?.brief || rawMessage;
+  session.pendingNewBook = {
+    stage: 'confirm',
+    seed: session.pendingNewBook?.seed ?? rawMessage,
+    brief: concept,
+  };
+  return {
+    kind: 'reply',
+    action: 'new_book_confirm',
+    message: formatNewBookConceptPreview({
+      action: 'new_book_confirm',
+      title: action.title,
+      concept,
+      message: '我先把概念整理出来给你看，确认后再建书。',
+    }),
+  };
+}
+
+function formatNewBookConceptPreview(action: Extract<LlmAgentAction, { action: 'new_book_confirm' }>): string {
+  return [
+    action.message,
+    '',
+    action.title ? `暂定书名：${action.title}` : '',
+    '开书概念：',
+    action.concept,
+    '',
+    '建书前我还想确认几个问题：',
+    '1. 这本书最终更偏什么结局气质：痛到底、苦后有糖，还是开放式余味？',
+    '2. 主线关系或核心冲突哪一条最重要？',
+    '3. 有哪些必须保留的刺激点，以及明确不要碰的雷区？',
+    '你可以逐条答，也可以说“你来补全后确认建书”。',
+    '',
+    '确认后我再建书。可以回复“确认建书 / 就这样建 / 开始建”。如果要改，直接说改哪里。',
+  ].filter((line) => line !== '').join('\n');
+}
+
+function canCreateNewBookFromMessage(message: string): boolean {
+  const normalized = message.trim();
+  if (/看看|看一下|让我看|给我看|整理|预览|方案|概念|先给|展示|review/i.test(normalized)) {
+    return false;
+  }
+  return /^(确认|确认建书|确认创建|可以建|可以创建|就这样|就这样建|开始建|开始吧|建吧|开工|按这个建|按这个方向建书|ok|OK)$/i.test(normalized)
+    || /直接开始|直接写|直接建|不用问|别问|马上建|开始写|你来补全后确认建书|你补全.*确认建书|问题你来定.*确认建书/.test(normalized);
 }

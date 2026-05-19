@@ -118,6 +118,53 @@ test('llm agent can ask for final new book confirmation with model-written conce
   assert.match(session.pendingNewBook?.brief ?? '', /刘新弟/);
 });
 
+test('llm new book confirmation always shows the organized concept before creation', async () => {
+  const session = createWebAgentSession();
+  session.pendingNewBook = { stage: 'intake', seed: '我想开一本新书' };
+  const result = await handleAgentMessageWithLlm(session, '主角是刘新弟，狗血舔狗重生虐恋，夹在男男和男女三角关系里', {
+    mode: 'llm',
+    llm: llmReturning(JSON.stringify({
+      action: 'new_book_confirm',
+      message: '我先帮你把想法整理成一个开书概念，确认后就建书开始写。',
+      title: '暂定名',
+      concept: '刘新弟重生后被迫重走一段狗血舔狗虐恋，在男男暧昧与男女旧情的三角拉扯里越陷越深，文笔细腻，情感足够虐。',
+    })),
+  });
+
+  assert.equal(result.kind, 'reply');
+  assert.equal(result.action, 'new_book_confirm');
+  assert.match(result.message, /开书概念/);
+  assert.match(result.message, /刘新弟/);
+  assert.match(result.message, /三角/);
+  assert.match(result.message, /建书前我还想确认几个问题/);
+  assert.match(result.message, /结局气质/);
+  assert.match(result.message, /确认建书/);
+});
+
+test('llm new book flow does not create when the user asks to see the organized concept', async () => {
+  const session = createWebAgentSession();
+  session.pendingNewBook = {
+    stage: 'confirm',
+    seed: '我想看一本主角是刘新弟的狗血舔狗重生虐恋文',
+    brief: '刘新弟重生后被夹在男男和男女三角关系里，感情细腻，足够虐。',
+  };
+  const result = await handleAgentMessageWithLlm(session, 'ok，整理吧，让我看看你的概念', {
+    mode: 'llm',
+    llm: llmReturning(JSON.stringify({
+      action: 'new_book_confirmed',
+      message: '概念已整理确认，我开始建书。',
+      concept: '刘新弟重生后被迫重走舔狗虐恋，在男男暧昧和男女旧情之间被反复撕扯。',
+    })),
+  });
+
+  assert.equal(result.kind, 'reply');
+  assert.equal(result.action, 'new_book_confirm');
+  assert.match(result.message, /开书概念/);
+  assert.match(result.message, /刘新弟/);
+  assert.match(result.message, /确认建书/);
+  assert.equal(session.pendingNewBook?.stage, 'confirm');
+});
+
 test('llm agent prompt includes pending new book state for confirmation', async () => {
   const session = createWebAgentSession();
   session.pendingNewBook = {
