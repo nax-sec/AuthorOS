@@ -207,6 +207,7 @@ test('private web app exposes personal cockpit regions', async () => {
   assert.match(html, /帮我继续推进当前书/);
   assert.match(html, /data-direct-action="read-latest"/);
   assert.match(html, /function handleDirectQuickAction/);
+  assert.match(html, /function handleNextActionClick/);
   assert.match(html, /result\.action === 'read_chapter'/);
   assert.equal(countMatches(html, /<button class="quick-action" type="button" data-message="[^"]+">去 AI 味<\/button>/g), 1);
   assert.equal(countMatches(html, /<button class="quick-action" type="button" data-message="[^"]+">仿写文风<\/button>/g), 1);
@@ -228,4 +229,14 @@ test('assistant collapse keeps model utilities reachable', async () => {
   assert.match(html, /--assistant-dock-max:/);
   assert.match(html, /\.desk-rail\[data-assistant-collapsed="true"\] \.assistant-body\s*\{\s*display:\s*none;/);
   assert.match(html, /\.desk-rail\[data-assistant-collapsed="true"\] \.rail-utilities\s*\{\s*display:\s*grid;/);
+});
+
+test('next action opens the assistant before starting a new book flow', async () => {
+  const html = await readFile(new URL('../src/web/public/app.html', import.meta.url), 'utf8');
+
+  assert.match(html, /const assistantPanel = document\.querySelector\('\[data-testid="assistant-panel"\]'\);/);
+  assert.match(html, /async function handleNextActionClick\(\)/);
+  assert.match(html, /toggleAssistantDock\(false\);\s*assistantPanel\.scrollIntoView\(\{ behavior: 'smooth', block: 'start' \}\);/);
+  assert.match(html, /await sendMessage\(message\);\s*messageInput\.focus\(\);/);
+  assert.match(html, /nextAction\.addEventListener\('click', \(\) => handleNextActionClick\(\)\.catch/);
 });

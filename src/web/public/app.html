@@ -616,6 +616,7 @@
     const taskCenter = document.querySelector('#taskCenter');
     const chapter = document.querySelector('#chapter');
     const chapterList = document.querySelector('#chapterList');
+    const assistantPanel = document.querySelector('[data-testid="assistant-panel"]');
     const books = document.querySelector('#books');
     const sessionStatus = document.querySelector('#sessionStatus');
     const residentService = document.querySelector('#residentService');
@@ -2291,6 +2292,15 @@
       }
     }
 
+    async function handleNextActionClick() {
+      const message = nextAction.dataset.message || '';
+      if (!message) return;
+      toggleAssistantDock(false);
+      assistantPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      await sendMessage(message);
+      messageInput.focus();
+    }
+
     async function loadLatestChapter(showErrors = true) {
       try {
         const latest = await api('/api/chapters/latest');
@@ -2386,9 +2396,7 @@
     messageInput.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) send();
     });
-    nextAction.addEventListener('click', () => {
-      if (nextAction.dataset.message) sendMessage(nextAction.dataset.message).catch(error => addMessage(`失败：${error.message}`, false, true));
-    });
+    nextAction.addEventListener('click', () => handleNextActionClick().catch(error => addMessage(`失败：${error.message}`, false, true)));
     document.querySelector('#refresh').addEventListener('click', () => loadCockpit().catch(error => addMessage(`刷新失败：${error.message}`, false, true)));
     document.querySelector('#readLatest').addEventListener('click', () => loadLatestChapter(true));
     document.querySelector('#downloadChapter').addEventListener('click', () => location.href = `${roomPrefix}/download/chapter/latest?token=${encodeURIComponent(token)}`);
