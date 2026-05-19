@@ -257,7 +257,7 @@ test('llm receptionist uses a JSON router system prompt with enough output budge
   assert.match(capturedOptions?.systemPrompt ?? '', /JSON router/);
   assert.match(capturedOptions?.systemPrompt ?? '', /JSON only/);
   assert.equal(capturedOptions?.temperature, 0.1);
-  assert.equal(capturedOptions?.maxTokens, 1600);
+  assert.equal(capturedOptions?.maxTokens, 9000);
 });
 
 test('llm agent can route style rewrite preview', async () => {

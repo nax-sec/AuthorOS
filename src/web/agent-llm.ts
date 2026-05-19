@@ -18,6 +18,7 @@ const agentRouterSystemPrompt = [
   'Return JSON only. No Markdown, no prose before or after JSON, no code fences.',
   'Keep the message field concise in Simplified Chinese.',
 ].join(' ');
+const agentRouterMaxTokens = 9000;
 
 type LlmAgentAction =
   | { action: 'new_book_intake'; message: string }
@@ -52,7 +53,7 @@ export async function handleAgentMessageWithLlm(
     const parsed = parseLlmAgentAction(await options.llm.generate(buildAgentPrompt(session, rawMessage), {
       systemPrompt: agentRouterSystemPrompt,
       temperature: 0.1,
-      maxTokens: 1600,
+      maxTokens: agentRouterMaxTokens,
     }));
     return applyLlmAction(session, rawMessage, parsed);
   } catch (error) {
