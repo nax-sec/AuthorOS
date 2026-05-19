@@ -427,15 +427,26 @@ async function resolveAgentMessage(
 
 function modelReceptionFailure(error: unknown): WebAgentResult {
   const detail = error instanceof Error ? error.message : String(error);
+  const message = isModelConfigFailure(detail)
+    ? [
+        '模型接待不可用。',
+        '请先打开右下角「模型配置」，保存 API Key、模型名和 Base URL 后再试。',
+        detail ? `原因：${detail}` : '',
+      ]
+    : [
+        '模型接待这次没有返回可用内容。',
+        '模型配置已读取到，但前台 agent 的路由响应不可用。可以直接重试一次；如果连续出现，换一个更稳定的接待模型或稍后再试。',
+        detail ? `原因：${detail}` : '',
+      ];
   return {
     kind: 'reply',
     action: 'unknown',
-    message: [
-      '模型接待不可用。',
-      '请先打开右下角「模型配置」，保存 API Key、模型名和 Base URL 后再试。',
-      detail ? `原因：${detail}` : '',
-    ].filter(Boolean).join('\n'),
+    message: message.filter(Boolean).join('\n'),
   };
+}
+
+function isModelConfigFailure(detail: string): boolean {
+  return /api key|api-key|apikey|model is required|model-backed AuthorOS commands|AUTHOROS_MODEL|OPENAI_MODEL|OPENAI_API_KEY|required for model/i.test(detail);
 }
 
 async function webListBooks(options: CreateWebServerOptions): Promise<PrivateShelf> {

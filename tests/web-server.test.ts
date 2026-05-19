@@ -297,6 +297,32 @@ test('web server default llm receptionist reports configuration problems without
   });
 });
 
+test('web server distinguishes truncated model reception from missing model config', async () => {
+  await withTempRoot(async (root) => {
+    const server = createWebServer({
+      root,
+      agentLlm: {
+        async generate() {
+          throw new Error('OpenAI-compatible response did not include message content (finish_reason: length).');
+        },
+      },
+    });
+
+    const response = await server.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '继续写' }),
+    }));
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.kind, 'reply');
+    assert.equal(body.action, 'unknown');
+    assert.match(body.message, /模型接待这次没有返回可用内容/);
+    assert.match(body.message, /直接重试/);
+    assert.doesNotMatch(body.message, /保存 API Key/);
+  });
+});
+
 test('web server can use llm agent mode for vague messages', async () => {
   await withTempRoot(async (root) => {
     const server = createWebServer({

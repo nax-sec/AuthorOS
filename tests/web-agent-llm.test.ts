@@ -193,6 +193,26 @@ test('llm prompt lists style rewrite actions', async () => {
   assert.match(prompt, /memory_update/);
 });
 
+test('llm receptionist uses a JSON router system prompt with enough output budget', async () => {
+  let capturedOptions: Parameters<LlmClient['generate']>[1] | undefined;
+  const llm: LlmClient = {
+    async generate(_input, options) {
+      capturedOptions = options;
+      return JSON.stringify({
+        action: 'unknown',
+        message: '我先帮你收窄下一步。',
+      });
+    },
+  };
+
+  await handleAgentMessageWithLlm(createWebAgentSession(), '看看状态', { mode: 'llm', llm });
+
+  assert.match(capturedOptions?.systemPrompt ?? '', /JSON router/);
+  assert.match(capturedOptions?.systemPrompt ?? '', /JSON only/);
+  assert.equal(capturedOptions?.temperature, 0.1);
+  assert.equal(capturedOptions?.maxTokens, 1600);
+});
+
 test('llm agent can route style rewrite preview', async () => {
   const result = await handleAgentMessageWithLlm(createWebAgentSession(), '去 AI 味', {
     mode: 'llm',

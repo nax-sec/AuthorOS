@@ -13,6 +13,12 @@ export interface HandleAgentMessageWithLlmOptions {
   llm: LlmClient;
 }
 
+const agentRouterSystemPrompt = [
+  'You are AuthorOS JSON router for a private writing cockpit.',
+  'Return JSON only. No Markdown, no prose before or after JSON, no code fences.',
+  'Keep the message field concise in Simplified Chinese.',
+].join(' ');
+
 type LlmAgentAction =
   | { action: 'new_book_intake'; message: string }
   | { action: 'new_book_confirm'; message: string; title?: string; concept: string }
@@ -44,8 +50,9 @@ export async function handleAgentMessageWithLlm(
 
   try {
     const parsed = parseLlmAgentAction(await options.llm.generate(buildAgentPrompt(session, rawMessage), {
-      temperature: 0.2,
-      maxTokens: 700,
+      systemPrompt: agentRouterSystemPrompt,
+      temperature: 0.1,
+      maxTokens: 1600,
     }));
     return applyLlmAction(session, rawMessage, parsed);
   } catch (error) {
