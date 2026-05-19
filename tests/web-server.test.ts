@@ -236,7 +236,7 @@ test('web server serves the browser shell', async () => {
 
 test('web server chat returns immediate agent reply for new book intake', async () => {
   await withTempRoot(async (root) => {
-    const server = createWebServer({ root });
+    const server = createWebServer({ root, agentMode: 'rule' });
 
     const response = await server.fetch(new Request('http://local/api/chat', {
       method: 'POST',
@@ -250,7 +250,7 @@ test('web server chat returns immediate agent reply for new book intake', async 
   });
 });
 
-test('web server defaults to rule agent without llm receptionist', async () => {
+test('web server defaults to external llm receptionist', async () => {
   await withTempRoot(async (root) => {
     let called = false;
     const server = createWebServer({
@@ -259,8 +259,8 @@ test('web server defaults to rule agent without llm receptionist', async () => {
         async generate() {
           called = true;
           return JSON.stringify({
-            action: 'unknown',
-            message: 'LLM 接待不应该默认接管。',
+            action: 'new_book_intake',
+            message: '模型接待：我先问两个问题，再开始建书。',
           });
         },
       },
@@ -273,9 +273,27 @@ test('web server defaults to rule agent without llm receptionist', async () => {
     const body = await response.json();
 
     assert.equal(response.status, 200);
-    assert.equal(called, false);
+    assert.equal(called, true);
     assert.equal(body.action, 'new_book_intake');
-    assert.match(body.message, /方向钉稳/);
+    assert.match(body.message, /模型接待/);
+  });
+});
+
+test('web server default llm receptionist reports configuration problems without local rule fallback', async () => {
+  await withTempRoot(async (root) => {
+    const server = createWebServer({ root, env: {} });
+
+    const response = await server.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '读最新章' }),
+    }));
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.kind, 'reply');
+    assert.equal(body.action, 'unknown');
+    assert.match(body.message, /模型接待不可用/);
+    assert.match(body.message, /模型配置/);
   });
 });
 
@@ -827,6 +845,7 @@ test('web server explains failed model jobs with readable failure details', asyn
     await writeStyleReadyBook(root);
     const server = createWebServer({
       root,
+      agentMode: 'rule',
       writingLlm: {
         async generate() {
           throw new Error('OpenAI-compatible response did not include message content (finish_reason: length).');

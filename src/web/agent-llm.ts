@@ -15,6 +15,7 @@ export interface HandleAgentMessageWithLlmOptions {
 
 type LlmAgentAction =
   | { action: 'new_book_intake'; message: string }
+  | { action: 'new_book_confirm'; message: string; title?: string; concept: string }
   | { action: 'new_book_confirmed'; message: string; title?: string; concept: string }
   | { action: 'create_book_and_continue'; message: string; title?: string; concept: string }
   | { action: 'continue_book'; message: string }
@@ -37,29 +38,34 @@ export async function handleAgentMessageWithLlm(
   rawMessage: string,
   options: HandleAgentMessageWithLlmOptions,
 ): Promise<WebAgentResult> {
-  const mode = options.mode ?? 'hybrid';
+  const mode = options.mode ?? 'llm';
   if (mode === 'rule') return handleAgentMessage(session, rawMessage);
   if (mode === 'hybrid' && session.pendingNewBook) return handleAgentMessage(session, rawMessage);
 
   try {
-    const parsed = parseLlmAgentAction(await options.llm.generate(buildAgentPrompt(rawMessage), {
+    const parsed = parseLlmAgentAction(await options.llm.generate(buildAgentPrompt(session, rawMessage), {
       temperature: 0.2,
       maxTokens: 700,
     }));
     return applyLlmAction(session, rawMessage, parsed);
-  } catch {
-    return handleAgentMessage(session, rawMessage);
+  } catch (error) {
+    if (mode === 'hybrid') return handleAgentMessage(session, rawMessage);
+    throw new Error(`模型接待失败：${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-function buildAgentPrompt(message: string): string {
+function buildAgentPrompt(session: WebAgentSession, message: string): string {
   return [
     'You are the AuthorOS 常驻写作搭档 inside the private web cockpit.',
     'Classify the user message into exactly one JSON action, but write the user-facing message like a calm author assistant, 不要像命令分类器.',
     'When the user is 模糊, stuck, or exploratory, gently narrow the next writing step instead of pretending you know too much.',
+    'Use the current session state. If pendingNewBook exists, treat the user message as the next turn in that exact book-starting flow.',
+    `Current session state: ${JSON.stringify({ pendingNewBook: session.pendingNewBook ?? null })}`,
     'Safety rules:',
     '- Do not create a new book from a vague first idea unless the user explicitly asks to start directly.',
     '- If the user is vague about a new book, use new_book_intake and ask compact creative questions.',
+    '- If pendingNewBook.stage is "intake" and the user supplies book details, use new_book_confirm with a complete concept and ask for final confirmation.',
+    '- If pendingNewBook.stage is "confirm" and the user confirms, use new_book_confirmed with the full concept from session state.',
     '- If the user is generally stuck, prefer unknown with a useful next-step message, unless a concrete route is clear.',
     '- Feedback preview never overwrites chapters.',
     '- Craft rewrite intents also produce feedback_preview first: 强化开头, 强化章尾钩子, 减少解释, 增加压迫感, 对白瘦身.',
@@ -72,6 +78,7 @@ function buildAgentPrompt(message: string): string {
     '',
     'Allowed actions:',
     '- new_book_intake: ask compact setup questions before creating a book.',
+    '- new_book_confirm: summarize the proposed book concept and ask the user to confirm before creating it. Requires concept.',
     '- new_book_confirmed: create a book only if explicit direct-start/confirmation is present.',
     '- create_book_and_continue: create a book and immediately plan/write chapter 1 unless the user asked to only create setup.',
     '- continue_book',
@@ -94,6 +101,8 @@ function buildAgentPrompt(message: string): string {
     '{"action":"style_rewrite_preview","message":"收到，我先做一版文风改写预览，正文先不动。","intent":"remove_ai_voice","text":"用户原文"}',
     '{"action":"reader_sim_review","message":"收到，我生成第 1 章读者模拟。","chapter":1}',
     '{"action":"new_book_intake","message":"我先帮你把开书方向钉稳，再开始建书。"}',
+    '{"action":"new_book_confirm","message":"我先把方向整理成一个开书承诺，确认后就建书。","concept":"完整开书概念"}',
+    '{"action":"new_book_confirmed","message":"确认收到，我开始建书。","concept":"完整开书概念"}',
     '{"action":"unknown","message":"我先把下一步收窄一下：可以开新书、继续写，或者读最新章。"}',
     '',
     `User message: ${JSON.stringify(message)}`,
@@ -110,6 +119,12 @@ function parseLlmAgentAction(raw: string): LlmAgentAction {
   switch (parsed.action) {
     case 'new_book_intake':
       return { action: parsed.action, message };
+    case 'new_book_confirm': {
+      const concept = 'concept' in parsed && typeof parsed.concept === 'string' ? parsed.concept.trim() : '';
+      if (!concept) throw new Error('new_book_confirm requires concept.');
+      const title = 'title' in parsed && typeof parsed.title === 'string' ? parsed.title.trim() : undefined;
+      return { action: parsed.action, message, title, concept };
+    }
     case 'new_book_confirmed': {
       const concept = 'concept' in parsed && typeof parsed.concept === 'string' ? parsed.concept.trim() : '';
       if (!concept) throw new Error('new_book_confirmed requires concept.');
@@ -165,7 +180,16 @@ function applyLlmAction(session: WebAgentSession, rawMessage: string, action: Ll
     session.pendingNewBook = { stage: 'intake', seed: rawMessage };
     return { kind: 'reply', action: action.action, message: action.message };
   }
+  if (action.action === 'new_book_confirm') {
+    session.pendingNewBook = {
+      stage: 'confirm',
+      seed: session.pendingNewBook?.seed ?? rawMessage,
+      brief: action.concept,
+    };
+    return { kind: 'reply', action: action.action, message: action.message };
+  }
   if (action.action === 'new_book_confirmed') {
+    session.pendingNewBook = undefined;
     return {
       kind: 'job',
       action: action.action,
@@ -174,6 +198,7 @@ function applyLlmAction(session: WebAgentSession, rawMessage: string, action: Ll
     };
   }
   if (action.action === 'create_book_and_continue') {
+    session.pendingNewBook = undefined;
     return {
       kind: 'job',
       action: action.action,

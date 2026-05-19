@@ -86,13 +86,13 @@ cloudflared tunnel --url http://127.0.0.1:8787
 
 把临时链接和访问码发给朋友。MVP 访问码只用于临时防误入,不要把公网链接长期公开。
 
-Web 页面内置一个轻量 Author Agent Controller。默认 `rule`:前台接待、开书问诊、确认和常用命令都走本地规则 agent,不会调用模型做意图判断。可选:
+Web 页面内置一个轻量 Author Agent Controller。默认 `llm`:前台接待、开书问诊、确认和常用命令都走外接模型 agent。模型接待没配置或返回格式不对时,页面会直接提示模型配置问题,不会偷偷回退到本地规则。可选:
 
-- `AUTHOROS_WEB_AGENT=rule`:默认值,完全不调用模型做前台判断,只在写书/修书时调用模型。
-- `AUTHOROS_WEB_AGENT=hybrid`:规则优先,规则不确定时调用模型,适合实验。
-- `AUTHOROS_WEB_AGENT=llm`:前台判断也尽量交给模型,解析失败会回退规则。
+- `AUTHOROS_WEB_AGENT=llm`:默认值,前台判断交给外接模型 agent。
+- `AUTHOROS_WEB_AGENT=rule`:开发/应急用,完全不调用模型做前台判断,只在写书/修书时调用模型。
+- `AUTHOROS_WEB_AGENT=hybrid`:保留旧的混合行为,规则优先,规则不确定时调用模型。
 
-前台 agent 默认复用 `AUTHOROS_MODEL`;如需单独指定更快的小模型,可设置 `AUTHOROS_WEB_AGENT_MODEL`。
+前台模型 agent 默认复用 `AUTHOROS_MODEL`;如需单独指定更快的小模型,可设置 `AUTHOROS_WEB_AGENT_MODEL`。
 
 ### 可选: 安装 Claude Code skill
 

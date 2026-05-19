@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createWebAgentSession, handleAgentMessage, type WebAgentCommand } from './agent.ts';
+import { createWebAgentSession, handleAgentMessage, type WebAgentCommand, type WebAgentResult } from './agent.ts';
 import { emptyCockpitAssetOverview, getCockpitAssetOverview, readCockpitAsset } from './assets.ts';
 import { createJobStore, type WebJob } from './jobs.ts';
 import { loadWebJobHistory, saveWebJobHistory } from './job-persistence.ts';
@@ -414,14 +414,28 @@ async function resolveAgentMessage(
   message: string,
   env: EnvLike,
 ) {
-  const mode = options.agentMode ?? optionalAgentMode(env.AUTHOROS_WEB_AGENT) ?? 'rule';
+  const mode = options.agentMode ?? optionalAgentMode(env.AUTHOROS_WEB_AGENT) ?? 'llm';
   if (mode === 'rule') return handleAgentMessage(session, message);
   try {
     const llm = options.agentLlm ?? await createAgentClient(options.root, env);
     return await handleAgentMessageWithLlm(session, message, { mode, llm });
-  } catch {
-    return handleAgentMessage(session, message);
+  } catch (error) {
+    if (mode === 'hybrid') return handleAgentMessage(session, message);
+    return modelReceptionFailure(error);
   }
+}
+
+function modelReceptionFailure(error: unknown): WebAgentResult {
+  const detail = error instanceof Error ? error.message : String(error);
+  return {
+    kind: 'reply',
+    action: 'unknown',
+    message: [
+      '模型接待不可用。',
+      '请先打开右下角「模型配置」，保存 API Key、模型名和 Base URL 后再试。',
+      detail ? `原因：${detail}` : '',
+    ].filter(Boolean).join('\n'),
+  };
 }
 
 async function webListBooks(options: CreateWebServerOptions): Promise<PrivateShelf> {

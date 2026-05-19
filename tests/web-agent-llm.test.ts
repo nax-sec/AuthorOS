@@ -84,7 +84,7 @@ test('hybrid agent preserves pending new book confirmation before calling recept
 
 test('llm receptionist can create a book and continue into chapter one', async () => {
   const result = await handleAgentMessageWithLlm(createWebAgentSession(), '你决定，直接开始写', {
-    mode: 'hybrid',
+    mode: 'llm',
     llm: llmReturning(JSON.stringify({
       action: 'create_book_and_continue',
       message: '收到，我会先建书，然后直接写第 1 章。',
@@ -97,6 +97,56 @@ test('llm receptionist can create a book and continue into chapter one', async (
   assert.equal(result.action, 'create_book_and_continue');
   assert.equal(result.command.type, 'new_book_and_continue');
   assert.equal(result.command.title, '记忆交易所');
+});
+
+test('llm agent can ask for final new book confirmation with model-written concept', async () => {
+  const session = createWebAgentSession();
+  session.pendingNewBook = { stage: 'intake', seed: '我想开一本新书' };
+  const result = await handleAgentMessageWithLlm(session, '主角是刘新弟，舔狗重生虐恋，感情要细腻', {
+    mode: 'llm',
+    llm: llmReturning(JSON.stringify({
+      action: 'new_book_confirm',
+      message: '我先整理成开书承诺，确认后就建书。',
+      concept: '主角刘新弟在重生后陷入舔狗式虐恋，文笔细腻，感情推进足够疼。',
+    })),
+  });
+
+  assert.equal(result.kind, 'reply');
+  assert.equal(result.action, 'new_book_confirm');
+  assert.match(result.message, /开书承诺/);
+  assert.equal(session.pendingNewBook?.stage, 'confirm');
+  assert.match(session.pendingNewBook?.brief ?? '', /刘新弟/);
+});
+
+test('llm agent prompt includes pending new book state for confirmation', async () => {
+  const session = createWebAgentSession();
+  session.pendingNewBook = {
+    stage: 'confirm',
+    seed: '我想开一本新书',
+    brief: '主角刘新弟，舔狗重生虐恋，感情要细腻',
+  };
+  let prompt = '';
+  const result = await handleAgentMessageWithLlm(session, '确认', {
+    mode: 'llm',
+    llm: {
+      async generate(input) {
+        prompt = input;
+        return JSON.stringify({
+          action: 'new_book_confirmed',
+          message: '确认收到，我开始建书。',
+          concept: '主角刘新弟，舔狗重生虐恋，感情细腻且足够虐。',
+        });
+      },
+    },
+  });
+
+  assert.match(prompt, /pendingNewBook/);
+  assert.match(prompt, /刘新弟/);
+  assert.equal(result.kind, 'job');
+  assert.equal(result.action, 'new_book_confirmed');
+  assert.equal(result.command.type, 'new_book');
+  assert.match(result.command.concept, /刘新弟/);
+  assert.equal(session.pendingNewBook, undefined);
 });
 
 test('llm agent can route vague feedback into feedback preview', async () => {
@@ -192,12 +242,9 @@ test('llm agent can route quality loop actions with chapter numbers', async () =
   assert.equal(result.command.chapter, 2);
 });
 
-test('llm agent falls back to rules when model returns invalid json', async () => {
-  const result = await handleAgentMessageWithLlm(createWebAgentSession(), '读最新章', {
+test('llm agent rejects invalid model routing instead of falling back to local rules', async () => {
+  await assert.rejects(() => handleAgentMessageWithLlm(createWebAgentSession(), '读最新章', {
     mode: 'llm',
     llm: llmReturning('not json'),
-  });
-
-  assert.equal(result.action, 'read_chapter');
-  assert.equal(result.kind, 'job');
+  }), /模型接待失败/);
 });
