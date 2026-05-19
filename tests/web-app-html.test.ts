@@ -189,6 +189,10 @@ test('private web app exposes personal cockpit regions', async () => {
   assert.match(html, /saveModelConfig/);
   assert.match(html, /api\('\/api\/model\/config'/);
   assert.match(html, /formatModelDoctor/);
+  assert.match(html, /function formatModelApiKeyLine/);
+  assert.equal(html.includes("return `API Key：${model.apiKeySet ? '已配置' : '未配置'}（页面本机保存）`;"), true);
+  assert.equal(html.includes('return `API Key：未配置（可粘贴保存，或使用环境变量 ${envName}）`;'), true);
+  assert.doesNotMatch(html, /API key env：/);
   assert.match(html, /一键重试/);
   assert.match(html, /检查模型配置/);
   assert.match(html, /回到当前书/);

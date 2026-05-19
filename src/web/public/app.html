@@ -889,7 +889,7 @@
       modelApiKeyEnv.value = config.apiKeyEnv || 'OPENAI_API_KEY';
       modelApiKey.value = '';
       modelConfigHint.textContent = config.apiKeySet
-        ? 'Key 已保存在本机或环境变量中；为安全起见不会回显。'
+        ? modelApiKeyStorageHint(config)
         : '可以直接粘贴 API Key 保存到本机，也可以只填写环境变量名。';
     }
 
@@ -901,8 +901,18 @@
 
     function modelApiKeySourceLabel(source) {
       if (source === 'env') return '环境变量';
-      if (source === 'local') return '本机保存';
+      if (source === 'local') return '页面本机保存';
       return '未配置';
+    }
+
+    function modelApiKeyStorageHint(config) {
+      if (config && config.apiKeySource === 'env') {
+        return `正在使用环境变量 ${config.apiKeyEnv || 'OPENAI_API_KEY'}；页面不会回显明文。`;
+      }
+      if (config && config.apiKeySource === 'local') {
+        return 'Key 已通过页面保存在本机配置文件中；为安全起见不会回显明文。';
+      }
+      return 'Key 已配置；为安全起见不会回显明文。';
     }
 
     function formatModelConfigSummary(result) {
@@ -1948,7 +1958,7 @@
       addMessage([
         '正在检查模型配置...',
         `模型：${model.model || '默认模型'}`,
-        `API key：${model.apiKeySet ? `已配置（${modelApiKeySourceLabel(model.apiKeySource)}）` : '未配置'}`,
+        formatModelApiKeyLine(model),
         `Base URL：${model.baseUrl || '默认'}`,
       ].join('\n'));
       api('/api/model/doctor')
@@ -1967,7 +1977,7 @@
         '模型配置检查结果',
         `范围：${scopeLabel}`,
         `状态：${doctor.ready ? '可以调用模型' : '还缺配置'}`,
-        `API key env：${doctor.apiKeyEnv || 'OPENAI_API_KEY'}（${doctor.apiKeySet ? '已设置' : '未设置'}，${modelApiKeySourceLabel(doctor.apiKeySource)}）`,
+        formatModelApiKeyLine(doctor),
         `Base URL：${doctor.baseUrl || '默认'}`,
         `模型：${doctor.model || '未设置'}`,
         blockers.length > 0 ? `阻塞项：\n- ${blockers.join('\n- ')}` : '阻塞项：无',
@@ -1975,6 +1985,17 @@
           ? '下一步：可以直接一键重试。'
           : '下一步：补齐上面的阻塞项后，再回到失败恢复里重试。',
       ].join('\n');
+    }
+
+    function formatModelApiKeyLine(model) {
+      const envName = model && model.apiKeyEnv ? model.apiKeyEnv : 'OPENAI_API_KEY';
+      if (model && model.apiKeySource === 'env') {
+        return `API Key：${model.apiKeySet ? '已配置' : '未配置'}（环境变量 ${envName}）`;
+      }
+      if (model && model.apiKeySource === 'local') {
+        return `API Key：${model.apiKeySet ? '已配置' : '未配置'}（页面本机保存）`;
+      }
+      return `API Key：未配置（可粘贴保存，或使用环境变量 ${envName}）`;
     }
 
     function deriveBooklessRecovery(jobs) {
