@@ -677,6 +677,8 @@
     const modeTabs = Array.from(document.querySelectorAll('[data-mode-target]'));
     const roomPrefix = (location.pathname.match(/^\/room\/[^/]+/) || [''])[0];
     const tokenKey = `authoros_token:${roomPrefix || 'single'}`;
+    const chatStorageKey = `authoros_chat:${roomPrefix || 'single'}`;
+    const chatHistoryLimit = 80;
     const activeStyleHintPrefix = '下一章将使用文风';
     const announcedProgressEvents = new Set();
     const watchedJobActions = new Map();
@@ -702,12 +704,61 @@
       return response.json();
     }
 
-    function addMessage(text, own = false, error = false) {
+    function addMessage(text, own = false, error = false, options = {}) {
       const div = document.createElement('div');
       div.className = `msg ${own ? 'me' : 'assistant'}${error ? ' error' : ''}`;
       div.textContent = text;
       chatLog.appendChild(div);
-      scrollChatToMessage(div, own);
+      if (options.persist !== false) persistAssistantMessage({ text, own, error });
+      if (options.scroll !== false) scrollChatToMessage(div, own);
+    }
+
+    function readStoredAssistantChat() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(chatStorageKey) || '[]');
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+          .filter(item => item && typeof item.text === 'string')
+          .map(item => ({
+            text: item.text,
+            own: item.own === true,
+            error: item.error === true,
+            at: typeof item.at === 'number' ? item.at : 0,
+          }))
+          .slice(-chatHistoryLimit);
+      } catch {
+        return [];
+      }
+    }
+
+    function persistAssistantMessage(entry) {
+      try {
+        const text = typeof entry.text === 'string' ? entry.text : '';
+        if (!text.trim()) return;
+        const next = [
+          ...readStoredAssistantChat(),
+          {
+            text: text.length > 12000 ? `${text.slice(0, 12000)}...` : text,
+            own: entry.own === true,
+            error: entry.error === true,
+            at: Date.now(),
+          },
+        ].slice(-chatHistoryLimit);
+        localStorage.setItem(chatStorageKey, JSON.stringify(next));
+      } catch {
+        // Ignore storage failures; chat should still work in private or restricted browser modes.
+      }
+    }
+
+    function restoreAssistantChat() {
+      for (const item of readStoredAssistantChat()) {
+        addMessage(item.text, item.own, item.error, { persist: false, scroll: false });
+      }
+      if (chatLog.children.length > 0) {
+        requestAnimationFrame(() => {
+          chatLog.scrollTop = chatLog.scrollHeight;
+        });
+      }
     }
 
     function scrollChatToMessage(element, own) {
@@ -2443,6 +2494,7 @@
     loginIfNeeded()
       .then(ready => {
         if (!ready) return undefined;
+        restoreAssistantChat();
         renderAssistantWelcome();
         return loadCockpit();
       })

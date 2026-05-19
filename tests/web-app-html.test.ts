@@ -248,6 +248,19 @@ test('assistant chat keeps long replies readable in an expanded dock', async () 
   assert.match(html, /scrollChatToMessage\(div, own\);/);
 });
 
+test('assistant chat restores local conversation history after refresh', async () => {
+  const html = await readFile(new URL('../src/web/public/app.html', import.meta.url), 'utf8');
+
+  assert.match(html, /const chatStorageKey = `authoros_chat:\$\{roomPrefix \|\| 'single'\}`;/);
+  assert.match(html, /const chatHistoryLimit = 80;/);
+  assert.match(html, /function restoreAssistantChat\(\)/);
+  assert.match(html, /function persistAssistantMessage\(entry\)/);
+  assert.match(html, /function readStoredAssistantChat\(\)/);
+  assert.match(html, /localStorage\.setItem\(chatStorageKey/);
+  assert.match(html, /addMessage\(item\.text, item\.own, item\.error, \{ persist: false, scroll: false \}\);/);
+  assert.match(html, /restoreAssistantChat\(\);\s*renderAssistantWelcome\(\);/);
+});
+
 test('next action opens the assistant before starting a new book flow', async () => {
   const html = await readFile(new URL('../src/web/public/app.html', import.meta.url), 'utf8');
 
