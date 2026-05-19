@@ -235,6 +235,19 @@ test('assistant collapse keeps model utilities reachable', async () => {
   assert.match(html, /\.desk-rail\[data-assistant-collapsed="true"\] \.rail-utilities\s*\{\s*display:\s*grid;/);
 });
 
+test('assistant chat keeps long replies readable in an expanded dock', async () => {
+  const html = await readFile(new URL('../src/web/public/app.html', import.meta.url), 'utf8');
+
+  assert.match(html, /--assistant-dock-max:\s*clamp\(520px,\s*calc\(100vh - 104px\),\s*820px\);/);
+  assert.match(html, /--assistant-chat-min:\s*clamp\(180px,\s*30vh,\s*300px\);/);
+  assert.match(html, /\.assistant-panel\s*\{[^}]*height:\s*min\(var\(--assistant-dock-max\),\s*calc\(100vh - 102px\)\);/s);
+  assert.match(html, /\.assistant-body\s*\{[^}]*grid-template-rows:\s*minmax\(var\(--assistant-chat-min\),\s*1fr\) auto auto;[^}]*overflow:\s*hidden;/s);
+  assert.match(html, /\.chat-log\s*\{[^}]*max-height:\s*none;/s);
+  assert.match(html, /\.chat-log\s*\{[^}]*position:\s*relative;/s);
+  assert.match(html, /function scrollChatToMessage\(element, own\)/);
+  assert.match(html, /scrollChatToMessage\(div, own\);/);
+});
+
 test('next action opens the assistant before starting a new book flow', async () => {
   const html = await readFile(new URL('../src/web/public/app.html', import.meta.url), 'utf8');
 

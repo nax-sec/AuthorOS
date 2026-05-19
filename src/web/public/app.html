@@ -25,8 +25,8 @@
       --danger: #a02b23;
       --danger-soft: #fff0ed;
       --shadow: 0 18px 48px rgba(33, 37, 31, .09);
-      --assistant-dock-max: clamp(300px, calc(100vh - 320px), 620px);
-      --assistant-chat-max: clamp(120px, 24vh, 240px);
+      --assistant-dock-max: clamp(520px, calc(100vh - 104px), 820px);
+      --assistant-chat-min: clamp(180px, 30vh, 300px);
     }
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
@@ -122,11 +122,11 @@
     .signal-ok { color: #176b37; font-weight: 800; }
     .chapter { min-height: 460px; max-height: 64vh; overflow: auto; white-space: pre-wrap; line-height: 1.78; padding: 18px; font-size: 15px; }
     .assistant-dock { position: sticky; top: 0; z-index: 6; }
-    .assistant-panel { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; max-height: var(--assistant-dock-max); overflow: hidden; border-color: #cbd8f5; box-shadow: 0 12px 30px rgba(24, 34, 48, .08); }
+    .assistant-panel { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; height: min(var(--assistant-dock-max), calc(100vh - 102px)); max-height: var(--assistant-dock-max); overflow: hidden; border-color: #cbd8f5; box-shadow: 0 12px 30px rgba(24, 34, 48, .08); }
     .assistant-input { display: grid; gap: 8px; }
     .assistant-quick-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     .quick-action { min-height: 34px; padding: 7px 9px; border-color: #b8c3d2; background: #fff; color: var(--ink); font-size: 12px; }
-    .chat-log { min-height: 120px; max-height: var(--assistant-chat-max); overflow: auto; display: flex; flex-direction: column; gap: 10px; white-space: pre-wrap; }
+    .chat-log { position: relative; min-height: var(--assistant-chat-min); max-height: none; overflow: auto; display: flex; flex-direction: column; gap: 10px; white-space: pre-wrap; }
     .msg { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; line-height: 1.5; }
     .me { align-self: flex-end; max-width: 88%; background: var(--accent-soft); }
     .assistant { align-self: flex-start; max-width: 86%; }
@@ -238,6 +238,7 @@
     }
     .assistant-panel {
       grid-template-rows: auto minmax(0, 1fr);
+      height: min(var(--assistant-dock-max), calc(100vh - 102px));
       max-height: var(--assistant-dock-max);
       border-color: #d3c6b2;
       background: #fffdf8;
@@ -245,10 +246,10 @@
     }
     .assistant-body {
       display: grid;
-      grid-template-rows: minmax(120px, var(--assistant-chat-max)) auto auto;
+      grid-template-rows: minmax(var(--assistant-chat-min), 1fr) auto auto;
       gap: 10px;
       min-height: 0;
-      overflow: auto;
+      overflow: hidden;
       padding-right: 2px;
     }
     .dock-toggle {
@@ -268,6 +269,7 @@
       display: grid;
     }
     .desk-rail[data-assistant-collapsed="true"] .assistant-panel {
+      height: auto;
       padding: 12px 14px;
       justify-items: stretch;
     }
@@ -337,7 +339,7 @@
       .commitment-grid { grid-template-columns: 1fr; }
       .desk-sidebar, .desk-rail { position: static; max-height: none; overflow: visible; }
       .assistant-dock { position: static; }
-      .assistant-panel { max-height: none; }
+      .assistant-panel { height: auto; max-height: none; }
       .chapter, .chat-log { max-height: none; }
       body.assistant-collapsed .cockpit { grid-template-columns: 1fr; }
       .production-dashboard, .quality-support-grid { grid-template-columns: 1fr; }
@@ -705,7 +707,17 @@
       div.className = `msg ${own ? 'me' : 'assistant'}${error ? ' error' : ''}`;
       div.textContent = text;
       chatLog.appendChild(div);
-      chatLog.scrollTop = chatLog.scrollHeight;
+      scrollChatToMessage(div, own);
+    }
+
+    function scrollChatToMessage(element, own) {
+      requestAnimationFrame(() => {
+        if (own) {
+          chatLog.scrollTop = chatLog.scrollHeight;
+          return;
+        }
+        chatLog.scrollTop = Math.max(0, element.offsetTop - 8);
+      });
     }
 
     function renderAssistantWelcome() {
