@@ -218,3 +218,14 @@ test('private web app exposes personal cockpit regions', async () => {
   assert.match(html, /创作现场/);
   assert.match(html, /文风与资产/);
 });
+
+test('assistant collapse keeps model utilities reachable', async () => {
+  const html = await readFile(new URL('../src/web/public/app.html', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(html, /body\.assistant-collapsed \.cockpit\s*\{\s*grid-template-columns:\s*248px minmax\(0,\s*1fr\) 82px;/);
+  assert.doesNotMatch(html, /\.desk-rail\[data-assistant-collapsed="true"\] \.assistant-body,\s*\.desk-rail\[data-assistant-collapsed="true"\] \.rail-utilities\s*\{\s*display:\s*none;/);
+  assert.doesNotMatch(html, /writing-mode:\s*vertical-rl/);
+  assert.match(html, /--assistant-dock-max:/);
+  assert.match(html, /\.desk-rail\[data-assistant-collapsed="true"\] \.assistant-body\s*\{\s*display:\s*none;/);
+  assert.match(html, /\.desk-rail\[data-assistant-collapsed="true"\] \.rail-utilities\s*\{\s*display:\s*grid;/);
+});
