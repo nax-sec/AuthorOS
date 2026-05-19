@@ -414,7 +414,7 @@ async function resolveAgentMessage(
   message: string,
   env: EnvLike,
 ) {
-  const mode = options.agentMode ?? optionalAgentMode(env.AUTHOROS_WEB_AGENT) ?? 'hybrid';
+  const mode = options.agentMode ?? optionalAgentMode(env.AUTHOROS_WEB_AGENT) ?? 'rule';
   if (mode === 'rule') return handleAgentMessage(session, message);
   try {
     const llm = options.agentLlm ?? await createAgentClient(options.root, env);

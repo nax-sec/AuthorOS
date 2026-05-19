@@ -28,7 +28,7 @@ The web layer is a lightweight front desk for AuthorOS:
 - Asks intake questions before creating a vague new story.
 - Shows progress events while long-running writing jobs execute.
 - Supports chapter reading and Markdown/ZIP downloads.
-- Routes explicit commands through local rules and vague feedback through a model-backed intent layer in `hybrid` mode.
+- Routes the browser chat through the local Author Agent rules by default. Optional `hybrid` or `llm` front-desk routing can still be enabled explicitly for experiments.
 
 ## Quick Start
 
@@ -61,10 +61,11 @@ Start the private web UI:
 ```bash
 export AUTHOROS_PRIVATE_ROOT="$HOME/Books/authoros-web"
 export AUTHOROS_WEB_TOKEN="<temporary-access-code>"
-export AUTHOROS_WEB_AGENT="hybrid"
 
 node src/cli.ts web --root "$AUTHOROS_PRIVATE_ROOT" --port 8787
 ```
+
+By default the web front desk uses the local rule agent for intake and command routing. To explicitly test model-backed front-desk routing, set `AUTHOROS_WEB_AGENT=hybrid` or `AUTHOROS_WEB_AGENT=llm`; writing, planning, review, and revision jobs still use the configured author model.
 
 For five isolated temporary rooms, use access codes as the room selector:
 

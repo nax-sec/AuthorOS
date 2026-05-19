@@ -60,7 +60,6 @@ node src\cli.ts --help
 ```powershell
 $env:AUTHOROS_PRIVATE_ROOT="D:\Books\authoros-web"
 $env:AUTHOROS_WEB_TOKEN="临时访问码"
-$env:AUTHOROS_WEB_AGENT="hybrid"   # rule | hybrid | llm
 author web --root D:\Books\authoros-web --port 8787
 ```
 
@@ -87,10 +86,10 @@ cloudflared tunnel --url http://127.0.0.1:8787
 
 把临时链接和访问码发给朋友。MVP 访问码只用于临时防误入,不要把公网链接长期公开。
 
-Web 页面内置一个轻量 Author Agent Controller。默认 `hybrid`:明确命令(继续写、下载、确认应用)走本地规则,模糊表达才调用模型做意图判断和追问。可选:
+Web 页面内置一个轻量 Author Agent Controller。默认 `rule`:前台接待、开书问诊、确认和常用命令都走本地规则 agent,不会调用模型做意图判断。可选:
 
-- `AUTHOROS_WEB_AGENT=rule`:完全不调用模型做前台判断,只在写书/修书时调用模型。
-- `AUTHOROS_WEB_AGENT=hybrid`:默认值,规则优先,规则不确定时调用模型。
+- `AUTHOROS_WEB_AGENT=rule`:默认值,完全不调用模型做前台判断,只在写书/修书时调用模型。
+- `AUTHOROS_WEB_AGENT=hybrid`:规则优先,规则不确定时调用模型,适合实验。
 - `AUTHOROS_WEB_AGENT=llm`:前台判断也尽量交给模型,解析失败会回退规则。
 
 前台 agent 默认复用 `AUTHOROS_MODEL`;如需单独指定更快的小模型,可设置 `AUTHOROS_WEB_AGENT_MODEL`。
