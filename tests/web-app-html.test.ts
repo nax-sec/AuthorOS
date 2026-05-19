@@ -274,6 +274,8 @@ test('assistant chat restores local conversation history after refresh', async (
   assert.match(html, /function persistAssistantMessage\(entry\)/);
   assert.match(html, /function readStoredAssistantChat\(\)/);
   assert.match(html, /localStorage\.setItem\(chatStorageKey/);
+  assert.match(html, /const history = readStoredAssistantChat\(\)\.slice\(-24\);/);
+  assert.match(html, /body: JSON\.stringify\(\{ message, history \}\)/);
   assert.match(html, /addMessage\(item\.text, item\.own, item\.error, \{ persist: false, scroll: false \}\);/);
   assert.match(html, /restoreAssistantChat\(\);\s*renderAssistantWelcome\(\);/);
 });

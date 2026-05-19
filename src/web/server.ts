@@ -2,10 +2,11 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createWebAgentSession, handleAgentMessage, type WebAgentCommand, type WebAgentResult } from './agent.ts';
+import { createWebAgentSession, handleAgentMessage, mergeClientChatHistory, recordAgentExchange, type WebAgentCommand, type WebAgentResult } from './agent.ts';
 import { emptyCockpitAssetOverview, getCockpitAssetOverview, readCockpitAsset } from './assets.ts';
 import { createJobStore, type WebJob } from './jobs.ts';
 import { loadWebJobHistory, saveWebJobHistory } from './job-persistence.ts';
+import { loadWebAgentSession, saveWebAgentSession } from './session-persistence.ts';
 import { withJobCompletion, type CompletedCommandType } from './job-completion.ts';
 import { explainJobFailure } from './job-failure.ts';
 import { isAuthorized } from './auth.ts';
@@ -265,8 +266,13 @@ export function createWebServer(options: CreateWebServerOptions): AuthorWebServe
       }
       if (routePath === '/api/chat' && request.method === 'POST') {
         const runtime = runtimeForRoute(roomRoute, () => singleRuntime ??= createRuntimeForRoot(options.root), roomRuntimes);
-        const body = await request.json() as { message?: string };
-        const result = await resolveAgentMessage({ ...options, root }, runtime.session, body.message ?? '', env);
+        const body = await request.json() as { message?: string; history?: unknown };
+        const message = body.message ?? '';
+        runtime.session = loadWebAgentSession(root);
+        mergeClientChatHistory(runtime.session, body.history);
+        const result = await resolveAgentMessage({ ...options, root }, runtime.session, message, env);
+        recordAgentExchange(runtime.session, message, result);
+        saveWebAgentSession(root, runtime.session);
         if (result.kind === 'reply') return json(result);
         const job = runtime.jobs.createJob(result.action, result.message);
         void runCommandJob(root, result.command, runtime.jobs, job.id, env, options.writingLlm);
@@ -352,7 +358,7 @@ function createRuntimeForRoot(root: string): WebRuntime {
   const recovered = recoverInterruptedJobs(loadWebJobHistory(root));
   if (recovered.changed) saveWebJobHistory(root, recovered.jobs);
   return {
-    session: createWebAgentSession(),
+    session: loadWebAgentSession(root),
     jobs: createJobStore({
       initialJobs: recovered.jobs,
       onChange: (jobs) => saveWebJobHistory(root, jobs),

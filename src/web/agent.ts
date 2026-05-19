@@ -24,8 +24,15 @@ export interface PendingNewBook {
   brief?: string;
 }
 
+export interface WebAgentTurn {
+  role: 'user' | 'assistant';
+  text: string;
+  action?: WebAgentAction;
+}
+
 export interface WebAgentSession {
   pendingNewBook?: PendingNewBook;
+  turns?: WebAgentTurn[];
 }
 
 export type WebAgentResult =
@@ -69,6 +76,44 @@ const craftRewriteIntents = [
 
 export function createWebAgentSession(): WebAgentSession {
   return {};
+}
+
+export function recordAgentExchange(
+  session: WebAgentSession,
+  rawMessage: string,
+  result: WebAgentResult,
+  limit = 24,
+): void {
+  const message = rawMessage.trim();
+  if (!message) return;
+  const turns: WebAgentTurn[] = [
+    ...(session.turns ?? []),
+    { role: 'user', text: message },
+    { role: 'assistant', text: result.message, action: result.action },
+  ];
+  session.turns = turns.slice(Math.max(0, turns.length - limit));
+}
+
+export function mergeClientChatHistory(
+  session: WebAgentSession,
+  history: unknown,
+  limit = 24,
+): void {
+  if (!Array.isArray(history)) return;
+  const turns = history
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+    .filter((item) => item.error !== true)
+    .map((item): WebAgentTurn | null => {
+      const text = typeof item.text === 'string' ? item.text.trim() : '';
+      if (!text) return null;
+      return {
+        role: item.own === true ? 'user' : 'assistant',
+        text: text.length > 12000 ? `${text.slice(0, 12000)}...` : text,
+      };
+    })
+    .filter((turn): turn is WebAgentTurn => turn !== null)
+    .slice(-limit);
+  if (turns.length > 0) session.turns = turns;
 }
 
 export function handleAgentMessage(session: WebAgentSession, rawMessage: string): WebAgentResult {

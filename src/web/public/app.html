@@ -2385,8 +2385,9 @@
     }
 
     async function sendMessage(message) {
+      const history = readStoredAssistantChat().slice(-24);
       addMessage(message, true);
-      const result = await api('/api/chat', { method: 'POST', body: JSON.stringify({ message }) });
+      const result = await api('/api/chat', { method: 'POST', body: JSON.stringify({ message, history }) });
       addMessage(result.message || '已收到。');
       if (result.jobId) {
         watchedJobActions.set(result.jobId, result.action);

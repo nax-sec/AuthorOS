@@ -1232,6 +1232,134 @@ test('web server persists job history across server instances', async () => {
   });
 });
 
+test('web server persists pending agent session across server instances', async () => {
+  await withTempRoot(async (root) => {
+    const first = createWebServer({
+      root,
+      agentLlm: {
+        async generate() {
+          return JSON.stringify({
+            action: 'new_book_intake',
+            message: '我先帮你把开书方向钉稳。',
+          });
+        },
+      },
+    });
+
+    const intake = await first.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '我想看一本主角是刘新弟的狗血舔狗重生虐恋文' }),
+    }));
+    const intakeBody = await intake.json();
+    assert.equal(intakeBody.action, 'new_book_intake');
+    const savedSession = JSON.parse(await readFile(join(root, '.authoros/web/session.json'), 'utf8'));
+    assert.equal(savedSession.session.pendingNewBook.stage, 'intake');
+    assert.match(JSON.stringify(savedSession.session.turns), /刘新弟/);
+
+    let capturedPrompt = '';
+    const second = createWebServer({
+      root,
+      agentLlm: {
+        async generate(prompt) {
+          capturedPrompt = prompt;
+          return JSON.stringify({
+            action: 'new_book_confirm',
+            message: '我记得前面的方向，先给你看概念。',
+            concept: '主角是刘新弟的狗血舔狗重生虐恋文。',
+          });
+        },
+      },
+    });
+
+    const followup = await second.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '你来补全后建书' }),
+    }));
+    const followupBody = await followup.json();
+
+    assert.equal(followup.status, 200);
+    assert.equal(followupBody.action, 'new_book_confirm');
+    assert.match(capturedPrompt, /"stage":"intake"/);
+    assert.match(capturedPrompt, /刘新弟/);
+    assert.match(capturedPrompt, /Recent conversation history/);
+    assert.match(capturedPrompt, /开书方向钉稳/);
+  });
+});
+
+test('web server hydrates agent context from client chat history', async () => {
+  await withTempRoot(async (root) => {
+    let capturedPrompt = '';
+    const server = createWebServer({
+      root,
+      agentLlm: {
+        async generate(prompt) {
+          capturedPrompt = prompt;
+          return JSON.stringify({
+            action: 'unknown',
+            message: '我接着上面的方向继续。',
+          });
+        },
+      },
+    });
+
+    const response = await server.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        message: '你来补全后建书',
+        history: [
+          { text: '我想看一本主角是刘新弟的狗血舔狗重生虐恋文', own: true },
+          { text: '我先帮你把开书方向钉稳。', own: false },
+        ],
+      }),
+    }));
+
+    assert.equal(response.status, 200);
+    assert.match(capturedPrompt, /Recent conversation history/);
+    assert.match(capturedPrompt, /刘新弟/);
+    assert.match(capturedPrompt, /开书方向钉稳/);
+  });
+});
+
+test('web server reloads local agent session before each chat request', async () => {
+  await withTempRoot(async (root) => {
+    let capturedPrompt = '';
+    const server = createWebServer({
+      root,
+      agentLlm: {
+        async generate(prompt) {
+          capturedPrompt = prompt;
+          return JSON.stringify({
+            action: 'new_book_confirm',
+            message: '我读到了本地上下文。',
+            concept: '主角是刘新弟的重生虐恋文。',
+          });
+        },
+      },
+    });
+
+    await server.fetch(new Request('http://local/api/cockpit'));
+    await mkdir(join(root, '.authoros/web'), { recursive: true });
+    await writeFile(join(root, '.authoros/web/session.json'), JSON.stringify({
+      version: 1,
+      session: {
+        pendingNewBook: {
+          stage: 'intake',
+          seed: '我想看一本主角是刘新弟的重生虐恋文',
+        },
+      },
+    }), 'utf8');
+
+    const response = await server.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '你来补全后建书' }),
+    }));
+
+    assert.equal(response.status, 200);
+    assert.match(capturedPrompt, /"stage":"intake"/);
+    assert.match(capturedPrompt, /刘新弟/);
+  });
+});
+
 test('web server keeps room job history isolated', async () => {
   await withTempRoot(async (root) => {
     const server = createWebServer({

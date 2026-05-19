@@ -196,6 +196,31 @@ test('llm agent prompt includes pending new book state for confirmation', async 
   assert.equal(session.pendingNewBook, undefined);
 });
 
+test('llm agent prompt includes recent server-side conversation history', async () => {
+  const session = createWebAgentSession();
+  session.turns = [
+    { role: 'user', text: '我想看一本主角是刘新弟的狗血舔狗重生虐恋文' },
+    { role: 'assistant', text: '我先帮你把开书方向钉稳。', action: 'new_book_intake' },
+  ];
+  let prompt = '';
+  await handleAgentMessageWithLlm(session, '你来补全后建书', {
+    mode: 'llm',
+    llm: {
+      async generate(input) {
+        prompt = input;
+        return JSON.stringify({
+          action: 'unknown',
+          message: '我接着前面的方向继续收窄。',
+        });
+      },
+    },
+  });
+
+  assert.match(prompt, /Recent conversation history/);
+  assert.match(prompt, /刘新弟/);
+  assert.match(prompt, /开书方向钉稳/);
+});
+
 test('llm agent can route vague feedback into feedback preview', async () => {
   const result = await handleAgentMessageWithLlm(createWebAgentSession(), '这章读起来怪怪的，不够有趣', {
     mode: 'llm',

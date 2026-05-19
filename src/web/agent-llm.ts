@@ -69,6 +69,7 @@ function buildAgentPrompt(session: WebAgentSession, message: string): string {
     'When the user is 模糊, stuck, or exploratory, gently narrow the next writing step instead of pretending you know too much.',
     'Use the current session state. If pendingNewBook exists, treat the user message as the next turn in that exact book-starting flow.',
     `Current session state: ${JSON.stringify({ pendingNewBook: session.pendingNewBook ?? null })}`,
+    `Recent conversation history: ${JSON.stringify((session.turns ?? []).slice(-12))}`,
     'Safety rules:',
     '- Do not create a new book from a vague first idea unless the user explicitly asks to start directly.',
     '- If the user is vague about a new book, use new_book_intake and ask compact creative questions.',
