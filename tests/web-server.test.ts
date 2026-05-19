@@ -310,6 +310,51 @@ test('web server hybrid mode calls receptionist before rule routing', async () =
   });
 });
 
+test('web server hybrid mode keeps pending new book confirmation in session', async () => {
+  await withTempRoot(async (root) => {
+    let called = 0;
+    const server = createWebServer({
+      root,
+      agentMode: 'hybrid',
+      agentLlm: {
+        async generate() {
+          called += 1;
+          return JSON.stringify({
+            action: 'new_book_intake',
+            message: '我先问几个问题，再建书。',
+          });
+        },
+      },
+    });
+
+    const intake = await server.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '我想开一本新书' }),
+    }));
+    const intakeBody = await intake.json();
+
+    const brief = await server.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '主角是刘新弟，舔狗重生虐恋，文笔和感情要细腻' }),
+    }));
+    const briefBody = await brief.json();
+
+    const confirm = await server.fetch(new Request('http://local/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: '确认' }),
+    }));
+    const confirmBody = await confirm.json();
+
+    assert.equal(intakeBody.action, 'new_book_intake');
+    assert.equal(briefBody.action, 'new_book_confirm');
+    assert.match(briefBody.message, /开书承诺/);
+    assert.equal(confirmBody.action, 'new_book_confirmed');
+    assert.equal(confirmBody.command.type, 'new_book');
+    assert.match(confirmBody.command.concept, /刘新弟/);
+    assert.equal(called, 1);
+  });
+});
+
 test('web server hybrid chat falls back to rules when receptionist client is unavailable', async () => {
   await withTempRoot(async (root) => {
     const server = createWebServer({

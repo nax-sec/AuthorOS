@@ -39,6 +39,7 @@ export async function handleAgentMessageWithLlm(
 ): Promise<WebAgentResult> {
   const mode = options.mode ?? 'hybrid';
   if (mode === 'rule') return handleAgentMessage(session, rawMessage);
+  if (mode === 'hybrid' && session.pendingNewBook) return handleAgentMessage(session, rawMessage);
 
   try {
     const parsed = parseLlmAgentAction(await options.llm.generate(buildAgentPrompt(rawMessage), {

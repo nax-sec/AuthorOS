@@ -31,6 +31,57 @@ test('hybrid agent lets receptionist handle chat before rule fallback', async ()
   assert.equal(called, true);
 });
 
+test('hybrid agent preserves pending new book intake before calling receptionist', async () => {
+  const session = createWebAgentSession();
+  session.pendingNewBook = { stage: 'intake', seed: '我想开一本新书' };
+  let called = false;
+  const llm: LlmClient = {
+    async generate() {
+      called = true;
+      return JSON.stringify({
+        action: 'unknown',
+        message: '我不确定你在补充什么。',
+      });
+    },
+  };
+
+  const result = await handleAgentMessageWithLlm(session, '主角是刘新弟，虐恋重生，感情要细腻', { llm, mode: 'hybrid' });
+
+  assert.equal(called, false);
+  assert.equal(result.kind, 'reply');
+  assert.equal(result.action, 'new_book_confirm');
+  assert.match(result.message, /开书承诺/);
+  assert.equal(session.pendingNewBook?.stage, 'confirm');
+});
+
+test('hybrid agent preserves pending new book confirmation before calling receptionist', async () => {
+  const session = createWebAgentSession();
+  session.pendingNewBook = {
+    stage: 'confirm',
+    seed: '我想开一本新书',
+    brief: '主角是刘新弟，虐恋重生，感情要细腻',
+  };
+  let called = false;
+  const llm: LlmClient = {
+    async generate() {
+      called = true;
+      return JSON.stringify({
+        action: 'unknown',
+        message: '收到「确认」，不过我不确定你确认的是哪一步。',
+      });
+    },
+  };
+
+  const result = await handleAgentMessageWithLlm(session, '确认', { llm, mode: 'hybrid' });
+
+  assert.equal(called, false);
+  assert.equal(result.kind, 'job');
+  assert.equal(result.action, 'new_book_confirmed');
+  assert.equal(result.command.type, 'new_book');
+  assert.match(result.command.concept, /刘新弟/);
+  assert.equal(session.pendingNewBook, undefined);
+});
+
 test('llm receptionist can create a book and continue into chapter one', async () => {
   const result = await handleAgentMessageWithLlm(createWebAgentSession(), '你决定，直接开始写', {
     mode: 'hybrid',
